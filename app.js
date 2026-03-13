@@ -26,10 +26,8 @@ const navBtns = {
 
 // --- View Toggling ---
 function switchView(viewName) {
-    // Update Header Text
     document.getElementById('header-subtitle').innerText = viewName === 'orders' ? 'Live Operations Center' : 'Inventory Management';
     
-    // Toggle active classes on sections
     Object.keys(views).forEach(key => {
         if (key === viewName) {
             views[key].classList.add('active');
@@ -80,10 +78,14 @@ function updateDashboard() {
         const timeString = new Date(order.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const card = document.createElement('div');
         card.classList.add('order-card');
+        
+        // Handle legacy ghost orders gracefully
+        const safeName = order.customerName || 'Legacy Guest';
+        
         card.innerHTML = `
             <div class="order-info">
                 <h4>Order #${(order._id || 'MOCK').toString().slice(-4).toUpperCase()}</h4>
-                <p class="order-meta">${order.customerName} • ${timeString}</p>
+                <p class="order-meta">${safeName} • ${timeString}</p>
             </div>
             <div class="order-status">${order.status}</div>
         `;
@@ -94,8 +96,17 @@ function updateDashboard() {
 
 function openOrderModal(order) {
     activeOrder = order;
+    
     document.getElementById('modal-order-id').innerText = `Order #${(order._id || 'MOCK').toString().slice(-4).toUpperCase()}`;
-    document.getElementById('modal-customer-name').innerText = order.customerName;
+    document.getElementById('modal-customer-name').innerText = order.customerName || 'Legacy Guest';
+    
+    // Inject routing details securely
+    const phoneEl = document.getElementById('modal-customer-phone');
+    phoneEl.innerText = order.customerPhone || 'N/A';
+    phoneEl.href = `tel:${order.customerPhone || ''}`;
+    
+    document.getElementById('modal-customer-address').innerText = order.deliveryAddress || 'No address provided (Legacy Order)';
+
     document.getElementById('modal-total').innerText = `₹${order.totalAmount}`;
     document.getElementById('modal-payment').innerText = order.paymentMethod;
 
@@ -107,6 +118,7 @@ function openOrderModal(order) {
         li.innerHTML = `<span>${item.name}</span> <span class="item-qty">x${item.qty}</span>`;
         listEl.appendChild(li);
     });
+    
     orderModalOverlay.classList.add('active');
 }
 
@@ -163,7 +175,6 @@ function renderInventory() {
 async function toggleProductStatus(productId, btnElement, event) {
     event.stopPropagation();
     
-    // Optimistic UI Update for instant feedback
     const isCurrentlyActive = btnElement.classList.contains('active');
     btnElement.classList.toggle('active');
     btnElement.parentElement.classList.toggle('inactive');
@@ -179,14 +190,12 @@ async function toggleProductStatus(productId, btnElement, event) {
             throw new Error('Failed to toggle');
         }
     } catch (error) {
-        // Revert UI if server fails
         btnElement.classList.toggle('active', isCurrentlyActive);
         btnElement.parentElement.classList.toggle('inactive', !isCurrentlyActive);
         showToast('Network error updating stock.');
     }
 }
 
-// Add Product Modal
 function openAddProductModal() { addProductModal.classList.add('active'); }
 function closeAddProductModal() { addProductModal.classList.remove('active'); }
 
@@ -215,7 +224,7 @@ async function submitNewProduct(event) {
             showToast('New product added to live catalog!');
             event.target.reset();
             closeAddProductModal();
-            fetchInventory(); // Refresh the list
+            fetchInventory(); 
         }
     } catch (error) {
         showToast('Error saving product.');
@@ -236,7 +245,16 @@ function showToast(message) {
 
 function loadMockOrders() {
     currentOrders = [
-        { _id: '1234', customerName: 'Guest (Table 4)', status: 'Order Placed', paymentMethod: 'Cash on Delivery', totalAmount: 165, items: [{ name: 'Fresh Cow Milk', qty: 2 }] }
+        { 
+            _id: '1234', 
+            customerName: 'Rahul Sharma', 
+            customerPhone: '9876543210',
+            deliveryAddress: 'Flat 402, Sunshine Apts, MG Road',
+            status: 'Order Placed', 
+            paymentMethod: 'Cash on Delivery', 
+            totalAmount: 165, 
+            items: [{ name: 'Fresh Cow Milk', qty: 2 }] 
+        }
     ];
     updateDashboard();
 }
