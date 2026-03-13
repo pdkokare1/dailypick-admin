@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DailyPick | Admin Operations</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="admin-header">
+        <div>
+            <h1>DAILYPICK.</h1>
+            <p class="subtitle">Live Operations Center</p>
+        </div>
+        <div class="pulse-indicator">
+            <span class="dot"></span> Live
+        </div>
+    </header>
+
+    <main class="dashboard-container">
+        <section class="stats-grid">
+            <div class="stat-card">
+                <h3>Today's Revenue</h3>
+                <p id="daily-revenue">₹0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Pending Orders</h3>
+                <p id="pending-count">0</p>
+            </div>
+        </section>
+
+        <section class="orders-section">
+            <div class="section-header">
+                <h2>Incoming Requests</h2>
+                <button class="refresh-btn" onclick="fetchOrders()">↻ Refresh</button>
+            </div>
+            
+            <div id="orders-feed" class="orders-feed">
+                <p class="empty-state">Waiting for new orders...</p>
+            </div>
+        </section>
+    </main>
+
+    <div id="order-modal-overlay" class="modal-overlay" onclick="closeOrderModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <h2 id="modal-order-id">Order #...</h2>
+                    <p id="modal-customer-name" class="customer-name">Guest Customer</p>
+                </div>
+                <button class="close-btn" onclick="closeOrderModal()">✕</button>
+            </div>
+            
+            <div class="packing-list-container">
+                <h3>Packing List</h3>
+                <ul id="modal-packing-list" class="packing-list">
+                    </ul>
+            </div>
+
+            <div class="order-summary">
+                <p>Total Amount: <strong id="modal-total">₹0</strong></p>
+                <p>Payment: <span id="modal-payment">COD</span></p>
+            </div>
+
+            <button class="primary-btn" onclick="markOrderDispatched()">Mark as Dispatched</button>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
