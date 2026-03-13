@@ -15,36 +15,49 @@
     <header class="admin-header">
         <div>
             <h1>DAILYPICK.</h1>
-            <p class="subtitle">Live Operations Center</p>
+            <p id="header-subtitle" class="subtitle">Live Operations Center</p>
         </div>
         <div class="pulse-indicator">
             <span class="dot"></span> Live
         </div>
     </header>
 
-    <main class="dashboard-container">
-        <section class="stats-grid">
-            <div class="stat-card">
-                <h3>Today's Revenue</h3>
-                <p id="daily-revenue">₹0</p>
-            </div>
-            <div class="stat-card">
-                <h3>Pending Orders</h3>
-                <p id="pending-count">0</p>
-            </div>
-        </section>
+    <article id="orders-view" class="view-section active">
+        <main class="dashboard-container">
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <h3>Today's Revenue</h3>
+                    <p id="daily-revenue">₹0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Pending Orders</h3>
+                    <p id="pending-count">0</p>
+                </div>
+            </section>
 
-        <section class="orders-section">
+            <section class="orders-section">
+                <div class="section-header">
+                    <h2>Incoming Requests</h2>
+                    <button class="refresh-btn" onclick="fetchOrders()">↻ Refresh</button>
+                </div>
+                <div id="orders-feed" class="orders-feed">
+                    <p class="empty-state">Waiting for new orders...</p>
+                </div>
+            </section>
+        </main>
+    </article>
+
+    <article id="inventory-view" class="view-section hidden">
+        <main class="dashboard-container">
             <div class="section-header">
-                <h2>Incoming Requests</h2>
-                <button class="refresh-btn" onclick="fetchOrders()">↻ Refresh</button>
+                <h2>Live Catalog</h2>
+                <button class="primary-btn-small" onclick="openAddProductModal()">+ Add Item</button>
             </div>
-            
-            <div id="orders-feed" class="orders-feed">
-                <p class="empty-state">Waiting for new orders...</p>
+            <div id="inventory-feed" class="inventory-feed">
+                <p class="empty-state">Loading inventory...</p>
             </div>
-        </section>
-    </main>
+        </main>
+    </article>
 
     <div id="order-modal-overlay" class="modal-overlay" onclick="closeOrderModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
@@ -58,8 +71,7 @@
             
             <div class="packing-list-container">
                 <h3>Packing List</h3>
-                <ul id="modal-packing-list" class="packing-list">
-                    </ul>
+                <ul id="modal-packing-list" class="packing-list"></ul>
             </div>
 
             <div class="order-summary">
@@ -71,7 +83,51 @@
         </div>
     </div>
 
+    <div id="add-product-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
+        <div class="form-card">
+            <div class="form-header">
+                <h2>Add New Product</h2>
+                <button class="close-btn" onclick="closeAddProductModal()">✕</button>
+            </div>
+            <form id="add-product-form" onsubmit="submitNewProduct(event)">
+                <div class="input-group">
+                    <label>Product Name</label>
+                    <input type="text" id="new-name" required placeholder="e.g., Almond Milk">
+                </div>
+                <div class="input-group">
+                    <label>Price (₹)</label>
+                    <input type="number" id="new-price" required placeholder="e.g., 120">
+                </div>
+                <div class="input-group">
+                    <label>Weight / Volume</label>
+                    <input type="text" id="new-weight" required placeholder="e.g., 1 Liter">
+                </div>
+                <div class="input-group">
+                    <label>Category</label>
+                    <select id="new-category" required>
+                        <option value="Dairy">Dairy</option>
+                        <option value="Bakery">Bakery</option>
+                        <option value="Produce">Produce</option>
+                        <option value="Pantry">Pantry</option>
+                    </select>
+                </div>
+                <button type="submit" class="primary-btn" style="margin-top: 10px;">Save Product</button>
+            </form>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
+
+    <nav class="bottom-nav">
+        <button id="nav-orders" class="nav-item active" onclick="switchView('orders')">
+            <span class="nav-icon">📦</span>
+            <span class="nav-label">Orders</span>
+        </button>
+        <button id="nav-inventory" class="nav-item" onclick="switchView('inventory')">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Inventory</span>
+        </button>
+    </nav>
 
     <script src="app.js"></script>
 </body>
