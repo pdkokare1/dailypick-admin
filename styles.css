@@ -53,8 +53,6 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 /* Inventory Specific UI */
 .inventory-card { opacity: 1; transition: opacity 0.3s; }
 .inventory-card.inactive { opacity: 0.5; }
-
-/* CSS Toggle Switch */
 .toggle-switch { position: relative; width: 44px; height: 24px; background: #CBD5E1; border-radius: 24px; transition: 0.3s; cursor: pointer; border: none; }
 .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
 .toggle-switch.active { background: var(--accent); }
@@ -65,7 +63,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .modal-overlay.active { opacity: 1; pointer-events: auto; }
 .modal-content { background: var(--bg-color); width: 100%; border-radius: 24px 24px 0 0; padding: 24px; transform: translateY(100%); transition: transform 0.3s; max-height: 85vh; display: flex; flex-direction: column; }
 .modal-overlay.active .modal-content { transform: translateY(0); }
-.hidden-modal { display: none; } /* Used for full screen form modal */
+.hidden-modal { display: none; } 
 .hidden-modal.active { display: flex; }
 
 .form-card { background: var(--surface); width: 90%; max-width: 400px; border-radius: 24px; padding: 24px; }
@@ -77,10 +75,14 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .input-group input, .input-group select { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.1); font-size: 14px; background: var(--bg-color); outline: none; }
 .input-group input:focus, .input-group select:focus { border-color: var(--primary); }
 
-.modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+.modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
 .modal-header h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
 .customer-name { font-size: 14px; color: var(--text-muted); }
 .close-btn { background: var(--surface); border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 14px; color: var(--text-main); }
+
+/* Delivery Info Card */
+.delivery-info-card { background: #F1F5F9; padding: 16px; border-radius: 12px; margin-bottom: 20px; font-size: 13px; color: var(--text-main); line-height: 1.5; }
+.delivery-info-card a { color: var(--primary); text-decoration: none; font-weight: 700; }
 
 .packing-list-container { background: var(--surface); border-radius: 16px; padding: 16px; margin-bottom: 20px; flex: 1; overflow-y: auto; }
 .packing-list-container h3 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px; }
