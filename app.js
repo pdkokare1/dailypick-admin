@@ -2,6 +2,7 @@ const BACKEND_URL = 'https://supermarket-backend-production-3a4d.up.railway.app'
 let currentOrders = [];
 let currentInventory = [];
 let activeOrder = null;
+let adminEventSource = null; // Memory bank for the live radio channel
 
 const dailyRevenueEl = document.getElementById('daily-revenue');
 const pendingCountEl = document.getElementById('pending-count');
@@ -17,6 +18,23 @@ const navBtns = {
     orders: document.getElementById('nav-orders'),
     inventory: document.getElementById('nav-inventory')
 };
+
+// Start listening for live signals from Railway
+function connectAdminLiveStream() {
+    if (adminEventSource) return; // Don't open twice
+    
+    adminEventSource = new EventSource(`${BACKEND_URL}/api/orders/stream/admin`);
+    
+    adminEventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'NEW_ORDER') {
+            // Instantly push the new order to the front of the local array and redraw
+            currentOrders.unshift(data.order);
+            updateDashboard();
+            showToast('🚨 New Order Arrived!');
+        }
+    };
+}
 
 function switchView(viewName) {
     document.getElementById('header-subtitle').innerText = viewName === 'orders' ? 'Live Operations Center' : 'Inventory Management';
@@ -45,6 +63,7 @@ async function fetchOrders() {
         if (result.success) {
             currentOrders = result.data;
             updateDashboard();
+            connectAdminLiveStream(); // Connect to the socket after first load
         }
     } catch (e) {
         console.error("Order Fetch Error:", e);
@@ -159,6 +178,34 @@ function openOrderModal(order) {
 }
 
 function closeOrderModal() { orderModalOverlay.classList.remove('active'); }
+
+async function markOrderDispatched() {
+    if (!activeOrder) return;
+    
+    const targetOrderId = activeOrder._id;
+    
+    // 1. Optimistic UI update (feels instant to the staff)
+    currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
+    closeOrderModal();
+    updateDashboard();
+    showToast('Dispatching to rider... 📦');
+
+    // 2. Actually inform the database
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders/${targetOrderId}/dispatch`, {
+            method: 'PUT'
+        });
+        const result = await res.json();
+        if (!result.success) {
+            showToast('Database Error.');
+            fetchOrders(); // Refresh to resync if it failed
+        }
+    } catch (e) {
+        showToast('Network error updating database.');
+        fetchOrders();
+    }
+}
+
 function openAddProductModal() { document.getElementById('add-product-modal').classList.add('active'); }
 function closeAddProductModal() { document.getElementById('add-product-modal').classList.remove('active'); }
 
@@ -183,5 +230,7 @@ async function submitNewProduct(e) {
         console.error("Add Product Error:", err);
     }
 }
+
+function showToast(m) { const t=document.createElement('div'); t.classList.add('toast'); t.innerText=m; document.getElementById('toast-container').appendChild(t); setTimeout(()=>t.remove(),3000); }
 
 fetchOrders();
