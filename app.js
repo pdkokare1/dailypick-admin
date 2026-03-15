@@ -1,4 +1,4 @@
-const BACKEND_URL = 'https://supermarket-backend-production-3a4d.up.railway.app';
+const BACKEND_URL = 'https://dailypick-backend-production-05d6.up.railway.app';
 let currentOrders = [];
 let currentInventory = [];
 let activeOrder = null;
