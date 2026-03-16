@@ -1,12 +1,15 @@
 const BACKEND_URL = 'https://dailypick-backend-production-05d6.up.railway.app';
 
-// --- CLOUDINARY KEYS (Create a free account at cloudinary.com to enable images) ---
+// --- CLOUDINARY KEYS ---
 const CLOUDINARY_CLOUD_NAME = 'YOUR_CLOUD_NAME'; 
 const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET'; 
 
-let currentOrders = []; let currentInventory = []; let activeOrder = null; let adminEventSource = null; 
-const dailyRevenueEl = document.getElementById('daily-revenue'); const pendingCountEl = document.getElementById('pending-count'); const ordersFeed = document.getElementById('orders-feed'); const inventoryFeed = document.getElementById('inventory-feed'); const orderModalOverlay = document.getElementById('order-modal-overlay');
-const views = { orders: document.getElementById('orders-view'), inventory: document.getElementById('inventory-view') }; const navBtns = { orders: document.getElementById('nav-orders'), inventory: document.getElementById('nav-inventory') };
+let currentOrders = []; let currentInventory = []; let currentCategories = []; 
+let activeOrder = null; let adminEventSource = null; 
+
+const dailyRevenueEl = document.getElementById('daily-revenue'); const pendingCountEl = document.getElementById('pending-count'); const ordersFeed = document.getElementById('orders-feed'); const inventoryFeed = document.getElementById('inventory-feed'); const categoriesFeed = document.getElementById('categories-feed'); const orderModalOverlay = document.getElementById('order-modal-overlay');
+const views = { orders: document.getElementById('orders-view'), inventory: document.getElementById('inventory-view'), categories: document.getElementById('categories-view') }; 
+const navBtns = { orders: document.getElementById('nav-orders'), inventory: document.getElementById('nav-inventory'), categories: document.getElementById('nav-categories') };
 
 function connectAdminLiveStream() {
     if (adminEventSource) return; 
@@ -22,12 +25,17 @@ function connectAdminLiveStream() {
 }
 
 function switchView(viewName) {
-    document.getElementById('header-subtitle').innerText = viewName === 'orders' ? 'Live Operations Center' : 'Inventory Management';
+    if(viewName === 'orders') document.getElementById('header-subtitle').innerText = 'Live Operations Center';
+    else if(viewName === 'inventory') document.getElementById('header-subtitle').innerText = 'Inventory Management';
+    else if(viewName === 'categories') document.getElementById('header-subtitle').innerText = 'Category Builder';
+
     Object.keys(views).forEach(key => {
         if (key === viewName) { views[key].classList.add('active'); views[key].classList.remove('hidden'); navBtns[key].classList.add('active'); } 
         else { views[key].classList.remove('active'); views[key].classList.add('hidden'); navBtns[key].classList.remove('active'); }
     });
+    
     if (viewName === 'inventory') fetchInventory();
+    if (viewName === 'categories') fetchCategories();
 }
 
 async function fetchOrders() {
@@ -57,6 +65,132 @@ function updateDashboard() {
     });
 }
 
+// --- NEW: CATEGORY LOGIC ---
+async function fetchCategories() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/categories?all=true`);
+        const result = await res.json();
+        if (result.success) { 
+            currentCategories = result.data; 
+            renderCategories(); 
+            populateCategoryDropdown();
+        }
+    } catch (e) { categoriesFeed.innerHTML = '<p class="empty-state">Error loading categories.</p>'; }
+}
+
+function populateCategoryDropdown() {
+    const select = document.getElementById('new-category');
+    select.innerHTML = '';
+    if (currentCategories.length === 0) {
+        select.innerHTML = '<option value="" disabled selected>Please create a category first</option>';
+        return;
+    }
+    // Group options by section for visual clarity in the dropdown
+    const grouped = currentCategories.reduce((acc, cat) => {
+        acc[cat.section] = acc[cat.section] || [];
+        acc[cat.section].push(cat);
+        return acc;
+    }, {});
+
+    for (const section in grouped) {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = section;
+        grouped[section].forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.name;
+            option.innerText = cat.name;
+            optgroup.appendChild(option);
+        });
+        select.appendChild(optgroup);
+    }
+}
+
+function renderCategories() {
+    categoriesFeed.innerHTML = '';
+    if (currentCategories.length === 0) { categoriesFeed.innerHTML = '<p class="empty-state">No categories found. Build one!</p>'; return; }
+    
+    // Group by section
+    const grouped = currentCategories.reduce((acc, cat) => {
+        acc[cat.section] = acc[cat.section] || [];
+        acc[cat.section].push(cat);
+        return acc;
+    }, {});
+
+    for (const section in grouped) {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.innerHTML = `<h3 class="cat-section-title">${section}</h3>`;
+        
+        const grid = document.createElement('div');
+        grid.classList.add('cat-grid');
+        
+        grouped[section].forEach(cat => {
+            const card = document.createElement('div');
+            card.classList.add('admin-cat-card');
+            const img = cat.imageUrl ? `<img src="${cat.imageUrl}">` : `<div style="width:48px;height:48px;background:#eee;border-radius:8px;display:flex;align-items:center;justify-content:center;">🖼️</div>`;
+            card.innerHTML = `${img}<h4>${cat.name}</h4><button class="del-cat-btn" onclick="deleteCategory('${cat._id}')">✕</button>`;
+            grid.appendChild(card);
+        });
+        
+        sectionDiv.appendChild(grid);
+        categoriesFeed.appendChild(sectionDiv);
+    }
+}
+
+function openAddCategoryModal() { document.getElementById('add-category-form').reset(); document.getElementById('add-category-modal').classList.add('active'); }
+function closeAddCategoryModal() { document.getElementById('add-category-modal').classList.remove('active'); }
+
+async function submitNewCategory(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submit-cat-btn');
+    btn.innerText = 'Uploading...'; btn.disabled = true;
+
+    try {
+        let finalImageUrl = '';
+        const fileInput = document.getElementById('new-cat-image');
+        
+        if (fileInput.files.length > 0) {
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+            const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+            const uploadData = await uploadRes.json();
+            finalImageUrl = uploadData.secure_url; 
+        }
+
+        const cat = {
+            section: document.getElementById('new-cat-section').value.trim(),
+            name: document.getElementById('new-cat-name').value.trim(),
+            imageUrl: finalImageUrl 
+        };
+
+        const res = await fetch(`${BACKEND_URL}/api/categories`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cat)
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            closeAddCategoryModal(); fetchCategories(); showToast('Category Created!');
+        } else {
+            showToast(result.message); // Will show "name already exists" error
+        }
+    } catch (err) {
+        showToast('Error saving category.');
+    } finally {
+        btn.innerText = 'Save Category'; btn.disabled = false;
+    }
+}
+
+async function deleteCategory(id) {
+    if(!confirm("Are you sure? This deletes the category, but won't delete the products inside it.")) return;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/categories/${id}`, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.success) fetchCategories();
+    } catch (err) { showToast('Error deleting category.'); }
+}
+
+
+// --- INVENTORY & PRODUCT LOGIC ---
 async function fetchInventory() {
     inventoryFeed.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
     try {
@@ -78,7 +212,6 @@ function renderInventory() {
             ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
             : `<div style="width:40px; height:40px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">📦</div>`;
 
-        // NEW: Calculate dynamic text based on variants array
         const vCount = p.variants ? p.variants.length : 0;
         const totalStock = p.variants ? p.variants.reduce((sum, v) => sum + (v.stock || 0), 0) : 0;
         const metaText = vCount > 0 ? `${vCount} Variant${vCount > 1 ? 's' : ''} • Stock: ${totalStock}` : `No variants`;
@@ -120,7 +253,6 @@ function openOrderModal(order) {
     document.getElementById('modal-payment').innerText = order.paymentMethod;
     const listEl = document.getElementById('modal-packing-list'); listEl.innerHTML = '';
     order.items.forEach(i => {
-        // Updated to show chosen variant if available in order history (future-proofing)
         const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
         const li = document.createElement('li'); li.style.display = 'flex'; li.style.justifyContent = 'space-between'; li.style.padding = '8px 0'; li.style.borderBottom = '1px solid #eee';
         li.innerHTML = `<span>${i.name}${variantText}</span><span class="item-qty">x${i.qty}</span>`;
@@ -142,7 +274,6 @@ async function markOrderDispatched() {
     } catch (e) { showToast('Network error updating database.'); fetchOrders(); }
 }
 
-// --- NEW: DYNAMIC VARIANT UI LOGIC ---
 function addVariantRow(weight = '', price = '', stock = '0') {
     const container = document.getElementById('variants-container');
     const row = document.createElement('div');
@@ -157,12 +288,13 @@ function addVariantRow(weight = '', price = '', stock = '0') {
 }
 
 function openAddProductModal() { 
+    if (currentCategories.length === 0) return showToast("Create a category first!");
     document.getElementById('add-product-form').reset();
     document.getElementById('edit-product-id').value = '';
     document.getElementById('modal-form-title').innerText = 'Add New Product';
     document.getElementById('current-image-text').style.display = 'none';
-    document.getElementById('variants-container').innerHTML = ''; // Clear rows
-    addVariantRow(); // Add one empty default row
+    document.getElementById('variants-container').innerHTML = ''; 
+    addVariantRow(); 
     document.getElementById('add-product-modal').classList.add('active'); 
 }
 
@@ -184,7 +316,6 @@ function openEditProductModal(id, e) {
     if (p.variants && p.variants.length > 0) {
         p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, v.stock));
     } else {
-        // Fallback if editing an old product without variants array
         addVariantRow(p.weightOrVolume || '', p.price || '', 0);
     }
 
@@ -201,7 +332,7 @@ async function submitNewProduct(e) {
     try {
         const editId = document.getElementById('edit-product-id').value;
         const fileInput = document.getElementById('new-image');
-        let finalImageUrl = undefined; // undefined means "don't change the image" on PUT
+        let finalImageUrl = undefined; 
 
         if (fileInput.files.length > 0) {
             const formData = new FormData();
@@ -211,10 +342,9 @@ async function submitNewProduct(e) {
             const uploadData = await uploadRes.json();
             finalImageUrl = uploadData.secure_url; 
         } else if (!editId) {
-            finalImageUrl = ''; // Creating new product with no image
+            finalImageUrl = ''; 
         }
 
-        // NEW: Gather dynamic variants
         const variantRows = document.querySelectorAll('.variant-row');
         const variants = [];
         variantRows.forEach(row => {
@@ -251,12 +381,11 @@ async function submitNewProduct(e) {
 function exportInventoryCSV() {
     if (currentInventory.length === 0) return showToast('No inventory to export.');
     
-    // Updated to handle Variants array safely via JSON.stringify
     let csvContent = "Name,Category,Image URL,VariantsJSON\n";
     
     currentInventory.forEach(p => {
         const cleanName = p.name.replace(/,/g, ''); 
-        const variantsString = JSON.stringify(p.variants || []).replace(/"/g, '""'); // Escape quotes for CSV
+        const variantsString = JSON.stringify(p.variants || []).replace(/"/g, '""'); 
         csvContent += `${cleanName},${p.category},${p.imageUrl || ''},"${variantsString}"\n`;
     });
 
@@ -278,13 +407,11 @@ function importInventoryCSV(event) {
     const reader = new FileReader();
     reader.onload = async function(e) {
         const text = e.target.result;
-        // Simple regex to split CSV correctly keeping JSON arrays intact
         const rows = text.split('\n').map(row => row.trim()).filter(row => row);
         
         const productsToImport = [];
         
         for (let i = 1; i < rows.length; i++) {
-            // A basic CSV parser for the 4 expected columns
             const cols = rows[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
             if (cols && cols.length >= 4) {
                 let variantsArr = [];
@@ -334,4 +461,6 @@ function importInventoryCSV(event) {
 
 function showToast(m) { const t=document.createElement('div'); t.classList.add('toast'); t.innerText=m; document.getElementById('toast-container').appendChild(t); setTimeout(()=>t.remove(),3000); }
 
+// Initialize
+fetchCategories(); // We fetch categories first to populate dropdowns
 fetchOrders();
