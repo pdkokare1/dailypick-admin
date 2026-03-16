@@ -4,11 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DailyPick | Admin Operations</title>
-    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -34,7 +32,6 @@
                     <p id="pending-count">0</p>
                 </div>
             </section>
-
             <section class="orders-section">
                 <div class="section-header">
                     <h2>Incoming Requests</h2>
@@ -49,10 +46,17 @@
 
     <article id="inventory-view" class="view-section hidden">
         <main class="dashboard-container">
-            <div class="section-header">
+            <div class="section-header" style="flex-wrap: wrap; gap: 10px;">
                 <h2>Live Catalog</h2>
-                <button class="primary-btn-small" onclick="openAddProductModal()">+ Add Item</button>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="primary-btn-small" style="background: #334155;" onclick="exportInventoryCSV()">⬇️ Export CSV</button>
+                    <button class="primary-btn-small" style="background: #334155;" onclick="document.getElementById('csv-upload').click()">⬆️ Import CSV</button>
+                    <input type="file" id="csv-upload" accept=".csv" style="display: none;" onchange="importInventoryCSV(event)">
+                    
+                    <button class="primary-btn-small" onclick="openAddProductModal()">+ Add Item</button>
+                </div>
             </div>
+            
             <div id="inventory-feed" class="inventory-feed">
                 <p class="empty-state">Loading inventory...</p>
             </div>
@@ -68,23 +72,19 @@
                 </div>
                 <button class="close-btn" onclick="closeOrderModal()">✕</button>
             </div>
-            
             <div class="delivery-info-card">
                 <div id="modal-delivery-badge" style="margin-bottom:12px;"></div>
                 <p style="margin-bottom: 8px;"><strong>📞 Phone:</strong> <a href="#" id="modal-customer-phone">...</a></p>
                 <p><strong>📍 Route:</strong> <span id="modal-customer-address">...</span></p>
             </div>
-
             <div class="packing-list-container">
                 <h3>Packing List</h3>
                 <ul id="modal-packing-list" class="packing-list"></ul>
             </div>
-
             <div class="order-summary">
                 <p>Total Amount: <strong id="modal-total">₹0</strong></p>
                 <p>Payment: <span id="modal-payment">COD</span></p>
             </div>
-
             <button class="primary-btn" onclick="markOrderDispatched()">Mark as Dispatched</button>
         </div>
     </div>
@@ -96,6 +96,10 @@
                 <button class="close-btn" onclick="closeAddProductModal()">✕</button>
             </div>
             <form id="add-product-form" onsubmit="submitNewProduct(event)">
+                <div class="input-group">
+                    <label>Product Image</label>
+                    <input type="file" id="new-image" accept="image/*" style="background: white;">
+                </div>
                 <div class="input-group">
                     <label>Product Name</label>
                     <input type="text" id="new-name" required placeholder="e.g., Almond Milk">
@@ -117,7 +121,7 @@
                         <option value="Pantry">Pantry</option>
                     </select>
                 </div>
-                <button type="submit" class="primary-btn" style="margin-top: 10px;">Save Product</button>
+                <button type="submit" id="submit-product-btn" class="primary-btn" style="margin-top: 10px;">Save Product</button>
             </form>
         </div>
     </div>
@@ -134,7 +138,6 @@
             <span class="nav-label">Inventory</span>
         </button>
     </nav>
-
     <script src="app.js"></script>
 </body>
 </html>
