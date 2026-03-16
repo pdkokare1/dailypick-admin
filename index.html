@@ -63,6 +63,19 @@
         </main>
     </article>
 
+    <article id="categories-view" class="view-section hidden">
+        <main class="dashboard-container">
+            <div class="section-header">
+                <h2>Manage Categories & Sections</h2>
+                <button class="primary-btn-small" onclick="openAddCategoryModal()">+ Add Category</button>
+            </div>
+            
+            <div id="categories-feed" class="categories-feed">
+                <p class="empty-state">Loading categories...</p>
+            </div>
+        </main>
+    </article>
+
     <div id="order-modal-overlay" class="modal-overlay" onclick="closeOrderModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
@@ -108,13 +121,8 @@
                     <input type="text" id="new-name" required placeholder="e.g., Almond Milk">
                 </div>
                 <div class="input-group">
-                    <label>Category</label>
-                    <select id="new-category" required>
-                        <option value="Dairy">Dairy</option>
-                        <option value="Bakery">Bakery</option>
-                        <option value="Produce">Produce</option>
-                        <option value="Pantry">Pantry</option>
-                    </select>
+                    <label>Assign to Category</label>
+                    <select id="new-category" required></select>
                 </div>
                 
                 <div class="input-group" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #E2E8F0;">
@@ -122,11 +130,34 @@
                         <label style="margin: 0;">Sizes / Variants</label>
                         <button type="button" class="primary-btn-small" style="background: #E2E8F0; color: var(--text-main); font-size: 10px;" onclick="addVariantRow()">+ Add Size</button>
                     </div>
-                    <div id="variants-container">
-                        </div>
+                    <div id="variants-container"></div>
                 </div>
 
                 <button type="submit" id="submit-product-btn" class="primary-btn" style="margin-top: 10px;">Save Product</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="add-category-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
+        <div class="form-card">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Add New Category</h2>
+                <button class="close-btn" onclick="closeAddCategoryModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <form id="add-category-form" onsubmit="submitNewCategory(event)">
+                <div class="input-group">
+                    <label>Category Image Thumbnail</label>
+                    <input type="file" id="new-cat-image" accept="image/*" style="background: white;" required>
+                </div>
+                <div class="input-group">
+                    <label>Section Name (The large header text)</label>
+                    <input type="text" id="new-cat-section" required placeholder="e.g., Grocery & Kitchen">
+                </div>
+                <div class="input-group">
+                    <label>Category Name (The card text)</label>
+                    <input type="text" id="new-cat-name" required placeholder="e.g., Vegetables & Fruits">
+                </div>
+                <button type="submit" id="submit-cat-btn" class="primary-btn" style="margin-top: 10px;">Save Category</button>
             </form>
         </div>
     </div>
@@ -141,6 +172,10 @@
         <button id="nav-inventory" class="nav-item" onclick="switchView('inventory')">
             <span class="nav-icon">📊</span>
             <span class="nav-label">Inventory</span>
+        </button>
+        <button id="nav-categories" class="nav-item" onclick="switchView('categories')">
+            <span class="nav-icon">🗂️</span>
+            <span class="nav-label">Categories</span>
         </button>
     </nav>
     <script src="app.js"></script>
