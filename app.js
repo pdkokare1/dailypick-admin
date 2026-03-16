@@ -69,16 +69,32 @@ async function fetchInventory() {
 function renderInventory() {
     inventoryFeed.innerHTML = '';
     if (currentInventory.length === 0) { inventoryFeed.innerHTML = '<p class="empty-state">No products found.</p>'; return; }
+    
     currentInventory.forEach(p => {
         const card = document.createElement('div'); card.classList.add('inventory-card');
         if (!p.isActive) card.classList.add('inactive');
         
-        // NEW: Show mini-image if one exists
         const thumb = p.imageUrl 
             ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
             : `<div style="width:40px; height:40px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">📦</div>`;
 
-        card.innerHTML = `<div style="display:flex; align-items:center;">${thumb}<div class="inv-info"><h4>${p.name}</h4><p class="inv-meta">₹${p.price} • ${p.weightOrVolume}</p></div></div><button class="toggle-switch ${p.isActive ? 'active' : ''}" onclick="toggleProductStatus('${p._id}', this, event)"></button>`;
+        // NEW: Calculate dynamic text based on variants array
+        const vCount = p.variants ? p.variants.length : 0;
+        const totalStock = p.variants ? p.variants.reduce((sum, v) => sum + (v.stock || 0), 0) : 0;
+        const metaText = vCount > 0 ? `${vCount} Variant${vCount > 1 ? 's' : ''} • Stock: ${totalStock}` : `No variants`;
+
+        card.innerHTML = `
+            <div style="display:flex; align-items:center;">
+                ${thumb}
+                <div class="inv-info">
+                    <h4>${p.name}</h4>
+                    <p class="inv-meta" style="font-size: 11px; color: var(--text-muted);">${metaText}</p>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center;">
+                <button class="edit-btn" onclick="openEditProductModal('${p._id}', event)">Edit</button>
+                <button class="toggle-switch ${p.isActive ? 'active' : ''}" onclick="toggleProductStatus('${p._id}', this, event)"></button>
+            </div>`;
         inventoryFeed.appendChild(card);
     });
 }
@@ -104,8 +120,10 @@ function openOrderModal(order) {
     document.getElementById('modal-payment').innerText = order.paymentMethod;
     const listEl = document.getElementById('modal-packing-list'); listEl.innerHTML = '';
     order.items.forEach(i => {
+        // Updated to show chosen variant if available in order history (future-proofing)
+        const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
         const li = document.createElement('li'); li.style.display = 'flex'; li.style.justifyContent = 'space-between'; li.style.padding = '8px 0'; li.style.borderBottom = '1px solid #eee';
-        li.innerHTML = `<span>${i.name}</span><span class="item-qty">x${i.qty}</span>`;
+        li.innerHTML = `<span>${i.name}${variantText}</span><span class="item-qty">x${i.qty}</span>`;
         listEl.appendChild(li);
     });
     orderModalOverlay.classList.add('active');
@@ -124,61 +142,122 @@ async function markOrderDispatched() {
     } catch (e) { showToast('Network error updating database.'); fetchOrders(); }
 }
 
-function openAddProductModal() { document.getElementById('add-product-modal').classList.add('active'); }
+// --- NEW: DYNAMIC VARIANT UI LOGIC ---
+function addVariantRow(weight = '', price = '', stock = '0') {
+    const container = document.getElementById('variants-container');
+    const row = document.createElement('div');
+    row.classList.add('variant-row');
+    row.innerHTML = `
+        <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" required>
+        <input type="number" placeholder="Price (₹)" class="var-price" value="${price}" required>
+        <input type="number" placeholder="Stock" class="var-stock" value="${stock}" required>
+        <button type="button" class="remove-variant-btn" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.appendChild(row);
+}
+
+function openAddProductModal() { 
+    document.getElementById('add-product-form').reset();
+    document.getElementById('edit-product-id').value = '';
+    document.getElementById('modal-form-title').innerText = 'Add New Product';
+    document.getElementById('current-image-text').style.display = 'none';
+    document.getElementById('variants-container').innerHTML = ''; // Clear rows
+    addVariantRow(); // Add one empty default row
+    document.getElementById('add-product-modal').classList.add('active'); 
+}
+
+function openEditProductModal(id, e) {
+    e.stopPropagation();
+    const p = currentInventory.find(item => item._id === id);
+    if (!p) return;
+
+    document.getElementById('add-product-form').reset();
+    document.getElementById('edit-product-id').value = p._id;
+    document.getElementById('modal-form-title').innerText = 'Edit Product';
+    
+    document.getElementById('new-name').value = p.name;
+    document.getElementById('new-category').value = p.category;
+    document.getElementById('current-image-text').style.display = p.imageUrl ? 'block' : 'none';
+
+    const container = document.getElementById('variants-container');
+    container.innerHTML = '';
+    if (p.variants && p.variants.length > 0) {
+        p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, v.stock));
+    } else {
+        // Fallback if editing an old product without variants array
+        addVariantRow(p.weightOrVolume || '', p.price || '', 0);
+    }
+
+    document.getElementById('add-product-modal').classList.add('active');
+}
+
 function closeAddProductModal() { document.getElementById('add-product-modal').classList.remove('active'); }
 
 async function submitNewProduct(e) {
     e.preventDefault();
     const btn = document.getElementById('submit-product-btn');
-    btn.innerText = 'Uploading...'; btn.disabled = true;
+    btn.innerText = 'Saving...'; btn.disabled = true;
 
     try {
-        let finalImageUrl = '';
+        const editId = document.getElementById('edit-product-id').value;
         const fileInput = document.getElementById('new-image');
-        
-        // --- NEW: CLOUDINARY DIRECT BROWSER UPLOAD ---
+        let finalImageUrl = undefined; // undefined means "don't change the image" on PUT
+
         if (fileInput.files.length > 0) {
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
             formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-            
-            const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-                method: 'POST', body: formData
-            });
+            const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
             const uploadData = await uploadRes.json();
-            finalImageUrl = uploadData.secure_url; // Grab the beautiful, compressed URL
+            finalImageUrl = uploadData.secure_url; 
+        } else if (!editId) {
+            finalImageUrl = ''; // Creating new product with no image
         }
+
+        // NEW: Gather dynamic variants
+        const variantRows = document.querySelectorAll('.variant-row');
+        const variants = [];
+        variantRows.forEach(row => {
+            variants.push({
+                weightOrVolume: row.querySelector('.var-weight').value,
+                price: Number(row.querySelector('.var-price').value),
+                stock: Number(row.querySelector('.var-stock').value)
+            });
+        });
 
         const p = {
             name: document.getElementById('new-name').value,
-            price: Number(document.getElementById('new-price').value),
-            weightOrVolume: document.getElementById('new-weight').value,
             category: document.getElementById('new-category').value,
-            imageUrl: finalImageUrl 
+            variants: variants
         };
+        if (finalImageUrl !== undefined) p.imageUrl = finalImageUrl;
 
-        await fetch(`${BACKEND_URL}/api/products`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p)
+        const method = editId ? 'PUT' : 'POST';
+        const url = editId ? `${BACKEND_URL}/api/products/${editId}` : `${BACKEND_URL}/api/products`;
+
+        await fetch(url, {
+            method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p)
         });
         
-        e.target.reset(); closeAddProductModal(); fetchInventory(); showToast('Product Added!');
+        closeAddProductModal(); fetchInventory(); showToast(editId ? 'Product Updated!' : 'Product Added!');
     } catch (err) {
-        console.error("Add Product Error:", err);
-        showToast('Error saving product. Check Cloudinary settings.');
+        console.error("Save Product Error:", err);
+        showToast('Error saving product.');
     } finally {
         btn.innerText = 'Save Product'; btn.disabled = false;
     }
 }
 
-// --- NEW: BULK CSV EXPORT ---
 function exportInventoryCSV() {
     if (currentInventory.length === 0) return showToast('No inventory to export.');
     
-    let csvContent = "Name,Price,Weight/Volume,Category,Image URL\n";
+    // Updated to handle Variants array safely via JSON.stringify
+    let csvContent = "Name,Category,Image URL,VariantsJSON\n";
     
     currentInventory.forEach(p => {
         const cleanName = p.name.replace(/,/g, ''); 
-        csvContent += `${cleanName},${p.price},${p.weightOrVolume},${p.category},${p.imageUrl || ''}\n`;
+        const variantsString = JSON.stringify(p.variants || []).replace(/"/g, '""'); // Escape quotes for CSV
+        csvContent += `${cleanName},${p.category},${p.imageUrl || ''},"${variantsString}"\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -192,7 +271,6 @@ function exportInventoryCSV() {
     document.body.removeChild(link);
 }
 
-// --- NEW: BULK CSV IMPORT ---
 function importInventoryCSV(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -200,19 +278,25 @@ function importInventoryCSV(event) {
     const reader = new FileReader();
     reader.onload = async function(e) {
         const text = e.target.result;
+        // Simple regex to split CSV correctly keeping JSON arrays intact
         const rows = text.split('\n').map(row => row.trim()).filter(row => row);
         
         const productsToImport = [];
         
         for (let i = 1; i < rows.length; i++) {
-            const cols = rows[i].split(',');
-            if (cols.length >= 4) {
+            // A basic CSV parser for the 4 expected columns
+            const cols = rows[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+            if (cols && cols.length >= 4) {
+                let variantsArr = [];
+                try {
+                    variantsArr = JSON.parse(cols[3].replace(/(^"|"$)/g, '').replace(/""/g, '"'));
+                } catch(e) { console.log('Error parsing variants JSON on row', i); }
+
                 productsToImport.push({
-                    name: cols[0].trim(),
-                    price: Number(cols[1].trim()),
-                    weightOrVolume: cols[2].trim(),
-                    category: cols[3].trim(),
-                    imageUrl: cols[4] ? cols[4].trim() : ''
+                    name: cols[0].replace(/(^"|"$)/g, '').trim(),
+                    category: cols[1].replace(/(^"|"$)/g, '').trim(),
+                    imageUrl: cols[2].replace(/(^"|"$)/g, '').trim(),
+                    variants: variantsArr
                 });
             }
         }
