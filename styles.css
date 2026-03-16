@@ -78,3 +78,9 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .bottom-nav { position: fixed; bottom: 0; width: 100%; background: #fff; display: flex; justify-content: space-around; padding: 12px 0; border-top: 1px solid #eee; z-index: 50; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 .nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); cursor: pointer; }
 .nav-item.active { color: var(--primary); }
+
+/* --- NEW STYLES FOR DYNAMIC VARIANTS & EDIT BUTTON --- */
+.variant-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; background: #F8FAFC; padding: 8px; border-radius: 8px; border: 1px solid #E2E8F0; }
+.variant-row input { padding: 8px; font-size: 12px; width: 100%; }
+.remove-variant-btn { background: #FEE2E2; color: #EF4444; border: none; border-radius: 6px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; flex-shrink: 0; }
+.edit-btn { background: #E0E7FF; color: #4338CA; border: none; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; margin-right: 12px; }
