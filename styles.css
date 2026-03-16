@@ -79,8 +79,16 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); cursor: pointer; }
 .nav-item.active { color: var(--primary); }
 
-/* --- NEW STYLES FOR DYNAMIC VARIANTS & EDIT BUTTON --- */
 .variant-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; background: #F8FAFC; padding: 8px; border-radius: 8px; border: 1px solid #E2E8F0; }
 .variant-row input { padding: 8px; font-size: 12px; width: 100%; }
 .remove-variant-btn { background: #FEE2E2; color: #EF4444; border: none; border-radius: 6px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; flex-shrink: 0; }
 .edit-btn { background: #E0E7FF; color: #4338CA; border: none; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; margin-right: 12px; }
+
+/* --- NEW: CATEGORY STYLES --- */
+.categories-feed { display: flex; flex-direction: column; gap: 24px; padding-bottom: 20px; }
+.cat-section-title { font-size: 14px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.5px; border-bottom: 2px solid #F1F5F9; padding-bottom: 4px; }
+.cat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.admin-cat-card { background: var(--surface); border: 1px solid #F1F5F9; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+.admin-cat-card img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: #F8FAFC; }
+.admin-cat-card h4 { font-size: 13px; font-weight: 700; flex: 1; }
+.del-cat-btn { background: #FEE2E2; color: #EF4444; border: none; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; font-weight: bold; }
