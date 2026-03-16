@@ -90,27 +90,22 @@
     </div>
 
     <div id="add-product-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
-        <div class="form-card">
-            <div class="form-header">
-                <h2>Add New Product</h2>
-                <button class="close-btn" onclick="closeAddProductModal()">✕</button>
+        <div class="form-card" style="max-height: 90vh; overflow-y: auto;">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="modal-form-title">Add New Product</h2>
+                <button class="close-btn" onclick="closeAddProductModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
             </div>
             <form id="add-product-form" onsubmit="submitNewProduct(event)">
+                <input type="hidden" id="edit-product-id">
+                
                 <div class="input-group">
-                    <label>Product Image</label>
+                    <label>Product Image (Optional)</label>
                     <input type="file" id="new-image" accept="image/*" style="background: white;">
+                    <p id="current-image-text" style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: none;">Leave blank to keep current image.</p>
                 </div>
                 <div class="input-group">
                     <label>Product Name</label>
                     <input type="text" id="new-name" required placeholder="e.g., Almond Milk">
-                </div>
-                <div class="input-group">
-                    <label>Price (₹)</label>
-                    <input type="number" id="new-price" required placeholder="e.g., 120">
-                </div>
-                <div class="input-group">
-                    <label>Weight / Volume</label>
-                    <input type="text" id="new-weight" required placeholder="e.g., 1 Liter">
                 </div>
                 <div class="input-group">
                     <label>Category</label>
@@ -121,6 +116,16 @@
                         <option value="Pantry">Pantry</option>
                     </select>
                 </div>
+                
+                <div class="input-group" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #E2E8F0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <label style="margin: 0;">Sizes / Variants</label>
+                        <button type="button" class="primary-btn-small" style="background: #E2E8F0; color: var(--text-main); font-size: 10px;" onclick="addVariantRow()">+ Add Size</button>
+                    </div>
+                    <div id="variants-container">
+                        </div>
+                </div>
+
                 <button type="submit" id="submit-product-btn" class="primary-btn" style="margin-top: 10px;">Save Product</button>
             </form>
         </div>
