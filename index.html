@@ -37,6 +37,16 @@
                     <h2>Incoming Requests</h2>
                     <button class="refresh-btn" onclick="fetchOrders()">↻ Refresh</button>
                 </div>
+                
+                <div class="orders-toolbar">
+                    <div class="order-tabs">
+                        <button id="tab-All" class="tab-btn active" onclick="setOrderTab('All')">All</button>
+                        <button id="tab-Instant" class="tab-btn" onclick="setOrderTab('Instant')">⚡ Instant</button>
+                        <button id="tab-Routine" class="tab-btn" onclick="setOrderTab('Routine')">📅 Routine</button>
+                    </div>
+                    <button id="bulk-dispatch-btn" class="bulk-btn" onclick="bulkDispatchOrders()">Dispatch Selected (0)</button>
+                </div>
+
                 <div id="orders-feed" class="orders-feed">
                     <p class="empty-state">Waiting for new orders...</p>
                 </div>
@@ -58,9 +68,18 @@
                 </div>
             </div>
             
+            <div class="inventory-toolbar">
+                <input type="text" id="inventory-search-input" class="inv-search" placeholder="Search products or hidden tags..." oninput="debounceInventorySearch()">
+                <select id="inventory-cat-filter" class="inv-filter" onchange="applyInventoryFilters()">
+                    <option value="All">All Categories</option>
+                </select>
+            </div>
+
             <div id="inventory-feed" class="inventory-feed">
                 <p class="empty-state">Loading inventory...</p>
             </div>
+            
+            <button id="load-more-btn" class="load-more-btn hidden" onclick="loadMoreInventory()">Load More Products</button>
         </main>
     </article>
 
