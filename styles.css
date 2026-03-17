@@ -84,7 +84,6 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .remove-variant-btn { background: #FEE2E2; color: #EF4444; border: none; border-radius: 6px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; flex-shrink: 0; }
 .edit-btn { background: #E0E7FF; color: #4338CA; border: none; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; margin-right: 12px; }
 
-/* --- NEW: CATEGORY STYLES --- */
 .categories-feed { display: flex; flex-direction: column; gap: 24px; padding-bottom: 20px; }
 .cat-section-title { font-size: 14px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.5px; border-bottom: 2px solid #F1F5F9; padding-bottom: 4px; }
 .cat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
@@ -92,3 +91,19 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .admin-cat-card img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: #F8FAFC; }
 .admin-cat-card h4 { font-size: 13px; font-weight: 700; flex: 1; }
 .del-cat-btn { background: #FEE2E2; color: #EF4444; border: none; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; font-weight: bold; }
+
+/* --- NEW PHASE 2 OPTIMIZATIONS --- */
+.orders-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.order-tabs { display: flex; background: #E2E8F0; padding: 4px; border-radius: 10px; gap: 4px; }
+.tab-btn { padding: 6px 16px; border: none; background: transparent; border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
+.tab-btn.active { background: var(--surface); color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.bulk-btn { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: none; }
+.bulk-btn.visible { display: block; animation: fadeIn 0.2s ease; }
+.order-checkbox { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+
+.inventory-toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.inv-search { flex: 1; min-width: 200px; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); outline: none; font-size: 13px; }
+.inv-filter { padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); outline: none; font-size: 13px; background: white; }
+.load-more-btn { width: 100%; padding: 12px; background: #E2E8F0; color: var(--text-main); border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 16px; transition: 0.2s; }
+.load-more-btn:active { transform: scale(0.98); }
+.load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
