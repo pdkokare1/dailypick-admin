@@ -4,7 +4,7 @@ const CLOUDINARY_CLOUD_NAME = 'YOUR_CLOUD_NAME';
 const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET'; 
 
 let currentOrders = []; let currentInventory = []; let currentCategories = []; 
-let currentBrands = []; let currentDistributors = []; // NEW
+let currentBrands = []; let currentDistributors = []; 
 let activeOrder = null; let adminEventSource = null; 
 
 let currentOrderTab = 'All'; 
@@ -15,8 +15,8 @@ let inventoryCategoryFilter = 'All';
 
 // Scanner & Restock State
 let html5QrcodeScanner = null;
-let currentSkuInputTarget = null; // Keeps track of which input gets the scanned barcode
-let restockSelectedVariant = null; // Keeps track of the item selected for restocking
+let currentSkuInputTarget = null; 
+let restockSelectedVariant = null; 
 
 const dailyRevenueEl = document.getElementById('daily-revenue'); const pendingCountEl = document.getElementById('pending-count'); const ordersFeed = document.getElementById('orders-feed'); const inventoryFeed = document.getElementById('inventory-feed'); const orderModalOverlay = document.getElementById('order-modal-overlay');
 const views = { orders: document.getElementById('orders-view'), inventory: document.getElementById('inventory-view') }; 
@@ -235,7 +235,7 @@ async function submitNewDistributor(e) {
     } catch (err) { showToast('Error saving distributor.'); } finally { btn.innerText = 'Save Distributor'; btn.disabled = false; }
 }
 
-// --- BARCODE SCANNER LOGIC ---
+// --- OPTIMIZED BARCODE SCANNER LOGIC ---
 function closeScannerModal() {
     if (html5QrcodeScanner) {
         html5QrcodeScanner.stop().then(() => {
@@ -264,15 +264,32 @@ function startScanner(onSuccessCallback) {
     document.getElementById('scanner-modal').classList.add('active');
     html5QrcodeScanner = new Html5Qrcode("reader");
     
+    // Highly optimized config for retail barcodes
+    const scannerConfig = {
+        fps: 20, // Increased to process frames faster and reduce motion blur
+        // Removed qrbox: Allows scanning anywhere on the screen, better for long barcodes
+        formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.QR_CODE
+        ]
+    };
+    
     html5QrcodeScanner.start(
         { facingMode: "environment" }, // Use back camera
-        { fps: 10, qrbox: { width: 250, height: 150 } },
+        scannerConfig,
         (decodedText) => {
             playBeep();
             closeScannerModal();
             onSuccessCallback(decodedText);
         },
-        (errorMessage) => { /* Ignore constant scan failures */ }
+        (errorMessage) => { 
+            // Library constantly throws errors while searching for a code, we safely ignore them
+        }
     ).catch(err => {
         showToast("Camera access denied or unavailable.");
         closeScannerModal();
@@ -280,7 +297,7 @@ function startScanner(onSuccessCallback) {
 }
 
 function startScannerForSku(btnElement) {
-    currentSkuInputTarget = btnElement.previousElementSibling; // The input field right before the button
+    currentSkuInputTarget = btnElement.previousElementSibling; 
     startScanner((decodedText) => {
         currentSkuInputTarget.value = decodedText;
         showToast(`SKU Captured: ${decodedText}`);
@@ -313,8 +330,6 @@ async function searchRestockItem(overrideSearchTerm = null) {
     
     if (term.length < 2) { resultsContainer.innerHTML = ''; return; }
     
-    // We search the existing loaded inventory, or we can hit the backend search API.
-    // Using backend search API to ensure we find items even if not on page 1.
     try {
         const res = await fetch(`${BACKEND_URL}/api/products?all=true&search=${encodeURIComponent(term)}&limit=10`);
         const result = await res.json();
@@ -351,7 +366,7 @@ function selectItemForRestock(product, variant) {
     document.getElementById('restock-product-id').value = product._id;
     document.getElementById('restock-variant-id').value = variant._id;
     
-    document.getElementById('restock-sell').value = variant.price; // Pre-fill with current retail price
+    document.getElementById('restock-sell').value = variant.price; 
     
     document.getElementById('restock-selected-item').classList.remove('hidden');
     document.getElementById('submit-restock-btn').disabled = false;
@@ -382,7 +397,7 @@ async function submitRestock(e) {
         if (result.success) {
             showToast('Shipment Received & Logged! 📦');
             closeRestockModal();
-            fetchInventory(); // Refresh view
+            fetchInventory(); 
         } else {
             showToast('Failed to process restock.');
         }
@@ -499,7 +514,6 @@ async function markOrderDispatched() {
     } catch (e) { showToast('Network error updating database.'); fetchOrders(); }
 }
 
-// UPDATED: Now includes SKU input and Scan Button
 function addVariantRow(weight = '', price = '', stock = '0', sku = '') {
     const container = document.getElementById('variants-container');
     const row = document.createElement('div');
