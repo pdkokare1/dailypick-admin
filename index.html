@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -64,12 +65,16 @@
                     <input type="file" id="csv-upload" accept=".csv" style="display: none;" onchange="importInventoryCSV(event)">
                     
                     <button class="primary-btn-small" style="background: #0284C7;" onclick="openAddCategoryModal()">+ Add Category</button>
+                    <button class="primary-btn-small" style="background: #0ea5e9;" onclick="openAddBrandModal()">+ Add Brand</button>
+                    <button class="primary-btn-small" style="background: #0369a1;" onclick="openAddDistributorModal()">+ Add Dist.</button>
+                    
                     <button class="primary-btn-small" onclick="openAddProductModal()">+ Add Item</button>
+                    <button class="primary-btn-small" style="background: #f59e0b; color: white;" onclick="openRestockModal()">📦 Receive Shipment</button>
                 </div>
             </div>
             
             <div class="inventory-toolbar">
-                <input type="text" id="inventory-search-input" class="inv-search" placeholder="Search products or hidden tags..." oninput="debounceInventorySearch()">
+                <input type="text" id="inventory-search-input" class="inv-search" placeholder="Search products, SKUs, or tags..." oninput="debounceInventorySearch()">
                 <select id="inventory-cat-filter" class="inv-filter" onchange="applyInventoryFilters()">
                     <option value="All">All Categories</option>
                 </select>
@@ -82,6 +87,72 @@
             <button id="load-more-btn" class="load-more-btn hidden" onclick="loadMoreInventory()">Load More Products</button>
         </main>
     </article>
+
+    <div id="scanner-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 200;">
+        <div class="form-card" style="text-align: center;">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Scan Barcode</h2>
+                <button class="close-btn" onclick="closeScannerModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <div id="reader" style="width: 100%; border-radius: 12px; overflow: hidden;"></div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px;">Point camera at the barcode.</p>
+        </div>
+    </div>
+
+    <div id="restock-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
+        <div class="form-card" style="max-width: 500px; max-height: 90vh; overflow-y: auto;">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Receive Shipment</h2>
+                <button class="close-btn" onclick="closeRestockModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <form id="restock-form" onsubmit="submitRestock(event)">
+                <div class="input-group">
+                    <label>Invoice Number / PO Number</label>
+                    <input type="text" id="restock-invoice" required placeholder="e.g. INV-2026-001">
+                </div>
+                <div class="input-group">
+                    <label>Distributor</label>
+                    <select id="restock-distributor" required></select>
+                </div>
+                
+                <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 20px 0;">
+
+                <div class="input-group">
+                    <label>Scan or Select Item</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="restock-search" placeholder="Type name or scan barcode..." style="flex: 1;" oninput="searchRestockItem()">
+                        <button type="button" class="primary-btn-small" onclick="startScannerForRestock()">📷 Scan</button>
+                    </div>
+                    <div id="restock-search-results" style="margin-top: 8px; max-height: 150px; overflow-y: auto; background: #f8fafc; border-radius: 8px;"></div>
+                </div>
+
+                <div id="restock-selected-item" class="hidden" style="background: #e0f2fe; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #bae6fd;">
+                    <p style="font-size: 11px; font-weight: 700; color: #0369a1; text-transform: uppercase;">Selected Item</p>
+                    <h4 id="restock-item-name" style="margin: 4px 0; font-size: 14px;">-</h4>
+                    <p id="restock-item-variant" style="font-size: 12px; color: #0c4a6e;">-</p>
+                    <input type="hidden" id="restock-product-id">
+                    <input type="hidden" id="restock-variant-id">
+                </div>
+
+                <div class="input-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label>Qty Received</label>
+                        <input type="number" id="restock-qty" required placeholder="0" min="1">
+                    </div>
+                    <div>
+                        <label>Cost Price (₹)</label>
+                        <input type="number" id="restock-cost" required placeholder="0" step="0.01">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>New Retail Selling Price (₹)</label>
+                    <input type="number" id="restock-sell" required placeholder="0" step="0.01">
+                </div>
+
+                <button type="submit" id="submit-restock-btn" class="primary-btn" style="margin-top: 10px;" disabled>Process Restock</button>
+            </form>
+        </div>
+    </div>
 
     <div id="order-modal-overlay" class="modal-overlay" onclick="closeOrderModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
@@ -110,7 +181,7 @@
     </div>
 
     <div id="add-product-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
-        <div class="form-card" style="max-height: 90vh; overflow-y: auto;">
+        <div class="form-card" style="max-height: 90vh; overflow-y: auto; width: 95%; max-width: 600px;">
             <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 id="modal-form-title">Add New Product</h2>
                 <button class="close-btn" onclick="closeAddProductModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
@@ -127,9 +198,20 @@
                     <label>Product Name</label>
                     <input type="text" id="new-name" required placeholder="e.g., Almond Milk">
                 </div>
+                <div class="input-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label>Category</label>
+                        <select id="new-category" required></select>
+                    </div>
+                    <div>
+                        <label>Brand (Optional)</label>
+                        <select id="new-brand"><option value="">Select Brand</option></select>
+                    </div>
+                </div>
                 <div class="input-group">
-                    <label>Assign to Category</label>
-                    <select id="new-category" required></select> </div>
+                    <label>Distributor (Optional)</label>
+                    <select id="new-distributor"><option value="">Select Distributor</option></select>
+                </div>
                 <div class="input-group">
                     <label>Hidden Search Tags (Comma Separated)</label>
                     <input type="text" id="new-tags" placeholder="e.g. sweet, frozen, summer, cold">
@@ -137,7 +219,7 @@
                 
                 <div class="input-group" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #E2E8F0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <label style="margin: 0;">Sizes / Variants</label>
+                        <label style="margin: 0;">Sizes / Variants / SKUs</label>
                         <button type="button" class="primary-btn-small" style="background: #E2E8F0; color: var(--text-main); font-size: 10px;" onclick="addVariantRow()">+ Add Size</button>
                     </div>
                     <div id="variants-container"></div>
@@ -160,6 +242,38 @@
                     <input type="text" id="new-cat-name" required placeholder="e.g., Household Essentials">
                 </div>
                 <button type="submit" id="submit-cat-btn" class="primary-btn" style="margin-top: 10px;">Save Category</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="add-brand-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
+        <div class="form-card">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Create New Brand</h2>
+                <button class="close-btn" onclick="closeAddBrandModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <form onsubmit="submitNewBrand(event)">
+                <div class="input-group">
+                    <label>Brand Name</label>
+                    <input type="text" id="new-brand-name" required placeholder="e.g., Coca-Cola">
+                </div>
+                <button type="submit" id="submit-brand-btn" class="primary-btn" style="margin-top: 10px;">Save Brand</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="add-distributor-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
+        <div class="form-card">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Create New Distributor</h2>
+                <button class="close-btn" onclick="closeAddDistributorModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <form onsubmit="submitNewDistributor(event)">
+                <div class="input-group">
+                    <label>Distributor / Supplier Name</label>
+                    <input type="text" id="new-dist-name" required placeholder="e.g., ABC Beverages Ltd">
+                </div>
+                <button type="submit" id="submit-dist-btn" class="primary-btn" style="margin-top: 10px;">Save Distributor</button>
             </form>
         </div>
     </div>
