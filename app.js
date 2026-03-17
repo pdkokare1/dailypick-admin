@@ -6,10 +6,18 @@ const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET';
 let currentOrders = []; let currentInventory = []; let currentCategories = []; 
 let activeOrder = null; let adminEventSource = null; 
 
+// NEW: Tracking variables for optimizations
+let currentOrderTab = 'All'; 
+let selectedOrders = new Set();
+let inventoryPage = 1;
+let inventorySearchTerm = '';
+let inventoryCategoryFilter = 'All';
+
 const dailyRevenueEl = document.getElementById('daily-revenue'); const pendingCountEl = document.getElementById('pending-count'); const ordersFeed = document.getElementById('orders-feed'); const inventoryFeed = document.getElementById('inventory-feed'); const orderModalOverlay = document.getElementById('order-modal-overlay');
 const views = { orders: document.getElementById('orders-view'), inventory: document.getElementById('inventory-view') }; 
 const navBtns = { orders: document.getElementById('nav-orders'), inventory: document.getElementById('nav-inventory') };
 
+// --- CONNECTION RESILIENCE ---
 function connectAdminLiveStream() {
     if (adminEventSource) return; 
     adminEventSource = new EventSource(`${BACKEND_URL}/api/orders/stream/admin`);
@@ -21,6 +29,14 @@ function connectAdminLiveStream() {
             showToast('🚨 New Order Arrived!');
         }
     };
+    
+    // NEW: Reconnection Logic
+    adminEventSource.onerror = () => {
+        console.warn("SSE Connection lost. Reconnecting in 3s...");
+        adminEventSource.close();
+        adminEventSource = null;
+        setTimeout(connectAdminLiveStream, 3000);
+    };
 }
 
 function switchView(viewName) {
@@ -29,9 +45,10 @@ function switchView(viewName) {
         if (key === viewName) { views[key].classList.add('active'); views[key].classList.remove('hidden'); navBtns[key].classList.add('active'); } 
         else { views[key].classList.remove('active'); views[key].classList.add('hidden'); navBtns[key].classList.remove('active'); }
     });
-    if (viewName === 'inventory') fetchInventory();
+    if (viewName === 'inventory' && currentInventory.length === 0) fetchInventory();
 }
 
+// --- ORDER OPERATIONS ---
 async function fetchOrders() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/orders`);
@@ -44,22 +61,93 @@ async function fetchOrders() {
     } catch (e) { console.error("Order Fetch Error:", e); }
 }
 
+function setOrderTab(tab) {
+    currentOrderTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    updateDashboard();
+}
+
+function toggleOrderSelection(orderId, event) {
+    event.stopPropagation();
+    if (selectedOrders.has(orderId)) selectedOrders.delete(orderId);
+    else selectedOrders.add(orderId);
+    updateBulkDispatchUI();
+}
+
+function updateBulkDispatchUI() {
+    const btn = document.getElementById('bulk-dispatch-btn');
+    if (selectedOrders.size > 0) {
+        btn.innerText = `Dispatch Selected (${selectedOrders.size})`;
+        btn.classList.add('visible');
+    } else {
+        btn.classList.remove('visible');
+    }
+}
+
+async function bulkDispatchOrders() {
+    if (selectedOrders.size === 0) return;
+    const btn = document.getElementById('bulk-dispatch-btn');
+    btn.innerText = 'Dispatching...'; btn.disabled = true;
+    
+    const idsToDispatch = Array.from(selectedOrders);
+    
+    try {
+        // Safe: Loops existing backend call rather than risking a backend alteration
+        await Promise.all(idsToDispatch.map(id => 
+            fetch(`${BACKEND_URL}/api/orders/${id}/dispatch`, { method: 'PUT' })
+        ));
+        
+        showToast(`Dispatched ${idsToDispatch.length} orders! 📦`);
+        currentOrders = currentOrders.filter(o => !selectedOrders.has(o._id));
+        selectedOrders.clear();
+        updateDashboard();
+    } catch (err) {
+        showToast('Error during bulk dispatch.');
+    } finally {
+        btn.disabled = false;
+        updateBulkDispatchUI();
+    }
+}
+
 function updateDashboard() {
     const pending = currentOrders.filter(o => o.status === 'Order Placed');
     dailyRevenueEl.innerText = `₹${pending.reduce((s, o) => s + o.totalAmount, 0)}`;
     pendingCountEl.innerText = pending.length;
     ordersFeed.innerHTML = '';
-    if (pending.length === 0) { ordersFeed.innerHTML = '<p class="empty-state">No pending orders.</p>'; return; }
-    pending.forEach(order => {
+    
+    // Filtering by Tabs
+    let displayOrders = pending;
+    if (currentOrderTab === 'Instant') displayOrders = pending.filter(o => o.deliveryType !== 'Routine');
+    if (currentOrderTab === 'Routine') displayOrders = pending.filter(o => o.deliveryType === 'Routine');
+
+    if (displayOrders.length === 0) { ordersFeed.innerHTML = `<p class="empty-state">No pending orders in ${currentOrderTab}.</p>`; return; }
+    
+    displayOrders.forEach(order => {
         const isRoutine = order.deliveryType === 'Routine';
+        
+        const cardWrapper = document.createElement('div');
+        cardWrapper.style.display = 'flex'; cardWrapper.style.alignItems = 'center'; cardWrapper.style.gap = '12px';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'order-checkbox';
+        checkbox.checked = selectedOrders.has(order._id);
+        checkbox.onclick = (e) => toggleOrderSelection(order._id, e);
+
         const card = document.createElement('div'); card.classList.add('order-card');
+        card.style.flex = '1';
         card.innerHTML = `<div class="order-info"><h4>Order #${order._id.toString().slice(-4).toUpperCase()}</h4><p class="order-meta">${order.customerName || 'Guest'} • ${isRoutine ? '📅 Routine' : '⚡ Instant'}</p></div><div class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</div>`;
         card.onclick = () => openOrderModal(order);
-        ordersFeed.appendChild(card);
+        
+        cardWrapper.appendChild(checkbox);
+        cardWrapper.appendChild(card);
+        ordersFeed.appendChild(cardWrapper);
     });
+    
+    updateBulkDispatchUI();
 }
 
-// --- NEW: CATEGORY MANAGEMENT ---
 async function fetchCategories() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/categories`);
@@ -68,10 +156,20 @@ async function fetchCategories() {
             currentCategories = result.data;
             const select = document.getElementById('new-category');
             select.innerHTML = currentCategories.length === 0 ? '<option value="" disabled selected>No Categories Created</option>' : '';
+            
+            const filterSelect = document.getElementById('inventory-cat-filter');
+            if(filterSelect) filterSelect.innerHTML = '<option value="All">All Categories</option>';
+
             currentCategories.forEach(cat => {
                 const option = document.createElement('option');
                 option.value = cat.name; option.innerText = cat.name;
                 select.appendChild(option);
+                
+                if(filterSelect) {
+                    const filterOption = document.createElement('option');
+                    filterOption.value = cat.name; filterOption.innerText = cat.name;
+                    filterSelect.appendChild(filterOption);
+                }
             });
         }
     } catch (e) { console.error("Error loading categories", e); }
@@ -93,31 +191,64 @@ async function submitNewCategory(e) {
         const result = await res.json();
         if (result.success) {
             closeAddCategoryModal(); fetchCategories(); showToast('Category Added!');
-        } else {
-            showToast(result.message);
+        } else { showToast(result.message); }
+    } catch (err) { showToast('Error saving category.'); } finally { btn.innerText = 'Save Category'; btn.disabled = false; }
+}
+
+// --- INVENTORY PAGINATION & SEARCH ---
+let searchTimeout;
+function debounceInventorySearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(applyInventoryFilters, 500);
+}
+
+function applyInventoryFilters() {
+    inventorySearchTerm = document.getElementById('inventory-search-input').value.trim();
+    inventoryCategoryFilter = document.getElementById('inventory-cat-filter').value;
+    inventoryPage = 1;
+    fetchInventory();
+}
+
+function loadMoreInventory() {
+    inventoryPage++;
+    fetchInventory();
+}
+
+async function fetchInventory() {
+    if(inventoryPage === 1) inventoryFeed.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
+    const loadBtn = document.getElementById('load-more-btn');
+    if (loadBtn) { loadBtn.innerText = 'Loading...'; loadBtn.disabled = true; }
+
+    try {
+        // Appends search, category, page, and limit to URL
+        let queryUrl = `${BACKEND_URL}/api/products?all=true&page=${inventoryPage}&limit=30`;
+        if (inventorySearchTerm) queryUrl += `&search=${encodeURIComponent(inventorySearchTerm)}`;
+        if (inventoryCategoryFilter !== 'All') queryUrl += `&category=${encodeURIComponent(inventoryCategoryFilter)}`;
+
+        const res = await fetch(queryUrl);
+        const result = await res.json();
+        
+        if (result.success) { 
+            if (inventoryPage === 1) currentInventory = result.data;
+            else currentInventory = [...currentInventory, ...result.data];
+            
+            renderInventory(result.data.length < 30); 
         }
-    } catch (err) {
-        showToast('Error saving category.');
+    } catch (e) { 
+        if(inventoryPage === 1) inventoryFeed.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
     } finally {
-        btn.innerText = 'Save Category'; btn.disabled = false;
+        if (loadBtn) { loadBtn.innerText = 'Load More Products'; loadBtn.disabled = false; }
     }
 }
 
-// --- INVENTORY MANAGEMENT ---
-async function fetchInventory() {
-    inventoryFeed.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/products?all=true`);
-        const result = await res.json();
-        if (result.success) { currentInventory = result.data; renderInventory(); }
-    } catch (e) { inventoryFeed.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; }
-}
-
-function renderInventory() {
-    inventoryFeed.innerHTML = '';
-    if (currentInventory.length === 0) { inventoryFeed.innerHTML = '<p class="empty-state">No products found.</p>'; return; }
+function renderInventory(isLastPage = true) {
+    if (inventoryPage === 1) inventoryFeed.innerHTML = '';
+    if (currentInventory.length === 0) { inventoryFeed.innerHTML = '<p class="empty-state">No products found.</p>'; document.getElementById('load-more-btn').classList.add('hidden'); return; }
     
-    currentInventory.forEach(p => {
+    // Render only the newly fetched page if paginating, or re-render all if page 1
+    const itemsToRender = inventoryPage === 1 ? currentInventory : currentInventory.slice((inventoryPage - 1) * 30);
+
+    itemsToRender.forEach(p => {
         const card = document.createElement('div'); card.classList.add('inventory-card');
         if (!p.isActive) card.classList.add('inactive');
         
@@ -140,6 +271,10 @@ function renderInventory() {
             </div>`;
         inventoryFeed.appendChild(card);
     });
+
+    const loadBtn = document.getElementById('load-more-btn');
+    if (isLastPage) loadBtn.classList.add('hidden');
+    else loadBtn.classList.remove('hidden');
 }
 
 async function toggleProductStatus(id, btn, e) {
@@ -147,7 +282,10 @@ async function toggleProductStatus(id, btn, e) {
     try {
         const res = await fetch(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' });
         const result = await res.json();
-        if (result.success) fetchInventory();
+        if (result.success) {
+            btn.classList.toggle('active');
+            btn.closest('.inventory-card').classList.toggle('inactive');
+        }
     } catch (err) { console.error("Toggle Error:", err); }
 }
 
@@ -176,6 +314,7 @@ function closeOrderModal() { orderModalOverlay.classList.remove('active'); }
 async function markOrderDispatched() {
     if (!activeOrder) return; const targetOrderId = activeOrder._id;
     currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
+    selectedOrders.delete(targetOrderId);
     closeOrderModal(); updateDashboard(); showToast('Dispatching to rider... 📦');
     try {
         const res = await fetch(`${BACKEND_URL}/api/orders/${targetOrderId}/dispatch`, { method: 'PUT' });
@@ -219,16 +358,14 @@ function openEditProductModal(id, e) {
     
     document.getElementById('new-name').value = p.name;
     document.getElementById('new-category').value = p.category;
-    document.getElementById('new-tags').value = p.searchTags || ''; // NEW: Populate Tags
+    document.getElementById('new-tags').value = p.searchTags || ''; 
     document.getElementById('current-image-text').style.display = p.imageUrl ? 'block' : 'none';
 
     const container = document.getElementById('variants-container');
     container.innerHTML = '';
     if (p.variants && p.variants.length > 0) {
         p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, v.stock));
-    } else {
-        addVariantRow(p.weightOrVolume || '', p.price || '', 0);
-    }
+    } else { addVariantRow(p.weightOrVolume || '', p.price || '', 0); }
 
     document.getElementById('add-product-modal').classList.add('active');
 }
@@ -252,58 +389,39 @@ async function submitNewProduct(e) {
             const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
             const uploadData = await uploadRes.json();
             finalImageUrl = uploadData.secure_url; 
-        } else if (!editId) {
-            finalImageUrl = ''; 
-        }
+        } else if (!editId) { finalImageUrl = ''; }
 
         const variantRows = document.querySelectorAll('.variant-row');
         const variants = [];
         variantRows.forEach(row => {
-            variants.push({
-                weightOrVolume: row.querySelector('.var-weight').value,
-                price: Number(row.querySelector('.var-price').value),
-                stock: Number(row.querySelector('.var-stock').value)
-            });
+            variants.push({ weightOrVolume: row.querySelector('.var-weight').value, price: Number(row.querySelector('.var-price').value), stock: Number(row.querySelector('.var-stock').value) });
         });
 
-        const p = {
-            name: document.getElementById('new-name').value,
-            category: document.getElementById('new-category').value,
-            searchTags: document.getElementById('new-tags').value.trim(), // NEW: Save Tags
-            variants: variants
-        };
+        const p = { name: document.getElementById('new-name').value, category: document.getElementById('new-category').value, searchTags: document.getElementById('new-tags').value.trim(), variants: variants };
         if (finalImageUrl !== undefined) p.imageUrl = finalImageUrl;
 
         const method = editId ? 'PUT' : 'POST';
         const url = editId ? `${BACKEND_URL}/api/products/${editId}` : `${BACKEND_URL}/api/products`;
 
-        await fetch(url, {
-            method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p)
-        });
+        await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
         
-        closeAddProductModal(); fetchInventory(); showToast(editId ? 'Product Updated!' : 'Product Added!');
-    } catch (err) {
-        console.error("Save Product Error:", err);
-        showToast('Error saving product.');
-    } finally {
-        btn.innerText = 'Save Product'; btn.disabled = false;
-    }
+        closeAddProductModal(); 
+        inventoryPage = 1; // Reset to page 1 to see the new item
+        fetchInventory(); 
+        showToast(editId ? 'Product Updated!' : 'Product Added!');
+    } catch (err) { console.error("Save Product Error:", err); showToast('Error saving product.'); } 
+    finally { btn.innerText = 'Save Product'; btn.disabled = false; }
 }
 
-// --- UPDATED CSV EXPORT FOR TAGS ---
 function exportInventoryCSV() {
     if (currentInventory.length === 0) return showToast('No inventory to export.');
-    
-    // NEW: Added SearchTags column
     let csvContent = "Name,Category,Image URL,SearchTags,VariantsJSON\n";
-    
     currentInventory.forEach(p => {
         const cleanName = p.name.replace(/,/g, ''); 
-        const cleanTags = (p.searchTags || '').replace(/,/g, ';'); // Replace commas with semicolons to avoid breaking CSV
+        const cleanTags = (p.searchTags || '').replace(/,/g, ';'); 
         const variantsString = JSON.stringify(p.variants || []).replace(/"/g, '""'); 
         csvContent += `${cleanName},${p.category},${p.imageUrl || ''},${cleanTags},"${variantsString}"\n`;
     });
-
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -315,7 +433,6 @@ function exportInventoryCSV() {
     document.body.removeChild(link);
 }
 
-// --- UPDATED CSV IMPORT FOR TAGS ---
 function importInventoryCSV(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -324,53 +441,26 @@ function importInventoryCSV(event) {
     reader.onload = async function(e) {
         const text = e.target.result;
         const rows = text.split('\n').map(row => row.trim()).filter(row => row);
-        
         const productsToImport = [];
         
         for (let i = 1; i < rows.length; i++) {
             const cols = rows[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
-            if (cols && cols.length >= 5) { // NEW: Expecting 5 columns now
+            if (cols && cols.length >= 5) { 
                 let variantsArr = [];
-                try {
-                    variantsArr = JSON.parse(cols[4].replace(/(^"|"$)/g, '').replace(/""/g, '"'));
-                } catch(e) { console.log('Error parsing variants JSON on row', i); }
-
+                try { variantsArr = JSON.parse(cols[4].replace(/(^"|"$)/g, '').replace(/""/g, '"')); } catch(e) { console.log('Error parsing JSON row', i); }
                 productsToImport.push({
-                    name: cols[0].replace(/(^"|"$)/g, '').trim(),
-                    category: cols[1].replace(/(^"|"$)/g, '').trim(),
-                    imageUrl: cols[2].replace(/(^"|"$)/g, '').trim(),
-                    searchTags: cols[3].replace(/(^"|"$)/g, '').replace(/;/g, ',').trim(), // Restore commas
-                    variants: variantsArr
+                    name: cols[0].replace(/(^"|"$)/g, '').trim(), category: cols[1].replace(/(^"|"$)/g, '').trim(), imageUrl: cols[2].replace(/(^"|"$)/g, '').trim(), searchTags: cols[3].replace(/(^"|"$)/g, '').replace(/;/g, ',').trim(), variants: variantsArr
                 });
             }
         }
-
-        if (productsToImport.length === 0) {
-            event.target.value = ''; 
-            return showToast('No valid rows found in file.');
-        }
-
+        if (productsToImport.length === 0) { event.target.value = ''; return showToast('No valid rows found.'); }
         showToast(`Uploading ${productsToImport.length} items to database...`);
-        
         try {
-            const res = await fetch(`${BACKEND_URL}/api/products/bulk`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ products: productsToImport })
-            });
+            const res = await fetch(`${BACKEND_URL}/api/products/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ products: productsToImport }) });
             const result = await res.json();
-            
-            if (result.success) {
-                showToast(result.message);
-                fetchInventory(); 
-            } else {
-                showToast('Database Error importing items.');
-            }
-        } catch (err) {
-            console.error("Bulk Import Error:", err);
-            showToast('Network error during import.');
-        }
-        
+            if (result.success) { showToast(result.message); inventoryPage = 1; fetchInventory(); } 
+            else { showToast('Database Error.'); }
+        } catch (err) { console.error("Import Error:", err); showToast('Network error.'); }
         event.target.value = ''; 
     };
     reader.readAsText(file);
