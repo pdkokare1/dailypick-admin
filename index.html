@@ -132,6 +132,19 @@
                 <h2>Performance Analytics</h2>
                 <button class="refresh-btn" onclick="fetchAnalytics()">↻ Refresh</button>
             </div>
+            
+            <div class="section-header" style="margin-top: 10px;">
+                <h2>Data Export Hub</h2>
+            </div>
+            <div class="export-grid" style="margin-bottom: 24px;">
+                <button class="primary-btn-small" style="background: #334155;" onclick="exportOrdersCSV()">📦 Export All Orders</button>
+                <button class="primary-btn-small" style="background: #0284C7;" onclick="exportCustomersCSV()">👥 Export Customers</button>
+                <button class="primary-btn-small" style="background: #10b981;" onclick="exportFinancialsCSV('Daily')">📊 Daily Revenue</button>
+                <button class="primary-btn-small" style="background: #059669;" onclick="exportFinancialsCSV('Monthly')">📊 Monthly Revenue</button>
+                <button class="primary-btn-small" style="background: #047857;" onclick="exportFinancialsCSV('Quarterly')">📊 Quarterly Revenue</button>
+                <button class="primary-btn-small" style="background: #065f46;" onclick="exportFinancialsCSV('Annual')">📊 Annual Revenue</button>
+            </div>
+
             <div class="chart-container">
                 <canvas id="revenueChart" height="100"></canvas>
             </div>
