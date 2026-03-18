@@ -379,6 +379,35 @@
                 <h3 id="deep-dive-name" style="margin-bottom: 4px;">-</h3>
                 <p id="deep-dive-phone" style="font-size: 13px; color: var(--text-muted); font-weight: 600;">-</p>
             </div>
+
+            <div id="credit-management-section" style="background: #F8FAFC; padding: 16px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #E2E8F0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0; color: var(--primary);">Pay Later Ledger</h4>
+                    <button class="toggle-switch" id="credit-toggle" onclick="toggleCredit()"></button>
+                </div>
+                
+                <div id="credit-details" class="hidden">
+                    <div class="input-group">
+                        <label>Maximum Credit Limit (₹)</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="number" id="credit-limit-input" placeholder="0">
+                            <button class="primary-btn-small" onclick="saveCreditLimit()">Save</button>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; margin-bottom: 16px; padding: 12px; background: white; border-radius: 8px; border: 1px solid #E2E8F0;">
+                        <span style="font-size: 13px; font-weight: 600;">Outstanding Debt:</span>
+                        <strong id="credit-used-display" style="color: #DC2626; font-size: 16px;">₹0</strong>
+                    </div>
+                    <div class="input-group" style="margin-bottom: 0; border-top: 1px dashed #CBD5E1; padding-top: 16px;">
+                        <label>Record Customer Payment</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="number" id="payment-amount-input" placeholder="Amount (₹)">
+                            <button class="primary-btn-small" style="background: #10b981;" onclick="submitPayment()">Receive Funds</button>
+                        </div>
+                    </div>
+                </div>
+                <p id="credit-disabled-msg" style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Credit facility is currently disabled for this user.</p>
+            </div>
             <h4>Order History</h4>
             <div id="customer-history-container" class="customer-history-list">
                 <p class="empty-state">Loading history...</p>
