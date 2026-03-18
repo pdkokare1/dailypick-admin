@@ -1,9 +1,12 @@
+/* pdkokare1/dailypick-admin/dailypick-admin-df203888c6fd87726009df81d774db1093720637/app.js */
+
 const BACKEND_URL = 'https://dailypick-backend-production-05d6.up.railway.app';
 const CLOUDINARY_CLOUD_NAME = 'YOUR_CLOUD_NAME'; 
 const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET'; 
 
 // State Variables
 let currentOrders = []; 
+let allHistoricalOrders = []; // New state for full analytics
 let currentInventory = []; 
 let currentCategories = []; 
 let currentBrands = []; 
@@ -350,7 +353,7 @@ async function markOrderDispatched() {
     }
 }
 
-// --- NEW PHASE 6: DATA EXPORT HUB ---
+// --- DATA EXPORT HUB ---
 async function exportOrdersCSV() {
     showToast('Fetching orders for export...');
     try {
@@ -465,33 +468,89 @@ function triggerCSVDownload(csvContent, filename) {
     document.body.removeChild(link);
 }
 
-// --- ANALYTICS ---
+// --- ANALYTICS (NEW DYNAMIC DATE RANGES) ---
 async function fetchAnalytics() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/orders/analytics`);
+        const res = await fetch(`${BACKEND_URL}/api/orders`);
         const result = await res.json();
         
         if (result.success) {
-            renderChart(result.data.chartLabels, result.data.revenueData);
-            
-            const feed = document.getElementById('top-items-feed');
-            feed.innerHTML = '';
-            
-            if (result.data.topItems.length === 0) {
-                feed.innerHTML = '<p class="empty-state">No sales data for the last 7 days.</p>';
-            } else {
-                result.data.topItems.forEach(item => {
-                    feed.innerHTML += `
-                        <div class="top-item-card">
-                            <span class="top-item-name">${item.name}</span>
-                            <span class="top-item-stats">${item.qty} units • ₹${item.revenue}</span>
-                        </div>
-                    `;
-                });
-            }
+            allHistoricalOrders = result.data.filter(o => o.status !== 'Cancelled');
+            updateAnalyticsRange(7); // Default to 7 days
         }
     } catch (e) {
         console.error("Analytics Error", e);
+    }
+}
+
+function updateAnalyticsRange(daysLimit) {
+    // Update button UI
+    document.querySelectorAll('.date-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`date-btn-${daysLimit === 999 ? 'all' : daysLimit}`).classList.add('active');
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const cutoffDate = new Date(today);
+    cutoffDate.setDate(today.getDate() - (daysLimit - 1));
+    cutoffDate.setHours(0, 0, 0, 0);
+
+    const filteredOrders = allHistoricalOrders.filter(o => new Date(o.createdAt) >= cutoffDate && new Date(o.createdAt) <= today);
+
+    // 1. Process Chart Data
+    let revenueMap = {};
+    let labels = [];
+    
+    // Pre-fill days based on selection (up to 30 days)
+    const pointsToGraph = Math.min(daysLimit, 30);
+    for (let i = pointsToGraph - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        labels.push(label);
+        revenueMap[label] = 0;
+    }
+
+    let itemFrequency = {};
+
+    filteredOrders.forEach(o => {
+        // Chart aggregation
+        const orderDate = new Date(o.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        if (revenueMap[orderDate] !== undefined) {
+            revenueMap[orderDate] += o.totalAmount;
+        }
+
+        // Top items aggregation
+        o.items.forEach(i => {
+            const key = `${i.name} (${i.selectedVariant || i.weightOrVolume || 'Standard'})`;
+            if (!itemFrequency[key]) itemFrequency[key] = { qty: 0, revenue: 0 };
+            itemFrequency[key].qty += i.qty;
+            itemFrequency[key].revenue += (i.price * i.qty);
+        });
+    });
+
+    const data = labels.map(label => revenueMap[label]);
+    renderChart(labels, data);
+
+    // 2. Process Top Items
+    const topItems = Object.entries(itemFrequency)
+        .map(([name, stats]) => ({ name, qty: stats.qty, revenue: stats.revenue }))
+        .sort((a,b) => b.qty - a.qty)
+        .slice(0, 8); // Top 8
+
+    const feed = document.getElementById('top-items-feed');
+    feed.innerHTML = '';
+    
+    if (topItems.length === 0) {
+        feed.innerHTML = `<p class="empty-state">No sales data for the selected timeframe.</p>`;
+    } else {
+        topItems.forEach(item => {
+            feed.innerHTML += `
+                <div class="top-item-card">
+                    <span class="top-item-name">${item.name}</span>
+                    <span class="top-item-stats">${item.qty} units • ₹${item.revenue}</span>
+                </div>
+            `;
+        });
     }
 }
 
@@ -521,7 +580,7 @@ function renderChart(labels, data) {
     });
 }
 
-// --- CRM LOGIC ---
+// --- CRM LOGIC & CUSTOMER DEEP-DIVE ---
 async function fetchCustomers() {
     const feed = document.getElementById('crm-feed');
     feed.innerHTML = '<p class="empty-state">Loading customers...</p>';
@@ -537,17 +596,27 @@ async function fetchCustomers() {
                 return;
             }
             
+            // Ensure we have historical orders for deep dive
+            if (allHistoricalOrders.length === 0) {
+                const orderRes = await fetch(`${BACKEND_URL}/api/orders`);
+                const orderData = await orderRes.json();
+                if(orderData.success) allHistoricalOrders = orderData.data;
+            }
+
             result.data.forEach(c => {
                 const wLink = `https://wa.me/91${c.phone}?text=Hi%20${c.name.split(' ')[0]},%20here%20is%20a%20special%20offer%20from%20DailyPick!`;
                 feed.innerHTML += `
-                    <div class="customer-card">
+                    <div class="customer-card" onclick="openCustomerModal('${c.phone}', '${c.name.replace(/'/g, "\\'")}')">
                         <h3>${c.name}</h3>
                         <p>📞 ${c.phone}</p>
                         <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; margin-bottom: 12px;">
                             <span>Orders: ${c.orderCount}</span>
                             <span style="color:#0A3622;">LTV: ₹${c.lifetimeValue}</span>
                         </div>
-                        <a href="${wLink}" target="_blank" class="whatsapp-btn">💬 Message on WhatsApp</a>
+                        <div style="display:flex; gap: 8px;" onclick="event.stopPropagation()">
+                            <a href="${wLink}" target="_blank" class="whatsapp-btn">💬 Promo Message</a>
+                            <button class="history-btn" onclick="openCustomerModal('${c.phone}', '${c.name.replace(/'/g, "\\'")}')">View History</button>
+                        </div>
                     </div>
                 `;
             });
@@ -555,6 +624,42 @@ async function fetchCustomers() {
     } catch (e) {
         feed.innerHTML = '<p class="empty-state">Error loading CRM.</p>';
     }
+}
+
+function openCustomerModal(phone, name) {
+    document.getElementById('deep-dive-name').innerText = name;
+    document.getElementById('deep-dive-phone').innerText = phone;
+    
+    const container = document.getElementById('customer-history-container');
+    container.innerHTML = '';
+
+    const customerOrders = allHistoricalOrders.filter(o => o.customerPhone === phone).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    if (customerOrders.length === 0) {
+        container.innerHTML = '<p class="empty-state">No orders found.</p>';
+    } else {
+        customerOrders.forEach(o => {
+            const dateStr = new Date(o.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const itemPreview = o.items.map(i => `${i.qty}x ${i.name}`).join(', ').substring(0, 40) + '...';
+            
+            container.innerHTML += `
+                <div class="history-order-card">
+                    <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">${dateStr}</span>
+                        <span style="font-size: 11px; font-weight: 800; color: var(--primary);">₹${o.totalAmount}</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-main); font-weight: 600; margin-bottom: 4px;">${o.deliveryType} Delivery</p>
+                    <p style="font-size: 11px; color: var(--text-muted);">${itemPreview}</p>
+                </div>
+            `;
+        });
+    }
+
+    document.getElementById('customer-modal').classList.add('active');
+}
+
+function closeCustomerModal() {
+    document.getElementById('customer-modal').classList.remove('active');
 }
 
 // --- SETUP DATA FETCHING ---
@@ -1466,6 +1571,42 @@ function closeAddProductModal() {
     document.getElementById('add-product-modal').classList.remove('active'); 
 }
 
+// NEW: Client-Side Image Compression Tool
+function compressImage(file, maxWidth = 800, maxHeight = 800) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = event => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height *= maxWidth / width;
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width *= maxHeight / height;
+                        height = maxHeight;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob(blob => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.85);
+            };
+            img.onerror = error => reject(error);
+        };
+        reader.onerror = error => reject(error);
+    });
+}
+
 async function submitNewProduct(e) {
     e.preventDefault();
     const btn = document.getElementById('submit-product-btn');
@@ -1478,8 +1619,11 @@ async function submitNewProduct(e) {
         let finalImageUrl = undefined; 
 
         if (fileInput.files.length > 0) {
+            // Compress the image before uploading to Cloudinary
+            const compressedFile = await compressImage(fileInput.files[0]);
+            
             const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+            formData.append('file', compressedFile);
             formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
             const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
             const uploadData = await uploadRes.json();
@@ -1534,135 +1678,7 @@ async function submitNewProduct(e) {
     }
 }
 
-// --- CSV UTILITIES & EXPORTS ---
-function exportInventoryCSV() {
-    if (currentInventory.length === 0) return showToast('No inventory to export.');
-    
-    let csvContent = "Name,Category,Brand,Distributor,Image URL,SearchTags,VariantsJSON\n";
-    currentInventory.forEach(p => {
-        const cleanName = p.name.replace(/,/g, ''); 
-        const cleanTags = (p.searchTags || '').replace(/,/g, ';'); 
-        const variantsString = JSON.stringify(p.variants || []).replace(/"/g, '""'); 
-        csvContent += `${cleanName},${p.category},${p.brand || ''},${p.distributorName || ''},${p.imageUrl || ''},${cleanTags},"${variantsString}"\n`;
-    });
-    
-    triggerCSVDownload(csvContent, "dailypick_inventory_export.csv");
-}
-
-async function exportOrdersCSV() {
-    showToast('Fetching orders for export...');
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/orders`);
-        const result = await res.json();
-        if (result.success) {
-            if (result.data.length === 0) return showToast('No orders to export.');
-            
-            let csvContent = "Order ID,Date,Customer Name,Phone,Address,Delivery Type,Total Amount,Payment Method,Status,Items\n";
-            result.data.forEach(o => {
-                const cleanName = (o.customerName || 'Guest').replace(/,/g, '');
-                const cleanPhone = o.customerPhone || '';
-                const cleanAddress = (o.deliveryAddress || '').replace(/,/g, ';').replace(/\n/g, ' ');
-                const date = new Date(o.createdAt).toLocaleString().replace(/,/g, '');
-                const itemsStr = o.items.map(i => `${i.qty}x ${i.name}`).join(' | ');
-                
-                csvContent += `${o._id},${date},${cleanName},${cleanPhone},${cleanAddress},${o.deliveryType},${o.totalAmount},${o.paymentMethod},${o.status},"${itemsStr}"\n`;
-            });
-            
-            triggerCSVDownload(csvContent, "dailypick_orders_export.csv");
-        } else {
-            showToast('Failed to fetch orders.');
-        }
-    } catch(e) {
-        showToast('Network error during export.');
-    }
-}
-
-async function exportCustomersCSV() {
-    showToast('Fetching customers for export...');
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/orders/customers`);
-        const result = await res.json();
-        if (result.success) {
-            if (result.data.length === 0) return showToast('No customers to export.');
-            
-            let csvContent = "Name,Phone Number,Total Orders,Lifetime Value (INR),Last Active Date\n";
-            result.data.forEach(c => {
-                const cleanName = (c.name || 'Guest').replace(/,/g, '');
-                const date = new Date(c.lastOrderDate).toLocaleString().replace(/,/g, '');
-                
-                csvContent += `${cleanName},${c.phone},${c.orderCount},${c.lifetimeValue},${date}\n`;
-            });
-            
-            triggerCSVDownload(csvContent, "dailypick_customers_export.csv");
-        } else {
-            showToast('Failed to fetch customers.');
-        }
-    } catch(e) {
-        showToast('Network error during export.');
-    }
-}
-
-async function exportFinancialsCSV(timeframe) {
-    showToast(`Generating ${timeframe} financials export...`);
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/orders`);
-        const result = await res.json();
-        if (result.success) {
-            const orders = result.data.filter(o => o.status !== 'Cancelled');
-            if (orders.length === 0) return showToast('No sales data available.');
-            
-            let groupedData = {};
-            
-            orders.forEach(o => {
-                const date = new Date(o.createdAt);
-                let key = '';
-                
-                if (timeframe === 'Daily') {
-                    key = date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
-                } else if (timeframe === 'Monthly') {
-                    key = date.toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
-                } else if (timeframe === 'Quarterly') {
-                    const q = Math.floor(date.getMonth() / 3) + 1;
-                    key = `Q${q} ${date.getFullYear()}`;
-                } else if (timeframe === 'Annual') {
-                    key = `${date.getFullYear()}`;
-                }
-                
-                if (!groupedData[key]) {
-                    groupedData[key] = { orders: 0, revenue: 0 };
-                }
-                groupedData[key].orders += 1;
-                groupedData[key].revenue += o.totalAmount;
-            });
-            
-            let csvContent = `Time Period (${timeframe}),Total Orders,Total Revenue (INR),Average Order Value (INR)\n`;
-            Object.keys(groupedData).forEach(key => {
-                const d = groupedData[key];
-                const aov = (d.revenue / d.orders).toFixed(2);
-                csvContent += `${key},${d.orders},${d.revenue},${aov}\n`;
-            });
-            
-            triggerCSVDownload(csvContent, `dailypick_financials_${timeframe.toLowerCase()}.csv`);
-        } else {
-            showToast('Failed to fetch data.');
-        }
-    } catch(e) {
-        showToast('Network error during export.');
-    }
-}
-
-function triggerCSVDownload(csvContent, filename) {
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
+// --- CSV UTILITIES (Import Logic unchanged) ---
 function importInventoryCSV(event) {
     const file = event.target.files[0];
     if (!file) return;
