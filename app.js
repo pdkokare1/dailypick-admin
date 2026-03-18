@@ -703,7 +703,7 @@ async function fetchCustomerCreditProfile(phone) {
                 msg.innerText = "Credit facility is currently disabled for this user.";
             }
         } else {
-            // REMOVED restriction clause. Now we show the inputs immediately to allow auto-creation.
+            // Show the inputs immediately to allow auto-creation.
             document.getElementById('credit-limit-input').value = 0;
             document.getElementById('credit-used-display').innerText = `₹0`;
             toggle.classList.remove('active');
@@ -719,12 +719,27 @@ async function toggleCredit() {
     if (!currentCustomerPhone) return;
     
     const toggle = document.getElementById('credit-toggle');
+    const details = document.getElementById('credit-details');
+    const msg = document.getElementById('credit-disabled-msg');
+    
     const isCurrentlyActive = toggle.classList.contains('active');
     const newStatus = !isCurrentlyActive; 
     
     const limitInput = document.getElementById('credit-limit-input').value || 0;
-    const nameInput = document.getElementById('deep-dive-name').innerText; // Grabs name to auto-create profile
+    const nameInput = document.getElementById('deep-dive-name').innerText;
     
+    // OPTIMISTIC UI UPDATE (Instant Feedback)
+    if (newStatus) {
+        toggle.classList.add('active');
+        details.classList.remove('hidden');
+        msg.classList.add('hidden');
+    } else {
+        toggle.classList.remove('active');
+        details.classList.add('hidden');
+        msg.innerText = "Credit facility is currently disabled for this user.";
+        msg.classList.remove('hidden');
+    }
+
     try {
         const res = await fetch(`${BACKEND_URL}/api/customers/profile/${currentCustomerPhone}/limit`, {
             method: 'PUT',
@@ -735,12 +750,22 @@ async function toggleCredit() {
         
         if (result.success) {
             showToast(newStatus ? 'Credit Enabled!' : 'Credit Disabled!');
-            fetchCustomerCreditProfile(currentCustomerPhone); 
+            // Removed the redundant fetchCustomerCreditProfile() call to fix the lag
         } else {
-            showToast(result.message || 'Failed to update credit status.');
+            throw new Error(result.message || 'Failed to update credit status.');
         }
     } catch (e) {
-        showToast('Network error updating credit.');
+        // Revert UI if network request fails
+        if (isCurrentlyActive) {
+            toggle.classList.add('active');
+            details.classList.remove('hidden');
+            msg.classList.add('hidden');
+        } else {
+            toggle.classList.remove('active');
+            details.classList.add('hidden');
+            msg.classList.remove('hidden');
+        }
+        showToast('Network error updating credit. Reverting...');
     }
 }
 
