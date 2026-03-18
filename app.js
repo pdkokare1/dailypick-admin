@@ -1,5 +1,4 @@
 const BACKEND_URL = 'https://dailypick-backend-production-05d6.up.railway.app';
-
 const CLOUDINARY_CLOUD_NAME = 'YOUR_CLOUD_NAME'; 
 const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET'; 
 
@@ -19,9 +18,11 @@ let selectedInventory = new Set();
 let inventoryPage = 1;
 let inventorySearchTerm = '';
 let inventoryCategoryFilter = 'All';
-let inventoryBrandFilter = 'All';      // NEW
-let inventoryDistributorFilter = 'All'; // NEW
+let inventoryBrandFilter = 'All';      
+let inventoryDistributorFilter = 'All'; 
 let isLowStockFilterActive = false; 
+
+let revenueChartInstance = null; 
 
 // Scanner & Restock State
 let html5QrcodeScanner = null;
@@ -35,14 +36,19 @@ const ordersFeed = document.getElementById('orders-feed');
 const inventoryFeed = document.getElementById('inventory-feed'); 
 const orderModalOverlay = document.getElementById('order-modal-overlay');
 
+// Expanded View Routing
 const views = { 
     orders: document.getElementById('orders-view'), 
-    inventory: document.getElementById('inventory-view') 
+    inventory: document.getElementById('inventory-view'),
+    analytics: document.getElementById('analytics-view'),
+    customers: document.getElementById('customers-view') 
 }; 
 
 const navBtns = { 
     orders: document.getElementById('nav-orders'), 
-    inventory: document.getElementById('nav-inventory') 
+    inventory: document.getElementById('nav-inventory'),
+    analytics: document.getElementById('nav-analytics'),
+    customers: document.getElementById('nav-customers') 
 };
 
 // --- REAL-TIME CONNECTION ---
@@ -69,7 +75,13 @@ function connectAdminLiveStream() {
 }
 
 function switchView(viewName) {
-    document.getElementById('header-subtitle').innerText = viewName === 'orders' ? 'Live Operations Center' : 'Inventory Management';
+    const titles = {
+        orders: 'Live Operations Center',
+        inventory: 'Inventory Management',
+        analytics: 'Business Insights',
+        customers: 'Customer Directory'
+    };
+    document.getElementById('header-subtitle').innerText = titles[viewName];
     
     Object.keys(views).forEach(key => {
         if (key === viewName) { 
@@ -83,12 +95,82 @@ function switchView(viewName) {
         }
     });
     
-    if (viewName === 'inventory' && currentInventory.length === 0) {
-        fetchInventory();
+    if (viewName === 'inventory' && currentInventory.length === 0) fetchInventory();
+    if (viewName === 'analytics') fetchAnalytics();
+    if (viewName === 'customers') fetchCustomers();
+}
+
+// --- ORDER HANDLING & ACTIONS ---
+function printReceipt() {
+    if (!activeOrder) return;
+    const pContainer = document.getElementById('print-receipt-container');
+    
+    const itemsHtml = activeOrder.items.map(i => `
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span>${i.qty}x ${i.name.substring(0, 15)}</span>
+            <span>${(i.price * i.qty).toFixed(2)}</span>
+        </div>
+    `).join('');
+
+    pContainer.innerHTML = `
+        <div style="text-align: center; border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
+            <h2 style="margin:0; font-size:18px;">DAILYPICK</h2>
+            <p style="margin:0;">Order #${activeOrder._id.toString().slice(-4).toUpperCase()}</p>
+            <p style="margin:0;">Date: ${new Date(activeOrder.createdAt).toLocaleString()}</p>
+        </div>
+        <div style="border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
+            <p style="margin:0;"><strong>Customer:</strong> ${activeOrder.customerName || 'Guest'}</p>
+            <p style="margin:0;"><strong>Phone:</strong> ${activeOrder.customerPhone || 'N/A'}</p>
+            <p style="margin:0;"><strong>Route:</strong> ${activeOrder.deliveryAddress || 'N/A'}</p>
+            <p style="margin:0;"><strong>Type:</strong> ${activeOrder.deliveryType}</p>
+        </div>
+        <div style="border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
+            <strong>ITEMS:</strong><br>
+            ${itemsHtml}
+        </div>
+        <div style="text-align: right; font-weight: bold; font-size: 14px;">
+            TOTAL: ₹${activeOrder.totalAmount.toFixed(2)}<br>
+            PAYMENT: ${activeOrder.paymentMethod}
+        </div>
+    `;
+    
+    window.print();
+}
+
+async function cancelOrder() {
+    if (!activeOrder) return;
+    const confirmCancel = confirm("Are you sure you want to cancel this order? Stock will be refunded automatically.");
+    if (!confirmCancel) return;
+
+    const targetOrderId = activeOrder._id;
+    currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
+    selectedOrders.delete(targetOrderId);
+    
+    closeOrderModal(); 
+    updateDashboard(); 
+    showToast('Cancelling order & refunding stock...');
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders/${targetOrderId}/cancel`, { 
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: "Admin Cancelled" })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            showToast('Order Cancelled successfully.');
+            if (currentInventory.length > 0) { inventoryPage = 1; fetchInventory(); }
+        } else {
+            showToast('Database Error during cancellation.');
+            fetchOrders();
+        }
+    } catch (e) {
+        showToast('Network error.');
+        fetchOrders();
     }
 }
 
-// --- ORDER MANAGEMENT ---
 async function fetchOrders() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/orders`);
@@ -202,6 +284,164 @@ function updateDashboard() {
     updateBulkDispatchUI();
 }
 
+function openOrderModal(order) {
+    activeOrder = order;
+    document.getElementById('modal-order-id').innerText = `Order #${order._id.toString().slice(-4).toUpperCase()}`;
+    document.getElementById('modal-customer-name').innerText = order.customerName || 'Guest';
+    
+    const phoneEl = document.getElementById('modal-customer-phone');
+    phoneEl.innerText = order.customerPhone || 'N/A'; 
+    phoneEl.href = `tel:${order.customerPhone || ''}`;
+    
+    document.getElementById('modal-customer-address').innerText = order.deliveryAddress || 'N/A';
+    
+    document.getElementById('modal-delivery-badge').innerHTML = `
+        <span class="type-badge ${order.deliveryType === 'Routine' ? 'type-routine' : 'type-instant'}">
+            ${order.deliveryType} ${order.deliveryType === 'Routine' ? '(' + order.scheduleTime + ')' : ''}
+        </span>
+    `;
+    
+    document.getElementById('modal-total').innerText = `₹${order.totalAmount}`;
+    document.getElementById('modal-payment').innerText = order.paymentMethod;
+    
+    const listEl = document.getElementById('modal-packing-list'); 
+    listEl.innerHTML = '';
+    
+    order.items.forEach(i => {
+        const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
+        const li = document.createElement('li'); 
+        li.style.display = 'flex'; 
+        li.style.justifyContent = 'space-between'; 
+        li.style.padding = '8px 0'; 
+        li.style.borderBottom = '1px solid #eee';
+        li.innerHTML = `<span>${i.name}${variantText}</span><span class="item-qty">x${i.qty}</span>`;
+        listEl.appendChild(li);
+    });
+    
+    orderModalOverlay.classList.add('active');
+}
+
+function closeOrderModal() { 
+    orderModalOverlay.classList.remove('active'); 
+}
+
+async function markOrderDispatched() {
+    if (!activeOrder) return; 
+    
+    const targetOrderId = activeOrder._id;
+    currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
+    selectedOrders.delete(targetOrderId);
+    
+    closeOrderModal(); 
+    updateDashboard(); 
+    showToast('Dispatching to rider... 📦');
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders/${targetOrderId}/dispatch`, { method: 'PUT' });
+        const result = await res.json();
+        
+        if (!result.success) { 
+            showToast('Database Error.'); 
+            fetchOrders(); 
+        }
+    } catch (e) { 
+        showToast('Network error updating database.'); 
+        fetchOrders(); 
+    }
+}
+
+// --- ANALYTICS ---
+async function fetchAnalytics() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders/analytics`);
+        const result = await res.json();
+        
+        if (result.success) {
+            renderChart(result.data.chartLabels, result.data.revenueData);
+            
+            const feed = document.getElementById('top-items-feed');
+            feed.innerHTML = '';
+            
+            if (result.data.topItems.length === 0) {
+                feed.innerHTML = '<p class="empty-state">No sales data for the last 7 days.</p>';
+            } else {
+                result.data.topItems.forEach(item => {
+                    feed.innerHTML += `
+                        <div class="top-item-card">
+                            <span class="top-item-name">${item.name}</span>
+                            <span class="top-item-stats">${item.qty} units • ₹${item.revenue}</span>
+                        </div>
+                    `;
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Analytics Error", e);
+    }
+}
+
+function renderChart(labels, data) {
+    const ctx = document.getElementById('revenueChart').getContext('2d');
+    if (revenueChartInstance) revenueChartInstance.destroy(); 
+    
+    revenueChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Revenue (₹)',
+                data: data,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+// --- CRM LOGIC ---
+async function fetchCustomers() {
+    const feed = document.getElementById('crm-feed');
+    feed.innerHTML = '<p class="empty-state">Loading customers...</p>';
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders/customers`);
+        const result = await res.json();
+        
+        if (result.success) {
+            feed.innerHTML = '';
+            if (result.data.length === 0) {
+                feed.innerHTML = '<p class="empty-state">No customers found.</p>';
+                return;
+            }
+            
+            result.data.forEach(c => {
+                const wLink = `https://wa.me/91${c.phone}?text=Hi%20${c.name.split(' ')[0]},%20here%20is%20a%20special%20offer%20from%20DailyPick!`;
+                feed.innerHTML += `
+                    <div class="customer-card">
+                        <h3>${c.name}</h3>
+                        <p>📞 ${c.phone}</p>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; margin-bottom: 12px;">
+                            <span>Orders: ${c.orderCount}</span>
+                            <span style="color:#0A3622;">LTV: ₹${c.lifetimeValue}</span>
+                        </div>
+                        <a href="${wLink}" target="_blank" class="whatsapp-btn">💬 Message on WhatsApp</a>
+                    </div>
+                `;
+            });
+        }
+    } catch (e) {
+        feed.innerHTML = '<p class="empty-state">Error loading CRM.</p>';
+    }
+}
+
 // --- SETUP DATA FETCHING ---
 async function fetchCategories() {
     try {
@@ -245,7 +485,7 @@ async function fetchBrands() {
         if (result.success) {
             currentBrands = result.data;
             const select = document.getElementById('new-brand');
-            const filterSelect = document.getElementById('inventory-brand-filter'); // NEW
+            const filterSelect = document.getElementById('inventory-brand-filter'); 
             
             select.innerHTML = '<option value="">Select Brand (Optional)</option>';
             if (filterSelect) filterSelect.innerHTML = '<option value="All">All Brands</option>';
@@ -278,7 +518,7 @@ async function fetchDistributors() {
             currentDistributors = result.data;
             const select = document.getElementById('new-distributor');
             const restockSelect = document.getElementById('restock-distributor');
-            const filterSelect = document.getElementById('inventory-dist-filter'); // NEW
+            const filterSelect = document.getElementById('inventory-dist-filter'); 
             
             select.innerHTML = '<option value="">Select Distributor (Optional)</option>';
             restockSelect.innerHTML = '<option value="">Select a Distributor</option>';
@@ -613,7 +853,6 @@ async function submitRestock(e) {
     }
 }
 
-// --- HELPERS: Restock, Inline Edit, Dashboard ---
 function quickRestock(productId, variantId, event) {
     event.stopPropagation();
     const product = currentInventory.find(p => p._id === productId);
@@ -625,7 +864,6 @@ function quickRestock(productId, variantId, event) {
     selectItemForRestock(product, variant);
 }
 
-// NEW HELPER: Open Restock History Audit Log
 function openRestockHistory(productId, variantId, event) {
     event.stopPropagation();
     const product = currentInventory.find(p => p._id === productId);
@@ -642,7 +880,6 @@ function openRestockHistory(productId, variantId, event) {
     if (!variant.purchaseHistory || variant.purchaseHistory.length === 0) {
         container.innerHTML = '<p class="empty-state">No history found for this item.</p>';
     } else {
-        // Sort newest first
         const sortedHistory = [...variant.purchaseHistory].sort((a,b) => new Date(b.date) - new Date(a.date));
         
         sortedHistory.forEach(h => {
@@ -699,7 +936,7 @@ async function saveInlineEdit(productId, variantId, field, element, event) {
 function updateInventoryDashboard() {
     let outOfStock = 0;
     let lowStock = 0;
-    let deadStock = 0; // NEW
+    let deadStock = 0; 
     let totalValue = 0;
 
     currentInventory.forEach(p => {
@@ -707,7 +944,7 @@ function updateInventoryDashboard() {
             p.variants.forEach(v => {
                 if (v.stock === 0) outOfStock++;
                 else if (v.stock <= (v.lowStockThreshold || 5)) lowStock++;
-                else if (v.stock > 15) deadStock++; // Basic dead stock logic
+                else if (v.stock > 15) deadStock++; 
 
                 totalValue += (v.stock * v.price);
             });
@@ -720,16 +957,14 @@ function updateInventoryDashboard() {
 
     document.getElementById('stat-out-stock').innerText = outOfStock;
     document.getElementById('stat-low-stock').innerText = lowStock;
-    document.getElementById('stat-dead-stock').innerText = deadStock; // NEW
+    document.getElementById('stat-dead-stock').innerText = deadStock; 
     document.getElementById('stat-total-value').innerText = `₹${totalValue.toFixed(2)}`;
 }
 
-// --- NEW HELPER: Reorder List Generator ---
 function generateReorderList() {
     let reorderData = {};
     let totalItemsCount = 0;
 
-    // Filter items that are low or out of stock
     currentInventory.forEach(p => {
         if (p.variants) {
             p.variants.forEach(v => {
@@ -756,7 +991,6 @@ function generateReorderList() {
         reportText += `\n\n`;
     }
 
-    // Copy to clipboard
     navigator.clipboard.writeText(reportText).then(() => {
         showToast(`Reorder list (${totalItemsCount} items) copied to clipboard!`);
     }).catch(err => {
@@ -895,7 +1129,6 @@ async function fetchInventory() {
         if (inventorySearchTerm) queryUrl += `&search=${encodeURIComponent(inventorySearchTerm)}`;
         if (inventoryCategoryFilter !== 'All') queryUrl += `&category=${encodeURIComponent(inventoryCategoryFilter)}`;
         
-        // NEW: Send brand and distributor filters to backend
         if (inventoryBrandFilter !== 'All') queryUrl += `&brand=${encodeURIComponent(inventoryBrandFilter)}`;
         if (inventoryDistributorFilter !== 'All') queryUrl += `&distributor=${encodeURIComponent(inventoryDistributorFilter)}`;
 
@@ -979,7 +1212,6 @@ function renderInventory(isLastPage = true) {
         if (lowestStockFlag === 'out') stockBadge = `<span class="badge-out">Out of Stock</span>`;
         else if (lowestStockFlag === 'low') stockBadge = `<span class="badge-low">Low Stock (${totalStock})</span>`;
 
-        // NEW: Calculate Margin and History Button
         const variantsHtml = (p.variants || []).map(v => {
             let lastCost = 0;
             if (v.purchaseHistory && v.purchaseHistory.length > 0) {
@@ -1054,72 +1286,6 @@ async function toggleProductStatus(id, btn, e) {
         }
     } catch (err) { 
         console.error("Toggle Error:", err); 
-    }
-}
-
-function openOrderModal(order) {
-    activeOrder = order;
-    document.getElementById('modal-order-id').innerText = `Order #${order._id.toString().slice(-4).toUpperCase()}`;
-    document.getElementById('modal-customer-name').innerText = order.customerName || 'Guest';
-    
-    const phoneEl = document.getElementById('modal-customer-phone');
-    phoneEl.innerText = order.customerPhone || 'N/A'; 
-    phoneEl.href = `tel:${order.customerPhone || ''}`;
-    
-    document.getElementById('modal-customer-address').innerText = order.deliveryAddress || 'N/A';
-    
-    document.getElementById('modal-delivery-badge').innerHTML = `
-        <span class="type-badge ${order.deliveryType === 'Routine' ? 'type-routine' : 'type-instant'}">
-            ${order.deliveryType} ${order.deliveryType === 'Routine' ? '(' + order.scheduleTime + ')' : ''}
-        </span>
-    `;
-    
-    document.getElementById('modal-total').innerText = `₹${order.totalAmount}`;
-    document.getElementById('modal-payment').innerText = order.paymentMethod;
-    
-    const listEl = document.getElementById('modal-packing-list'); 
-    listEl.innerHTML = '';
-    
-    order.items.forEach(i => {
-        const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
-        const li = document.createElement('li'); 
-        li.style.display = 'flex'; 
-        li.style.justifyContent = 'space-between'; 
-        li.style.padding = '8px 0'; 
-        li.style.borderBottom = '1px solid #eee';
-        li.innerHTML = `<span>${i.name}${variantText}</span><span class="item-qty">x${i.qty}</span>`;
-        listEl.appendChild(li);
-    });
-    
-    orderModalOverlay.classList.add('active');
-}
-
-function closeOrderModal() { 
-    orderModalOverlay.classList.remove('active'); 
-}
-
-async function markOrderDispatched() {
-    if (!activeOrder) return; 
-    
-    const targetOrderId = activeOrder._id;
-    currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
-    selectedOrders.delete(targetOrderId);
-    
-    closeOrderModal(); 
-    updateDashboard(); 
-    showToast('Dispatching to rider... 📦');
-    
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/orders/${targetOrderId}/dispatch`, { method: 'PUT' });
-        const result = await res.json();
-        
-        if (!result.success) { 
-            showToast('Database Error.'); 
-            fetchOrders(); 
-        }
-    } catch (e) { 
-        showToast('Network error updating database.'); 
-        fetchOrders(); 
     }
 }
 
