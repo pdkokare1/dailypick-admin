@@ -63,6 +63,7 @@
                 <h2>Live Catalog</h2>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="primary-btn-small" style="background: #334155;" onclick="exportInventoryCSV()">⬇️ Export</button>
+                    <button class="primary-btn-small" style="background: #10b981;" onclick="generateReorderList()">📋 Reorder List</button>
                     
                     <button class="primary-btn-small" style="background: #0284C7;" onclick="openAddCategoryModal()">+ Category</button>
                     <button class="primary-btn-small" style="background: #0ea5e9;" onclick="openAddBrandModal()">+ Brand</button>
@@ -82,6 +83,10 @@
                     <h3>Low Stock</h3>
                     <p id="stat-low-stock">0</p>
                 </div>
+                <div class="inv-stat-card warning">
+                    <h3>Dead Stock</h3>
+                    <p id="stat-dead-stock">0</p>
+                </div>
                 <div class="inv-stat-card">
                     <h3>Total Value</h3>
                     <p id="stat-total-value">₹0</p>
@@ -93,6 +98,14 @@
                 
                 <select id="inventory-cat-filter" class="inv-filter" style="max-width: 150px;" onchange="applyInventoryFilters()">
                     <option value="All">All Categories</option>
+                </select>
+
+                <select id="inventory-brand-filter" class="inv-filter" style="max-width: 150px;" onchange="applyInventoryFilters()">
+                    <option value="All">All Brands</option>
+                </select>
+
+                <select id="inventory-dist-filter" class="inv-filter" style="max-width: 150px;" onchange="applyInventoryFilters()">
+                    <option value="All">All Distributors</option>
                 </select>
 
                 <select id="inventory-sort" class="inv-filter" onchange="applyInventoryFilters()">
@@ -166,6 +179,22 @@
                 </div>
                 <button type="submit" id="submit-restock-btn" class="primary-btn" style="margin-top: 10px;" disabled>Process Restock</button>
             </form>
+        </div>
+    </div>
+
+    <div id="history-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
+        <div class="form-card" style="max-width: 500px; max-height: 90vh; overflow-y: auto;">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Restock History</h2>
+                <button class="close-btn" onclick="document.getElementById('history-modal').classList.remove('active')" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <div style="background: #e0f2fe; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #bae6fd;">
+                <h4 id="history-item-name" style="margin: 4px 0; font-size: 14px; color: #0369a1;">-</h4>
+                <p id="history-item-variant" style="font-size: 12px; color: #0c4a6e;">-</p>
+            </div>
+            <div id="history-timeline-container" class="history-timeline">
+                <p class="empty-state">No history found for this item.</p>
+            </div>
         </div>
     </div>
 
