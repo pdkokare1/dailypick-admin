@@ -41,7 +41,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .orders-feed, .inventory-feed { display: flex; flex-direction: column; gap: 12px; }
 .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; font-size: 14px; }
 
-.order-card, .inventory-card { background: var(--surface); border-radius: 16px; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.04); cursor: pointer; }
+.order-card, .inventory-card { background: var(--surface); border-radius: 16px; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.04); cursor: pointer; flex-wrap: wrap; }
 
 .type-badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
 .type-instant { background: #DCFCE7; color: #16A34A; }
@@ -93,9 +93,9 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .tab-btn.active { background: var(--surface); color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 .bulk-btn { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: none; }
 .bulk-btn.visible { display: block; animation: fadeIn 0.2s ease; }
-.order-checkbox { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.order-checkbox { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; margin-right: 10px; }
 
-.inventory-toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.inventory-toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
 .inv-search { flex: 1; min-width: 200px; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); outline: none; font-size: 13px; }
 .inv-filter { padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); outline: none; font-size: 13px; background: white; }
 .load-more-btn { width: 100%; padding: 12px; background: #E2E8F0; color: var(--text-main); border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 16px; transition: 0.2s; }
@@ -113,3 +113,22 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .restock-result-item:hover { background: #f1f5f9; }
 .restock-result-item h4 { font-size: 13px; color: var(--text-main); margin-bottom: 2px; }
 .restock-result-item p { font-size: 11px; color: var(--text-muted); }
+
+/* --- NEW PHASE 4 OPTIMIZATIONS (Simpler, Dynamic, Helpful) --- */
+.inv-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+.inv-stat-card { background: var(--surface); padding: 16px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 2px 8px rgba(0,0,0,0.02); text-align: center; }
+.inv-stat-card h3 { font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+.inv-stat-card p { font-size: 18px; font-weight: 800; color: var(--primary); }
+.inv-stat-card.alert p { color: #DC2626; }
+
+.badge-healthy { background: #DCFCE7; color: #16A34A; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-left: 6px; }
+.badge-low { background: #FEF3C7; color: #D97706; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-left: 6px; }
+.badge-out { background: #FEE2E2; color: #DC2626; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-left: 6px; }
+
+.quick-restock-btn { background: #fef3c7; color: #d97706; border: 1px solid #fde68a; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+.quick-restock-btn:hover { background: #fde68a; }
+
+.inline-edit-input { width: 60px; padding: 4px 8px; font-size: 11px; border: 1px solid #E2E8F0; border-radius: 6px; outline: none; font-weight: 600; text-align: center; }
+.inline-edit-input:focus { border-color: var(--primary); background: #F8FAFC; }
+
+.variant-collapse-btn { background: none; border: none; font-size: 11px; color: var(--primary); font-weight: 700; cursor: pointer; padding: 4px 8px; }
