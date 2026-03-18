@@ -350,6 +350,121 @@ async function markOrderDispatched() {
     }
 }
 
+// --- NEW PHASE 6: DATA EXPORT HUB ---
+async function exportOrdersCSV() {
+    showToast('Fetching orders for export...');
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders`);
+        const result = await res.json();
+        if (result.success) {
+            if (result.data.length === 0) return showToast('No orders to export.');
+            
+            let csvContent = "Order ID,Date,Customer Name,Phone,Address,Delivery Type,Total Amount,Payment Method,Status,Items\n";
+            result.data.forEach(o => {
+                const cleanName = (o.customerName || 'Guest').replace(/,/g, '');
+                const cleanPhone = o.customerPhone || '';
+                const cleanAddress = (o.deliveryAddress || '').replace(/,/g, ';').replace(/\n/g, ' ');
+                const date = new Date(o.createdAt).toLocaleString().replace(/,/g, '');
+                const itemsStr = o.items.map(i => `${i.qty}x ${i.name}`).join(' | ');
+                
+                csvContent += `${o._id},${date},${cleanName},${cleanPhone},${cleanAddress},${o.deliveryType},${o.totalAmount},${o.paymentMethod},${o.status},"${itemsStr}"\n`;
+            });
+            
+            triggerCSVDownload(csvContent, "dailypick_orders_export.csv");
+        } else {
+            showToast('Failed to fetch orders.');
+        }
+    } catch(e) {
+        showToast('Network error during export.');
+    }
+}
+
+async function exportCustomersCSV() {
+    showToast('Fetching customers for export...');
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders/customers`);
+        const result = await res.json();
+        if (result.success) {
+            if (result.data.length === 0) return showToast('No customers to export.');
+            
+            let csvContent = "Name,Phone Number,Total Orders,Lifetime Value (INR),Last Active Date\n";
+            result.data.forEach(c => {
+                const cleanName = (c.name || 'Guest').replace(/,/g, '');
+                const date = new Date(c.lastOrderDate).toLocaleString().replace(/,/g, '');
+                
+                csvContent += `${cleanName},${c.phone},${c.orderCount},${c.lifetimeValue},${date}\n`;
+            });
+            
+            triggerCSVDownload(csvContent, "dailypick_customers_export.csv");
+        } else {
+            showToast('Failed to fetch customers.');
+        }
+    } catch(e) {
+        showToast('Network error during export.');
+    }
+}
+
+async function exportFinancialsCSV(timeframe) {
+    showToast(`Generating ${timeframe} financials export...`);
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders`);
+        const result = await res.json();
+        if (result.success) {
+            const orders = result.data.filter(o => o.status !== 'Cancelled');
+            if (orders.length === 0) return showToast('No sales data available.');
+            
+            let groupedData = {};
+            
+            orders.forEach(o => {
+                const date = new Date(o.createdAt);
+                let key = '';
+                
+                if (timeframe === 'Daily') {
+                    key = date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                } else if (timeframe === 'Monthly') {
+                    key = date.toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+                } else if (timeframe === 'Quarterly') {
+                    const q = Math.floor(date.getMonth() / 3) + 1;
+                    key = `Q${q} ${date.getFullYear()}`;
+                } else if (timeframe === 'Annual') {
+                    key = `${date.getFullYear()}`;
+                }
+                
+                if (!groupedData[key]) {
+                    groupedData[key] = { orders: 0, revenue: 0 };
+                }
+                groupedData[key].orders += 1;
+                groupedData[key].revenue += o.totalAmount;
+            });
+            
+            let csvContent = `Time Period (${timeframe}),Total Orders,Total Revenue (INR),Average Order Value (INR)\n`;
+            Object.keys(groupedData).forEach(key => {
+                const d = groupedData[key];
+                const aov = (d.revenue / d.orders).toFixed(2);
+                csvContent += `${key},${d.orders},${d.revenue},${aov}\n`;
+            });
+            
+            triggerCSVDownload(csvContent, `dailypick_financials_${timeframe.toLowerCase()}.csv`);
+        } else {
+            showToast('Failed to fetch data.');
+        }
+    } catch(e) {
+        showToast('Network error during export.');
+    }
+}
+
+function triggerCSVDownload(csvContent, filename) {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
 // --- ANALYTICS ---
 async function fetchAnalytics() {
     try {
@@ -1419,7 +1534,7 @@ async function submitNewProduct(e) {
     }
 }
 
-// --- CSV UTILITIES ---
+// --- CSV UTILITIES & EXPORTS ---
 function exportInventoryCSV() {
     if (currentInventory.length === 0) return showToast('No inventory to export.');
     
@@ -1431,11 +1546,117 @@ function exportInventoryCSV() {
         csvContent += `${cleanName},${p.category},${p.brand || ''},${p.distributorName || ''},${p.imageUrl || ''},${cleanTags},"${variantsString}"\n`;
     });
     
+    triggerCSVDownload(csvContent, "dailypick_inventory_export.csv");
+}
+
+async function exportOrdersCSV() {
+    showToast('Fetching orders for export...');
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders`);
+        const result = await res.json();
+        if (result.success) {
+            if (result.data.length === 0) return showToast('No orders to export.');
+            
+            let csvContent = "Order ID,Date,Customer Name,Phone,Address,Delivery Type,Total Amount,Payment Method,Status,Items\n";
+            result.data.forEach(o => {
+                const cleanName = (o.customerName || 'Guest').replace(/,/g, '');
+                const cleanPhone = o.customerPhone || '';
+                const cleanAddress = (o.deliveryAddress || '').replace(/,/g, ';').replace(/\n/g, ' ');
+                const date = new Date(o.createdAt).toLocaleString().replace(/,/g, '');
+                const itemsStr = o.items.map(i => `${i.qty}x ${i.name}`).join(' | ');
+                
+                csvContent += `${o._id},${date},${cleanName},${cleanPhone},${cleanAddress},${o.deliveryType},${o.totalAmount},${o.paymentMethod},${o.status},"${itemsStr}"\n`;
+            });
+            
+            triggerCSVDownload(csvContent, "dailypick_orders_export.csv");
+        } else {
+            showToast('Failed to fetch orders.');
+        }
+    } catch(e) {
+        showToast('Network error during export.');
+    }
+}
+
+async function exportCustomersCSV() {
+    showToast('Fetching customers for export...');
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders/customers`);
+        const result = await res.json();
+        if (result.success) {
+            if (result.data.length === 0) return showToast('No customers to export.');
+            
+            let csvContent = "Name,Phone Number,Total Orders,Lifetime Value (INR),Last Active Date\n";
+            result.data.forEach(c => {
+                const cleanName = (c.name || 'Guest').replace(/,/g, '');
+                const date = new Date(c.lastOrderDate).toLocaleString().replace(/,/g, '');
+                
+                csvContent += `${cleanName},${c.phone},${c.orderCount},${c.lifetimeValue},${date}\n`;
+            });
+            
+            triggerCSVDownload(csvContent, "dailypick_customers_export.csv");
+        } else {
+            showToast('Failed to fetch customers.');
+        }
+    } catch(e) {
+        showToast('Network error during export.');
+    }
+}
+
+async function exportFinancialsCSV(timeframe) {
+    showToast(`Generating ${timeframe} financials export...`);
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders`);
+        const result = await res.json();
+        if (result.success) {
+            const orders = result.data.filter(o => o.status !== 'Cancelled');
+            if (orders.length === 0) return showToast('No sales data available.');
+            
+            let groupedData = {};
+            
+            orders.forEach(o => {
+                const date = new Date(o.createdAt);
+                let key = '';
+                
+                if (timeframe === 'Daily') {
+                    key = date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                } else if (timeframe === 'Monthly') {
+                    key = date.toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+                } else if (timeframe === 'Quarterly') {
+                    const q = Math.floor(date.getMonth() / 3) + 1;
+                    key = `Q${q} ${date.getFullYear()}`;
+                } else if (timeframe === 'Annual') {
+                    key = `${date.getFullYear()}`;
+                }
+                
+                if (!groupedData[key]) {
+                    groupedData[key] = { orders: 0, revenue: 0 };
+                }
+                groupedData[key].orders += 1;
+                groupedData[key].revenue += o.totalAmount;
+            });
+            
+            let csvContent = `Time Period (${timeframe}),Total Orders,Total Revenue (INR),Average Order Value (INR)\n`;
+            Object.keys(groupedData).forEach(key => {
+                const d = groupedData[key];
+                const aov = (d.revenue / d.orders).toFixed(2);
+                csvContent += `${key},${d.orders},${d.revenue},${aov}\n`;
+            });
+            
+            triggerCSVDownload(csvContent, `dailypick_financials_${timeframe.toLowerCase()}.csv`);
+        } else {
+            showToast('Failed to fetch data.');
+        }
+    } catch(e) {
+        showToast('Network error during export.');
+    }
+}
+
+function triggerCSVDownload(csvContent, filename) {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", "dailypick_inventory.csv"); 
+    link.setAttribute("download", filename);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
