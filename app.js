@@ -18,7 +18,7 @@ let selectedOrders = new Set();
 let inventoryPage = 1;
 let inventorySearchTerm = '';
 let inventoryCategoryFilter = 'All';
-let isLowStockFilterActive = false;
+let isLowStockFilterActive = false; 
 
 // Scanner & Restock State
 let html5QrcodeScanner = null;
@@ -204,13 +204,16 @@ async function fetchCategories() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/categories`);
         const result = await res.json();
+        
         if (result.success) { 
             currentCategories = result.data;
             const select = document.getElementById('new-category');
             select.innerHTML = currentCategories.length === 0 ? '<option value="" disabled selected>No Categories Created</option>' : '';
             
             const filterSelect = document.getElementById('inventory-cat-filter');
-            if(filterSelect) filterSelect.innerHTML = '<option value="All">All Categories</option>';
+            if (filterSelect) {
+                filterSelect.innerHTML = '<option value="All">All Categories</option>';
+            }
 
             currentCategories.forEach(cat => {
                 const option = document.createElement('option');
@@ -218,7 +221,7 @@ async function fetchCategories() {
                 option.innerText = cat.name;
                 select.appendChild(option);
                 
-                if(filterSelect) {
+                if (filterSelect) {
                     const filterOption = document.createElement('option');
                     filterOption.value = cat.name; 
                     filterOption.innerText = cat.name;
@@ -226,17 +229,21 @@ async function fetchCategories() {
                 }
             });
         }
-    } catch (e) { console.error("Error loading categories", e); }
+    } catch (e) { 
+        console.error("Error loading categories", e); 
+    }
 }
 
 async function fetchBrands() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/brands`);
         const result = await res.json();
+        
         if (result.success) {
             currentBrands = result.data;
             const select = document.getElementById('new-brand');
             select.innerHTML = '<option value="">Select Brand (Optional)</option>';
+            
             currentBrands.forEach(b => {
                 const opt = document.createElement('option');
                 opt.value = b.name; 
@@ -244,13 +251,16 @@ async function fetchBrands() {
                 select.appendChild(opt);
             });
         }
-    } catch (e) { console.error("Error loading brands", e); }
+    } catch (e) { 
+        console.error("Error loading brands", e); 
+    }
 }
 
 async function fetchDistributors() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/distributors`);
         const result = await res.json();
+        
         if (result.success) {
             currentDistributors = result.data;
             const select = document.getElementById('new-distributor');
@@ -271,50 +281,127 @@ async function fetchDistributors() {
                 restockSelect.appendChild(opt2);
             });
         }
-    } catch (e) { console.error("Error loading distributors", e); }
+    } catch (e) { 
+        console.error("Error loading distributors", e); 
+    }
 }
 
-// --- SETUP MODALS & SUBMISSIONS ---
-function openAddCategoryModal() { document.getElementById('add-category-form').reset(); document.getElementById('add-category-modal').classList.add('active'); }
-function closeAddCategoryModal() { document.getElementById('add-category-modal').classList.remove('active'); }
+// --- MODALS & FORM SUBMISSIONS ---
+function openAddCategoryModal() { 
+    document.getElementById('add-category-form').reset(); 
+    document.getElementById('add-category-modal').classList.add('active'); 
+}
+
+function closeAddCategoryModal() { 
+    document.getElementById('add-category-modal').classList.remove('active'); 
+}
+
 async function submitNewCategory(e) { 
     e.preventDefault(); 
     const btn = document.getElementById('submit-cat-btn'); 
     btn.innerText = 'Saving...'; 
     btn.disabled = true; 
+    
     try { 
-        const res = await fetch(`${BACKEND_URL}/api/categories`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: document.getElementById('new-cat-name').value.trim() }) }); 
+        const res = await fetch(`${BACKEND_URL}/api/categories`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ name: document.getElementById('new-cat-name').value.trim() }) 
+        }); 
+        
         const result = await res.json(); 
-        if (result.success) { closeAddCategoryModal(); fetchCategories(); showToast('Category Added!'); } else { showToast(result.message); } 
-    } catch (err) { showToast('Error saving category.'); } finally { btn.innerText = 'Save Category'; btn.disabled = false; } 
+        
+        if (result.success) { 
+            closeAddCategoryModal(); 
+            fetchCategories(); 
+            showToast('Category Added!'); 
+        } else { 
+            showToast(result.message); 
+        } 
+    } catch (err) { 
+        showToast('Error saving category.'); 
+    } finally { 
+        btn.innerText = 'Save Category'; 
+        btn.disabled = false; 
+    } 
 }
 
-function openAddBrandModal() { document.getElementById('new-brand-name').value = ''; document.getElementById('add-brand-modal').classList.add('active'); }
-function closeAddBrandModal() { document.getElementById('add-brand-modal').classList.remove('active'); }
+function openAddBrandModal() { 
+    document.getElementById('new-brand-name').value = ''; 
+    document.getElementById('add-brand-modal').classList.add('active'); 
+}
+
+function closeAddBrandModal() { 
+    document.getElementById('add-brand-modal').classList.remove('active'); 
+}
+
 async function submitNewBrand(e) { 
     e.preventDefault(); 
     const btn = document.getElementById('submit-brand-btn'); 
     btn.innerText = 'Saving...'; 
     btn.disabled = true; 
+    
     try { 
-        const res = await fetch(`${BACKEND_URL}/api/brands`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: document.getElementById('new-brand-name').value.trim() }) }); 
+        const res = await fetch(`${BACKEND_URL}/api/brands`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ name: document.getElementById('new-brand-name').value.trim() }) 
+        }); 
+        
         const result = await res.json(); 
-        if (result.success) { closeAddBrandModal(); fetchBrands(); showToast('Brand Added!'); } else { showToast(result.message); } 
-    } catch (err) { showToast('Error saving brand.'); } finally { btn.innerText = 'Save Brand'; btn.disabled = false; } 
+        
+        if (result.success) { 
+            closeAddBrandModal(); 
+            fetchBrands(); 
+            showToast('Brand Added!'); 
+        } else { 
+            showToast(result.message); 
+        } 
+    } catch (err) { 
+        showToast('Error saving brand.'); 
+    } finally { 
+        btn.innerText = 'Save Brand'; 
+        btn.disabled = false; 
+    } 
 }
 
-function openAddDistributorModal() { document.getElementById('new-dist-name').value = ''; document.getElementById('add-distributor-modal').classList.add('active'); }
-function closeAddDistributorModal() { document.getElementById('add-distributor-modal').classList.remove('active'); }
+function openAddDistributorModal() { 
+    document.getElementById('new-dist-name').value = ''; 
+    document.getElementById('add-distributor-modal').classList.add('active'); 
+}
+
+function closeAddDistributorModal() { 
+    document.getElementById('add-distributor-modal').classList.remove('active'); 
+}
+
 async function submitNewDistributor(e) { 
     e.preventDefault(); 
     const btn = document.getElementById('submit-dist-btn'); 
     btn.innerText = 'Saving...'; 
     btn.disabled = true; 
+    
     try { 
-        const res = await fetch(`${BACKEND_URL}/api/distributors`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: document.getElementById('new-dist-name').value.trim() }) }); 
+        const res = await fetch(`${BACKEND_URL}/api/distributors`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ name: document.getElementById('new-dist-name').value.trim() }) 
+        }); 
+        
         const result = await res.json(); 
-        if (result.success) { closeAddDistributorModal(); fetchDistributors(); showToast('Distributor Added!'); } else { showToast(result.message); } 
-    } catch (err) { showToast('Error saving distributor.'); } finally { btn.innerText = 'Save Distributor'; btn.disabled = false; } 
+        
+        if (result.success) { 
+            closeAddDistributorModal(); 
+            fetchDistributors(); 
+            showToast('Distributor Added!'); 
+        } else { 
+            showToast(result.message); 
+        } 
+    } catch (err) { 
+        showToast('Error saving distributor.'); 
+    } finally { 
+        btn.innerText = 'Save Distributor'; 
+        btn.disabled = false; 
+    } 
 }
 
 // --- BARCODE SCANNER ---
@@ -349,15 +436,24 @@ function startScanner(onSuccessCallback) {
     const scannerConfig = { 
         fps: 20, 
         formatsToSupport: [ 
-            Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, 
-            Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, 
-            Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39, 
+            Html5QrcodeSupportedFormats.EAN_13, 
+            Html5QrcodeSupportedFormats.EAN_8, 
+            Html5QrcodeSupportedFormats.UPC_A, 
+            Html5QrcodeSupportedFormats.UPC_E, 
+            Html5QrcodeSupportedFormats.CODE_128, 
+            Html5QrcodeSupportedFormats.CODE_39, 
             Html5QrcodeSupportedFormats.QR_CODE 
         ] 
     }; 
     
-    html5QrcodeScanner.start( { facingMode: "environment" }, scannerConfig, 
-        (decodedText) => { playBeep(); closeScannerModal(); onSuccessCallback(decodedText); }, 
+    html5QrcodeScanner.start( 
+        { facingMode: "environment" }, 
+        scannerConfig, 
+        (decodedText) => { 
+            playBeep(); 
+            closeScannerModal(); 
+            onSuccessCallback(decodedText); 
+        }, 
         (errorMessage) => { } 
     ).catch(err => { 
         showToast("Camera access denied or unavailable."); 
@@ -375,7 +471,10 @@ function startScannerForSku(btnElement) {
 
 // --- RESTOCK WORKFLOW ---
 function openRestockModal() { 
-    if (currentDistributors.length === 0) return showToast("Create a Distributor first!"); 
+    if (currentDistributors.length === 0) {
+        return showToast("Create a Distributor first!"); 
+    }
+    
     document.getElementById('restock-form').reset(); 
     document.getElementById('restock-selected-item').classList.add('hidden'); 
     document.getElementById('restock-search-results').innerHTML = ''; 
@@ -407,6 +506,7 @@ async function searchRestockItem(overrideSearchTerm = null) {
     try {
         const res = await fetch(`${BACKEND_URL}/api/products?all=true&search=${encodeURIComponent(term)}&limit=10`);
         const result = await res.json();
+        
         resultsContainer.innerHTML = '';
         
         if(result.data.length === 0) { 
@@ -436,6 +536,7 @@ async function searchRestockItem(overrideSearchTerm = null) {
 
 function selectItemForRestock(product, variant) {
     restockSelectedVariant = { productId: product._id, variantId: variant._id };
+    
     document.getElementById('restock-search-results').innerHTML = ''; 
     document.getElementById('restock-search').value = '';
     
@@ -492,6 +593,7 @@ async function submitRestock(e) {
 
 // --- INVENTORY MANAGEMENT & LOW STOCK LOGIC ---
 let searchTimeout;
+
 function debounceInventorySearch() { 
     clearTimeout(searchTimeout); 
     searchTimeout = setTimeout(applyInventoryFilters, 500); 
@@ -526,10 +628,15 @@ function loadMoreInventory() {
 }
 
 async function fetchInventory() {
-    if(inventoryPage === 1) inventoryFeed.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
+    if (inventoryPage === 1) {
+        inventoryFeed.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
+    }
     
     const loadBtn = document.getElementById('load-more-btn');
-    if (loadBtn) { loadBtn.innerText = 'Loading...'; loadBtn.disabled = true; }
+    if (loadBtn) { 
+        loadBtn.innerText = 'Loading...'; 
+        loadBtn.disabled = true; 
+    }
 
     try {
         let queryUrl = `${BACKEND_URL}/api/products?all=true&page=${inventoryPage}&limit=30`;
@@ -548,20 +655,30 @@ async function fetchInventory() {
                 });
             }
 
-            if (inventoryPage === 1) currentInventory = dataToRender;
-            else currentInventory = [...currentInventory, ...dataToRender];
+            if (inventoryPage === 1) {
+                currentInventory = dataToRender;
+            } else {
+                currentInventory = [...currentInventory, ...dataToRender];
+            }
             
             renderInventory(dataToRender.length < 30); 
         }
     } catch (e) { 
-        if(inventoryPage === 1) inventoryFeed.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
+        if (inventoryPage === 1) {
+            inventoryFeed.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
+        }
     } finally { 
-        if (loadBtn) { loadBtn.innerText = 'Load More Products'; loadBtn.disabled = false; } 
+        if (loadBtn) { 
+            loadBtn.innerText = 'Load More Products'; 
+            loadBtn.disabled = false; 
+        } 
     }
 }
 
 function renderInventory(isLastPage = true) {
-    if (inventoryPage === 1) inventoryFeed.innerHTML = '';
+    if (inventoryPage === 1) {
+        inventoryFeed.innerHTML = '';
+    }
     
     if (currentInventory.length === 0) { 
         inventoryFeed.innerHTML = '<p class="empty-state">No products found.</p>'; 
@@ -569,12 +686,17 @@ function renderInventory(isLastPage = true) {
         return; 
     }
     
-    const itemsToRender = inventoryPage === 1 ? currentInventory : currentInventory.slice((inventoryPage - 1) * 30);
+    const itemsToRender = inventoryPage === 1 
+        ? currentInventory 
+        : currentInventory.slice((inventoryPage - 1) * 30);
 
     itemsToRender.forEach(p => {
         const card = document.createElement('div'); 
         card.classList.add('inventory-card');
-        if (!p.isActive) card.classList.add('inactive');
+        
+        if (!p.isActive) {
+            card.classList.add('inactive');
+        }
         
         const thumb = p.imageUrl 
             ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
@@ -584,10 +706,13 @@ function renderInventory(isLastPage = true) {
         
         let totalStock = 0;
         let isLowStock = false;
+        
         if (p.variants) {
             p.variants.forEach(v => {
                 totalStock += v.stock;
-                if (v.stock <= (v.lowStockThreshold || 5)) isLowStock = true;
+                if (v.stock <= (v.lowStockThreshold || 5)) {
+                    isLowStock = true;
+                }
             });
         }
         
@@ -607,12 +732,16 @@ function renderInventory(isLastPage = true) {
                 <button class="toggle-switch ${p.isActive ? 'active' : ''}" onclick="toggleProductStatus('${p._id}', this, event)"></button>
             </div>
         `;
+        
         inventoryFeed.appendChild(card);
     });
 
     const loadBtn = document.getElementById('load-more-btn');
-    if (isLastPage || isLowStockFilterActive) loadBtn.classList.add('hidden');
-    else loadBtn.classList.remove('hidden');
+    if (isLastPage || isLowStockFilterActive) {
+        loadBtn.classList.add('hidden');
+    } else {
+        loadBtn.classList.remove('hidden');
+    }
 }
 
 async function toggleProductStatus(id, btn, e) {
@@ -620,11 +749,80 @@ async function toggleProductStatus(id, btn, e) {
     try {
         const res = await fetch(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' });
         const result = await res.json();
+        
         if (result.success) { 
             btn.classList.toggle('active'); 
             btn.closest('.inventory-card').classList.toggle('inactive'); 
         }
-    } catch (err) { console.error("Toggle Error:", err); }
+    } catch (err) { 
+        console.error("Toggle Error:", err); 
+    }
+}
+
+function openOrderModal(order) {
+    activeOrder = order;
+    document.getElementById('modal-order-id').innerText = `Order #${order._id.toString().slice(-4).toUpperCase()}`;
+    document.getElementById('modal-customer-name').innerText = order.customerName || 'Guest';
+    
+    const phoneEl = document.getElementById('modal-customer-phone');
+    phoneEl.innerText = order.customerPhone || 'N/A'; 
+    phoneEl.href = `tel:${order.customerPhone || ''}`;
+    
+    document.getElementById('modal-customer-address').innerText = order.deliveryAddress || 'N/A';
+    
+    document.getElementById('modal-delivery-badge').innerHTML = `
+        <span class="type-badge ${order.deliveryType === 'Routine' ? 'type-routine' : 'type-instant'}">
+            ${order.deliveryType} ${order.deliveryType === 'Routine' ? '(' + order.scheduleTime + ')' : ''}
+        </span>
+    `;
+    
+    document.getElementById('modal-total').innerText = `₹${order.totalAmount}`;
+    document.getElementById('modal-payment').innerText = order.paymentMethod;
+    
+    const listEl = document.getElementById('modal-packing-list'); 
+    listEl.innerHTML = '';
+    
+    order.items.forEach(i => {
+        const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
+        const li = document.createElement('li'); 
+        li.style.display = 'flex'; 
+        li.style.justifyContent = 'space-between'; 
+        li.style.padding = '8px 0'; 
+        li.style.borderBottom = '1px solid #eee';
+        li.innerHTML = `<span>${i.name}${variantText}</span><span class="item-qty">x${i.qty}</span>`;
+        listEl.appendChild(li);
+    });
+    
+    orderModalOverlay.classList.add('active');
+}
+
+function closeOrderModal() { 
+    orderModalOverlay.classList.remove('active'); 
+}
+
+async function markOrderDispatched() {
+    if (!activeOrder) return; 
+    
+    const targetOrderId = activeOrder._id;
+    currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
+    selectedOrders.delete(targetOrderId);
+    
+    closeOrderModal(); 
+    updateDashboard(); 
+    showToast('Dispatching to rider... 📦');
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/orders/${targetOrderId}/dispatch`, { method: 'PUT' });
+        const result = await res.json();
+        
+        if (!result.success) { 
+            showToast('Database Error.'); 
+            fetchOrders(); 
+        }
+    } catch (e) { 
+        showToast('Network error updating database.'); 
+        fetchOrders(); 
+    }
 }
 
 // --- EDIT & ADD PRODUCTS ---
@@ -732,6 +930,7 @@ async function submitNewProduct(e) {
             searchTags: document.getElementById('new-tags').value.trim(), 
             variants: variants 
         };
+        
         if (finalImageUrl !== undefined) p.imageUrl = finalImageUrl;
 
         const method = editId ? 'PUT' : 'POST';
