@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -64,11 +66,9 @@
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="primary-btn-small" style="background: #334155;" onclick="exportInventoryCSV()">⬇️ Export</button>
                     <button class="primary-btn-small" style="background: #10b981;" onclick="generateReorderList()">📋 Reorder List</button>
-                    
                     <button class="primary-btn-small" style="background: #0284C7;" onclick="openAddCategoryModal()">+ Category</button>
                     <button class="primary-btn-small" style="background: #0ea5e9;" onclick="openAddBrandModal()">+ Brand</button>
                     <button class="primary-btn-small" style="background: #0369a1;" onclick="openAddDistributorModal()">+ Dist.</button>
-                    
                     <button class="primary-btn-small" onclick="openAddProductModal()">+ Add Item</button>
                     <button class="primary-btn-small" style="background: #f59e0b; color: white;" onclick="openRestockModal()">📦 Receive Shipment</button>
                 </div>
@@ -115,7 +115,6 @@
                 </select>
 
                 <button id="low-stock-btn" class="inv-filter" style="background: #FEF2F2; color: #DC2626; border-color: #FECACA; font-weight: 700; cursor: pointer;" onclick="toggleLowStockFilter()">⚠️ Low Stock</button>
-                
                 <button id="inv-bulk-btn" class="bulk-btn" onclick="bulkDeactivateInventory()" style="margin-left: auto;">Deactivate Selected (0)</button>
             </div>
 
@@ -126,6 +125,38 @@
             <button id="load-more-btn" class="load-more-btn hidden" onclick="loadMoreInventory()">Load More Products</button>
         </main>
     </article>
+
+    <article id="analytics-view" class="view-section hidden">
+        <main class="dashboard-container">
+            <div class="section-header">
+                <h2>Performance Analytics</h2>
+                <button class="refresh-btn" onclick="fetchAnalytics()">↻ Refresh</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="revenueChart" height="100"></canvas>
+            </div>
+            <div class="section-header">
+                <h2>Top Selling Items (Last 7 Days)</h2>
+            </div>
+            <div id="top-items-feed" class="top-items-list">
+                <p class="empty-state">Loading insights...</p>
+            </div>
+        </main>
+    </article>
+
+    <article id="customers-view" class="view-section hidden">
+        <main class="dashboard-container">
+            <div class="section-header">
+                <h2>Customer Directory</h2>
+                <button class="refresh-btn" onclick="fetchCustomers()">↻ Refresh</button>
+            </div>
+            <div id="crm-feed" class="crm-grid">
+                <p class="empty-state">Loading customers...</p>
+            </div>
+        </main>
+    </article>
+
+    <div id="print-receipt-container"></div>
 
     <div id="scanner-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 200;">
         <div class="form-card" style="text-align: center;">
@@ -220,7 +251,11 @@
                 <p>Total Amount: <strong id="modal-total">₹0</strong></p>
                 <p>Payment: <span id="modal-payment">COD</span></p>
             </div>
-            <button class="primary-btn" onclick="markOrderDispatched()">Mark as Dispatched</button>
+            <div style="display: flex; gap: 10px; margin-top: 16px;">
+                <button class="primary-btn-small" style="background: #334155;" onclick="printReceipt()">🖨️ Print Receipt</button>
+                <button class="danger-btn-small" onclick="cancelOrder()">❌ Cancel & Refund</button>
+            </div>
+            <button class="primary-btn" style="margin-top: 10px;" onclick="markOrderDispatched()">Mark as Dispatched</button>
         </div>
     </div>
 
@@ -323,6 +358,12 @@
         </button>
         <button id="nav-inventory" class="nav-item" onclick="switchView('inventory')">
             <span class="nav-icon">📊</span><span class="nav-label">Inventory</span>
+        </button>
+        <button id="nav-analytics" class="nav-item" onclick="switchView('analytics')">
+            <span class="nav-icon">📈</span><span class="nav-label">Analytics</span>
+        </button>
+        <button id="nav-customers" class="nav-item" onclick="switchView('customers')">
+            <span class="nav-icon">👥</span><span class="nav-label">Customers</span>
         </button>
     </nav>
     <script src="app.js"></script>
