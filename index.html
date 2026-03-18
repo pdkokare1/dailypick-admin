@@ -72,13 +72,38 @@
                     <button class="primary-btn-small" style="background: #f59e0b; color: white;" onclick="openRestockModal()">📦 Receive Shipment</button>
                 </div>
             </div>
+
+            <div class="inv-stats-grid" id="inv-stats-dashboard">
+                <div class="inv-stat-card alert">
+                    <h3>Out of Stock</h3>
+                    <p id="stat-out-stock">0</p>
+                </div>
+                <div class="inv-stat-card">
+                    <h3>Low Stock</h3>
+                    <p id="stat-low-stock">0</p>
+                </div>
+                <div class="inv-stat-card">
+                    <h3>Total Value</h3>
+                    <p id="stat-total-value">₹0</p>
+                </div>
+            </div>
             
             <div class="inventory-toolbar">
                 <input type="text" id="inventory-search-input" class="inv-search" placeholder="Search products, SKUs, or tags..." oninput="debounceInventorySearch()">
+                
                 <select id="inventory-cat-filter" class="inv-filter" style="max-width: 150px;" onchange="applyInventoryFilters()">
                     <option value="All">All Categories</option>
                 </select>
+
+                <select id="inventory-sort" class="inv-filter" onchange="applyInventoryFilters()">
+                    <option value="name_asc">Name (A-Z)</option>
+                    <option value="stock_low">Stock (Low - High)</option>
+                    <option value="recent">Recently Added</option>
+                </select>
+
                 <button id="low-stock-btn" class="inv-filter" style="background: #FEF2F2; color: #DC2626; border-color: #FECACA; font-weight: 700; cursor: pointer;" onclick="toggleLowStockFilter()">⚠️ Low Stock</button>
+                
+                <button id="inv-bulk-btn" class="bulk-btn" onclick="bulkDeactivateInventory()" style="margin-left: auto;">Deactivate Selected (0)</button>
             </div>
 
             <div id="inventory-feed" class="inventory-feed">
