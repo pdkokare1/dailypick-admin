@@ -156,6 +156,9 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .customer-history-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .history-order-card { background: #F8FAFC; padding: 12px; border-radius: 12px; border: 1px solid #E2E8F0; }
 
+/* Credit Toggle Modifier */
+#credit-toggle.active { background: #10b981; }
+
 /* Thermal Print Setup */
 #print-receipt-container { display: none; }
 @media print {
