@@ -131,7 +131,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .history-timeline { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .history-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: #F8FAFC; border-radius: 12px; border-left: 4px solid var(--accent); }
 
-/* NEW Phase 5: CRM & Analytics Layouts */
+/* PHASE 5: CRM & Analytics Layouts */
 .chart-container { background: var(--surface); padding: 20px; border-radius: 16px; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 24px; }
 .top-items-list { display: flex; flex-direction: column; gap: 8px; }
 .top-item-card { background: var(--surface); padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04); display: flex; justify-content: space-between; align-items: center; }
@@ -144,7 +144,10 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .customer-card p { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
 .whatsapp-btn { background: #25D366; color: white; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 12px; display: inline-block; }
 
-/* NEW Phase 5: Thermal Print Setup */
+/* NEW Phase 6: Export Grid */
+.export-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+
+/* Thermal Print Setup */
 #print-receipt-container { display: none; }
 @media print {
     body { background: white; color: black; padding: 0; margin: 0; }
@@ -152,7 +155,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
     #print-receipt-container { 
         display: block !important; 
         position: absolute; left: 0; top: 0; 
-        width: 80mm; /* Standard Thermal POS Width */
+        width: 80mm; 
         padding: 5mm;
         font-family: monospace; 
         font-size: 12px;
