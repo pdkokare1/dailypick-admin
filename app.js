@@ -14,6 +14,7 @@ let activeOrder = null;
 let adminEventSource = null; 
 let currentOrderTab = 'All'; 
 let selectedOrders = new Set();
+let selectedInventory = new Set(); // NEW: For bulk inventory actions
 
 let inventoryPage = 1;
 let inventorySearchTerm = '';
@@ -591,7 +592,78 @@ async function submitRestock(e) {
     }
 }
 
-// --- INVENTORY MANAGEMENT & LOW STOCK LOGIC ---
+// --- NEW HELPER: 1-Click Quick Restock ---
+function quickRestock(productId, variantId, event) {
+    event.stopPropagation();
+    const product = currentInventory.find(p => p._id === productId);
+    if (!product) return;
+    const variant = product.variants.find(v => v._id === variantId);
+    if (!variant) return;
+
+    openRestockModal();
+    selectItemForRestock(product, variant);
+}
+
+// --- NEW HELPER: Inline Edit Save ---
+async function saveInlineEdit(productId, variantId, field, element, event) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    element.blur();
+    
+    const newVal = element.value;
+    const product = currentInventory.find(p => p._id === productId);
+    const variant = product.variants.find(v => v._id === variantId);
+    
+    if (Number(newVal) === variant[field]) return; // No change made
+    
+    variant[field] = Number(newVal);
+    showToast('Saving update...');
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/products/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(product)
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            showToast('Item updated successfully!');
+            updateInventoryDashboard();
+        } else {
+            showToast('Failed to update.');
+        }
+    } catch(e) {
+        showToast('Error saving inline edit.');
+    }
+}
+
+// --- NEW HELPER: Dashboard Stats Calculation ---
+function updateInventoryDashboard() {
+    let outOfStock = 0;
+    let lowStock = 0;
+    let totalValue = 0;
+
+    currentInventory.forEach(p => {
+        if(p.variants) {
+            p.variants.forEach(v => {
+                if (v.stock === 0) outOfStock++;
+                else if (v.stock <= (v.lowStockThreshold || 5)) lowStock++;
+                totalValue += (v.stock * v.price);
+            });
+        }
+    });
+    
+    const outCard = document.getElementById('stat-out-stock').parentElement;
+    if(outOfStock > 0) outCard.classList.add('alert');
+    else outCard.classList.remove('alert');
+
+    document.getElementById('stat-out-stock').innerText = outOfStock;
+    document.getElementById('stat-low-stock').innerText = lowStock;
+    document.getElementById('stat-total-value').innerText = `₹${totalValue.toFixed(2)}`;
+}
+
+// --- INVENTORY MANAGEMENT & FILTERS ---
 let searchTimeout;
 
 function debounceInventorySearch() { 
@@ -625,6 +697,80 @@ function applyInventoryFilters() {
 function loadMoreInventory() { 
     inventoryPage++; 
     fetchInventory(); 
+}
+
+// NEW HELPER: Dynamic Sorting
+function applyInventorySorting(data) {
+    const sortDropdown = document.getElementById('inventory-sort');
+    const sortVal = sortDropdown ? sortDropdown.value : 'name_asc';
+    
+    if (sortVal === 'name_asc') {
+        return data.sort((a,b) => a.name.localeCompare(b.name));
+    }
+    if (sortVal === 'stock_low') {
+        return data.sort((a,b) => {
+            const aStock = a.variants ? a.variants.reduce((sum, v) => sum + v.stock, 0) : 0;
+            const bStock = b.variants ? b.variants.reduce((sum, v) => sum + v.stock, 0) : 0;
+            return aStock - bStock;
+        });
+    }
+    if (sortVal === 'recent') {
+        return data.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+    return data;
+}
+
+// NEW HELPER: Bulk Action Selection
+function toggleInventorySelection(id, event) {
+    event.stopPropagation();
+    if (selectedInventory.has(id)) {
+        selectedInventory.delete(id);
+    } else {
+        selectedInventory.add(id);
+    }
+    updateInventoryBulkUI();
+}
+
+function updateInventoryBulkUI() {
+    const btn = document.getElementById('inv-bulk-btn');
+    if (selectedInventory.size > 0) {
+        btn.innerText = `Deactivate Selected (${selectedInventory.size})`;
+        btn.classList.add('visible');
+    } else { 
+        btn.classList.remove('visible'); 
+    }
+}
+
+async function bulkDeactivateInventory() {
+    if (selectedInventory.size === 0) return;
+    
+    const btn = document.getElementById('inv-bulk-btn');
+    btn.innerText = 'Processing...'; 
+    btn.disabled = true;
+    
+    const ids = Array.from(selectedInventory);
+    
+    try {
+        await Promise.all(ids.map(id => fetch(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' })));
+        showToast(`Toggled ${ids.length} products!`);
+        selectedInventory.clear();
+        fetchInventory(); // Refresh view
+    } catch (err) { 
+        showToast('Error during bulk action.'); 
+    } finally { 
+        btn.disabled = false; 
+        updateInventoryBulkUI(); 
+    }
+}
+
+function toggleVariantView(productId, event) {
+    event.stopPropagation();
+    const el = document.getElementById(`variants-${productId}`);
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
 }
 
 async function fetchInventory() {
@@ -661,6 +807,8 @@ async function fetchInventory() {
                 currentInventory = [...currentInventory, ...dataToRender];
             }
             
+            updateInventoryDashboard(); // Refresh Dashboard Stats
+            currentInventory = applyInventorySorting(currentInventory); // Apply dynamic sorting
             renderInventory(dataToRender.length < 30); 
         }
     } catch (e) { 
@@ -694,42 +842,68 @@ function renderInventory(isLastPage = true) {
         const card = document.createElement('div'); 
         card.classList.add('inventory-card');
         
-        if (!p.isActive) {
-            card.classList.add('inactive');
-        }
+        if (!p.isActive) card.classList.add('inactive');
+        
+        // Generate Checkbox for bulk actions
+        const checkboxHtml = `<input type="checkbox" class="order-checkbox" ${selectedInventory.has(p._id) ? 'checked' : ''} onclick="toggleInventorySelection('${p._id}', event)">`;
         
         const thumb = p.imageUrl 
             ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
             : `<div style="width:40px; height:40px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">📦</div>`;
         
         const vCount = p.variants ? p.variants.length : 0;
-        
         let totalStock = 0;
-        let isLowStock = false;
+        let lowestStockFlag = 'healthy'; // healthy, low, out
         
         if (p.variants) {
             p.variants.forEach(v => {
                 totalStock += v.stock;
-                if (v.stock <= (v.lowStockThreshold || 5)) {
-                    isLowStock = true;
+                if (v.stock === 0) {
+                    lowestStockFlag = 'out';
+                } else if (lowestStockFlag !== 'out' && v.stock <= (v.lowStockThreshold || 5)) {
+                    lowestStockFlag = 'low';
                 }
             });
         }
         
-        const alertIcon = isLowStock ? '<span style="color: #DC2626; margin-left:4px;">⚠️ Low Stock</span>' : '';
-        const metaText = vCount > 0 ? `${vCount} Variant${vCount > 1 ? 's' : ''} • Stock: ${totalStock} ${alertIcon}` : `No variants`;
+        let stockBadge = `<span class="badge-healthy">Stock: ${totalStock}</span>`;
+        if (lowestStockFlag === 'out') stockBadge = `<span class="badge-out">Out of Stock</span>`;
+        else if (lowestStockFlag === 'low') stockBadge = `<span class="badge-low">Low Stock (${totalStock})</span>`;
 
-        card.innerHTML = `
-            <div style="display:flex; align-items:center;">
-                ${thumb}
-                <div class="inv-info">
-                    <h4>${p.name}</h4>
-                    <p class="inv-meta" style="font-size: 11px; color: var(--text-muted);">${metaText}</p>
+        const variantsHtml = (p.variants || []).map(v => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #F8FAFC; border-radius: 8px; margin-bottom: 4px; font-size: 12px;" onclick="event.stopPropagation()">
+                <span>${v.weightOrVolume}</span>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span style="color: var(--text-muted);">₹</span>
+                    <input class="inline-edit-input" type="number" value="${v.price}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'price', this, event)" title="Press Enter to save">
+                    <span style="color: var(--text-muted);">Qty:</span>
+                    <input class="inline-edit-input" type="number" value="${v.stock}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'stock', this, event)" title="Press Enter to save">
+                    <button class="quick-restock-btn" onclick="quickRestock('${p._id}', '${v._id}', event)" title="Quick Restock">📦</button>
                 </div>
             </div>
-            <div style="display:flex; align-items:center;">
-                <button class="edit-btn" onclick="openEditProductModal('${p._id}', event)">Edit</button>
-                <button class="toggle-switch ${p.isActive ? 'active' : ''}" onclick="toggleProductStatus('${p._id}', this, event)"></button>
+        `).join('');
+
+        card.innerHTML = `
+            <div style="display:flex; align-items:center; width:100%; justify-content:space-between;">
+                <div style="display:flex; align-items:center;">
+                    ${checkboxHtml}
+                    ${thumb}
+                    <div class="inv-info">
+                        <h4 style="margin-bottom: 2px;">${p.name}</h4>
+                        <div style="display:flex; align-items:center;">
+                            <span class="inv-meta" style="font-size: 11px; color: var(--text-muted);">${vCount} Variant${vCount !== 1 ? 's' : ''}</span>
+                            ${stockBadge}
+                            ${vCount > 0 ? `<button class="variant-collapse-btn" onclick="toggleVariantView('${p._id}', event)">▼ Edit Inline</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <button class="edit-btn" onclick="openEditProductModal('${p._id}', event)">Full Edit</button>
+                    <button class="toggle-switch ${p.isActive ? 'active' : ''}" onclick="toggleProductStatus('${p._id}', this, event)"></button>
+                </div>
+            </div>
+            <div style="width: 100%; margin-top: 10px; display: none;" id="variants-${p._id}">
+                ${variantsHtml}
             </div>
         `;
         
