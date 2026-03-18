@@ -74,6 +74,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 
 .primary-btn { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: 16px; font-weight: 700; cursor: pointer; }
 .primary-btn-small { background: var(--primary); color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.danger-btn-small { background: #FEE2E2; color: #DC2626; border: none; border-radius: 8px; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer; }
 
 .bottom-nav { position: fixed; bottom: 0; width: 100%; background: #fff; display: flex; justify-content: space-around; padding: 12px 0; border-top: 1px solid #eee; z-index: 50; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 .nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); cursor: pointer; }
@@ -99,8 +100,6 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .inv-search { flex: 1; min-width: 200px; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); outline: none; font-size: 13px; }
 .inv-filter { padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); outline: none; font-size: 13px; background: white; }
 .load-more-btn { width: 100%; padding: 12px; background: #E2E8F0; color: var(--text-main); border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 16px; transition: 0.2s; }
-.load-more-btn:active { transform: scale(0.98); }
-.load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* NEW Phase 3 (SKU & Scanner) Updates */
 #toast-container { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
@@ -111,10 +110,8 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .scan-sku-btn { background: #E2E8F0; border: none; border-radius: 6px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; flex-shrink: 0;}
 .restock-result-item { padding: 10px; border-bottom: 1px solid #e2e8f0; cursor: pointer; transition: 0.1s; }
 .restock-result-item:hover { background: #f1f5f9; }
-.restock-result-item h4 { font-size: 13px; color: var(--text-main); margin-bottom: 2px; }
-.restock-result-item p { font-size: 11px; color: var(--text-muted); }
 
-/* PHASE 4 OPTIMIZATIONS (Simpler, Dynamic, Helpful) */
+/* PHASE 4 OPTIMIZATIONS */
 .inv-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
 .inv-stat-card { background: var(--surface); padding: 16px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 2px 8px rgba(0,0,0,0.02); text-align: center; }
 .inv-stat-card h3 { font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
@@ -128,16 +125,36 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .margin-badge { background: #E0E7FF; color: #4338CA; padding: 2px 4px; border-radius: 4px; font-size: 9px; font-weight: 800; margin-left: 4px; vertical-align: middle; }
 
 .quick-restock-btn { background: #fef3c7; color: #d97706; border: 1px solid #fde68a; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-.quick-restock-btn:hover { background: #fde68a; }
-
 .inline-edit-input { width: 60px; padding: 4px 8px; font-size: 11px; border: 1px solid #E2E8F0; border-radius: 6px; outline: none; font-weight: 600; text-align: center; }
-.inline-edit-input:focus { border-color: var(--primary); background: #F8FAFC; }
-
 .variant-collapse-btn { background: none; border: none; font-size: 11px; color: var(--primary); font-weight: 700; cursor: pointer; padding: 4px 8px; }
 
-/* PHASE 5: History Timeline */
 .history-timeline { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .history-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: #F8FAFC; border-radius: 12px; border-left: 4px solid var(--accent); }
-.history-icon { font-size: 18px; }
-.history-details h4 { font-size: 13px; margin-bottom: 2px; }
-.history-details p { font-size: 11px; color: var(--text-muted); }
+
+/* NEW Phase 5: CRM & Analytics Layouts */
+.chart-container { background: var(--surface); padding: 20px; border-radius: 16px; border: 1px solid rgba(0,0,0,0.04); margin-bottom: 24px; }
+.top-items-list { display: flex; flex-direction: column; gap: 8px; }
+.top-item-card { background: var(--surface); padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.04); display: flex; justify-content: space-between; align-items: center; }
+.top-item-name { font-weight: 600; font-size: 13px; }
+.top-item-stats { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+
+.crm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.customer-card { background: var(--surface); padding: 20px; border-radius: 16px; border: 1px solid rgba(0,0,0,0.04); }
+.customer-card h3 { font-size: 16px; margin-bottom: 4px; }
+.customer-card p { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+.whatsapp-btn { background: #25D366; color: white; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 12px; display: inline-block; }
+
+/* NEW Phase 5: Thermal Print Setup */
+#print-receipt-container { display: none; }
+@media print {
+    body { background: white; color: black; padding: 0; margin: 0; }
+    .admin-header, .bottom-nav, .view-section, .modal-overlay, #toast-container { display: none !important; }
+    #print-receipt-container { 
+        display: block !important; 
+        position: absolute; left: 0; top: 0; 
+        width: 80mm; /* Standard Thermal POS Width */
+        padding: 5mm;
+        font-family: monospace; 
+        font-size: 12px;
+    }
+}
