@@ -32,6 +32,9 @@ let html5QrcodeScanner = null;
 let currentSkuInputTarget = null; 
 let restockSelectedVariant = null; 
 
+// NEW: Credit tracking
+let currentCustomerPhone = null;
+
 // DOM Elements
 const dailyRevenueEl = document.getElementById('daily-revenue'); 
 const pendingCountEl = document.getElementById('pending-count'); 
@@ -626,10 +629,12 @@ async function fetchCustomers() {
     }
 }
 
-function openCustomerModal(phone, name) {
+async function openCustomerModal(phone, name) {
+    currentCustomerPhone = phone; // Store globally for credit functions
     document.getElementById('deep-dive-name').innerText = name;
     document.getElementById('deep-dive-phone').innerText = phone;
     
+    // 1. Fetch Order History
     const container = document.getElementById('customer-history-container');
     container.innerHTML = '';
 
@@ -655,11 +660,131 @@ function openCustomerModal(phone, name) {
         });
     }
 
+    // 2. Fetch Credit Profile
+    await fetchCustomerCreditProfile(phone);
+
     document.getElementById('customer-modal').classList.add('active');
 }
 
 function closeCustomerModal() {
+    currentCustomerPhone = null;
     document.getElementById('customer-modal').classList.remove('active');
+}
+
+// ==========================================
+// --- NEW: CUSTOMER CREDIT FUNCTIONS ---
+// ==========================================
+
+async function fetchCustomerCreditProfile(phone) {
+    const toggle = document.getElementById('credit-toggle');
+    const details = document.getElementById('credit-details');
+    const msg = document.getElementById('credit-disabled-msg');
+    
+    // Reset UI while loading
+    toggle.classList.remove('active');
+    details.classList.add('hidden');
+    msg.innerText = "Loading credit profile...";
+    msg.classList.remove('hidden');
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${phone}`);
+        const result = await res.json();
+        
+        if (result.success && result.data) {
+            const p = result.data;
+            document.getElementById('credit-limit-input').value = p.creditLimit || 0;
+            document.getElementById('credit-used-display').innerText = `₹${p.creditUsed || 0}`;
+            
+            if (p.isCreditEnabled) {
+                toggle.classList.add('active');
+                details.classList.remove('hidden');
+                msg.classList.add('hidden');
+            } else {
+                msg.innerText = "Credit facility is currently disabled for this user.";
+            }
+        } else {
+            msg.innerText = "User has no credit profile. They must place 1 order first.";
+        }
+    } catch (e) {
+        msg.innerText = "Failed to load credit profile.";
+    }
+}
+
+async function toggleCredit() {
+    if (!currentCustomerPhone) return;
+    
+    const toggle = document.getElementById('credit-toggle');
+    const isCurrentlyActive = toggle.classList.contains('active');
+    const newStatus = !isCurrentlyActive; // flip it
+    
+    const limitInput = document.getElementById('credit-limit-input').value || 0;
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${currentCustomerPhone}/limit`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isCreditEnabled: newStatus, creditLimit: limitInput })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            showToast(newStatus ? 'Credit Enabled!' : 'Credit Disabled!');
+            fetchCustomerCreditProfile(currentCustomerPhone); // Refresh UI completely
+        } else {
+            showToast(result.message || 'Failed to update credit status.');
+        }
+    } catch (e) {
+        showToast('Network error updating credit.');
+    }
+}
+
+async function saveCreditLimit() {
+    if (!currentCustomerPhone) return;
+    const limitInput = document.getElementById('credit-limit-input').value;
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${currentCustomerPhone}/limit`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isCreditEnabled: true, creditLimit: limitInput })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            showToast(`Credit limit saved: ₹${limitInput}`);
+        } else {
+            showToast(result.message || 'Failed to save limit.');
+        }
+    } catch (e) {
+        showToast('Network error saving limit.');
+    }
+}
+
+async function submitPayment() {
+    if (!currentCustomerPhone) return;
+    const paymentInput = document.getElementById('payment-amount-input');
+    const amount = Number(paymentInput.value);
+    
+    if (!amount || amount <= 0) return showToast("Enter a valid payment amount.");
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${currentCustomerPhone}/pay`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amount })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            showToast(`Recorded payment of ₹${amount}!`);
+            paymentInput.value = ''; // clear input
+            document.getElementById('credit-used-display').innerText = `₹${result.data.creditUsed}`;
+        } else {
+            showToast(result.message || 'Failed to record payment.');
+        }
+    } catch (e) {
+        showToast('Network error processing payment.');
+    }
 }
 
 // --- SETUP DATA FETCHING ---
