@@ -6,7 +6,7 @@ const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET';
 
 // State Variables
 let currentOrders = []; 
-let allHistoricalOrders = []; // New state for full analytics
+let allHistoricalOrders = []; 
 let currentInventory = []; 
 let currentCategories = []; 
 let currentBrands = []; 
@@ -32,7 +32,7 @@ let html5QrcodeScanner = null;
 let currentSkuInputTarget = null; 
 let restockSelectedVariant = null; 
 
-// NEW: Credit tracking
+// Credit tracking
 let currentCustomerPhone = null;
 
 // DOM Elements
@@ -630,7 +630,7 @@ async function fetchCustomers() {
 }
 
 async function openCustomerModal(phone, name) {
-    currentCustomerPhone = phone; // Store globally for credit functions
+    currentCustomerPhone = phone; 
     document.getElementById('deep-dive-name').innerText = name;
     document.getElementById('deep-dive-phone').innerText = phone;
     
@@ -672,7 +672,7 @@ function closeCustomerModal() {
 }
 
 // ==========================================
-// --- NEW: CUSTOMER CREDIT FUNCTIONS ---
+// --- CUSTOMER CREDIT FUNCTIONS ---
 // ==========================================
 
 async function fetchCustomerCreditProfile(phone) {
@@ -703,7 +703,12 @@ async function fetchCustomerCreditProfile(phone) {
                 msg.innerText = "Credit facility is currently disabled for this user.";
             }
         } else {
-            msg.innerText = "User has no credit profile. They must place 1 order first.";
+            // REMOVED restriction clause. Now we show the inputs immediately to allow auto-creation.
+            document.getElementById('credit-limit-input').value = 0;
+            document.getElementById('credit-used-display').innerText = `₹0`;
+            toggle.classList.remove('active');
+            details.classList.remove('hidden');
+            msg.classList.add('hidden');
         }
     } catch (e) {
         msg.innerText = "Failed to load credit profile.";
@@ -715,21 +720,22 @@ async function toggleCredit() {
     
     const toggle = document.getElementById('credit-toggle');
     const isCurrentlyActive = toggle.classList.contains('active');
-    const newStatus = !isCurrentlyActive; // flip it
+    const newStatus = !isCurrentlyActive; 
     
     const limitInput = document.getElementById('credit-limit-input').value || 0;
+    const nameInput = document.getElementById('deep-dive-name').innerText; // Grabs name to auto-create profile
     
     try {
         const res = await fetch(`${BACKEND_URL}/api/customers/profile/${currentCustomerPhone}/limit`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isCreditEnabled: newStatus, creditLimit: limitInput })
+            body: JSON.stringify({ isCreditEnabled: newStatus, creditLimit: limitInput, name: nameInput })
         });
         const result = await res.json();
         
         if (result.success) {
             showToast(newStatus ? 'Credit Enabled!' : 'Credit Disabled!');
-            fetchCustomerCreditProfile(currentCustomerPhone); // Refresh UI completely
+            fetchCustomerCreditProfile(currentCustomerPhone); 
         } else {
             showToast(result.message || 'Failed to update credit status.');
         }
@@ -741,12 +747,13 @@ async function toggleCredit() {
 async function saveCreditLimit() {
     if (!currentCustomerPhone) return;
     const limitInput = document.getElementById('credit-limit-input').value;
+    const nameInput = document.getElementById('deep-dive-name').innerText;
     
     try {
         const res = await fetch(`${BACKEND_URL}/api/customers/profile/${currentCustomerPhone}/limit`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isCreditEnabled: true, creditLimit: limitInput })
+            body: JSON.stringify({ isCreditEnabled: true, creditLimit: limitInput, name: nameInput })
         });
         const result = await res.json();
         
@@ -777,7 +784,7 @@ async function submitPayment() {
         
         if (result.success) {
             showToast(`Recorded payment of ₹${amount}!`);
-            paymentInput.value = ''; // clear input
+            paymentInput.value = ''; 
             document.getElementById('credit-used-display').innerText = `₹${result.data.creditUsed}`;
         } else {
             showToast(result.message || 'Failed to record payment.');
