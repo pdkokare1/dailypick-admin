@@ -15,6 +15,7 @@ let currentDistributors = [];
 let activeOrder = null; 
 let adminEventSource = null; 
 let currentOrderTab = 'All'; 
+let currentOrderLayout = 'list'; // 'list' or 'kanban'
 let selectedOrders = new Set();
 let selectedInventory = new Set(); 
 
@@ -38,8 +39,8 @@ let currentCustomerPhone = null;
 // DOM Elements
 const dailyRevenueEl = document.getElementById('daily-revenue'); 
 const pendingCountEl = document.getElementById('pending-count'); 
-const ordersFeed = document.getElementById('orders-feed'); 
-const inventoryFeed = document.getElementById('inventory-feed'); 
+const ordersFeed = document.getElementById('orders-list-view'); 
+const ordersKanban = document.getElementById('orders-kanban-view');
 const orderModalOverlay = document.getElementById('order-modal-overlay');
 
 // Expanded View Routing
@@ -193,8 +194,26 @@ async function fetchOrders() {
 
 function setOrderTab(tab) {
     currentOrderTab = tab;
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('tab-All').classList.remove('active');
+    document.getElementById('tab-Instant').classList.remove('active');
+    document.getElementById('tab-Routine').classList.remove('active');
     document.getElementById(`tab-${tab}`).classList.add('active');
+    updateDashboard();
+}
+
+function toggleOrderLayout(layout) {
+    currentOrderLayout = layout;
+    document.getElementById('layout-list').classList.remove('active');
+    document.getElementById('layout-kanban').classList.remove('active');
+    document.getElementById(`layout-${layout}`).classList.add('active');
+    
+    if (layout === 'kanban') {
+        ordersFeed.classList.add('hidden');
+        ordersKanban.classList.remove('hidden');
+    } else {
+        ordersFeed.classList.remove('hidden');
+        ordersKanban.classList.add('hidden');
+    }
     updateDashboard();
 }
 
@@ -231,7 +250,12 @@ async function bulkDispatchOrders() {
         await Promise.all(idsToDispatch.map(id => fetch(`${BACKEND_URL}/api/orders/${id}/dispatch`, { method: 'PUT' })));
         showToast(`Dispatched ${idsToDispatch.length} orders! 📦`);
         
-        currentOrders = currentOrders.filter(o => !selectedOrders.has(o._id));
+        // Update local state instantly
+        idsToDispatch.forEach(id => {
+            const o = currentOrders.find(ord => ord._id === id);
+            if(o) o.status = 'Dispatched';
+        });
+        
         selectedOrders.clear();
         updateDashboard();
     } catch (err) { 
@@ -242,23 +266,59 @@ async function bulkDispatchOrders() {
     }
 }
 
-function updateDashboard() {
-    const pending = currentOrders.filter(o => o.status === 'Order Placed');
-    dailyRevenueEl.innerText = `₹${pending.reduce((s, o) => s + o.totalAmount, 0)}`;
-    pendingCountEl.innerText = pending.length;
-    ordersFeed.innerHTML = '';
+async function updateOrderStatus(orderId, newStatus, event) {
+    if (event) event.stopPropagation();
     
-    let displayOrders = pending;
-    if (currentOrderTab === 'Instant') displayOrders = pending.filter(o => o.deliveryType !== 'Routine');
-    if (currentOrderTab === 'Routine') displayOrders = pending.filter(o => o.deliveryType === 'Routine');
+    // Optimistic UI update
+    const order = currentOrders.find(o => o._id === orderId);
+    if(order) order.status = newStatus;
+    updateDashboard();
+    showToast(`Order marked as ${newStatus}`);
 
-    if (displayOrders.length === 0) { 
-        ordersFeed.innerHTML = `<p class="empty-state">No pending orders in ${currentOrderTab}.</p>`; 
+    try {
+        const endpoint = newStatus === 'Dispatched' ? 'dispatch' : 'status';
+        const body = newStatus === 'Dispatched' ? null : JSON.stringify({ status: newStatus });
+        
+        await fetch(`${BACKEND_URL}/api/orders/${orderId}/${endpoint}`, { 
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: body
+        });
+    } catch(e) {
+        showToast('Network error, order may not have synced.');
+    }
+}
+
+function updateDashboard() {
+    // Top Bar Stats (Only Pending items)
+    const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
+    dailyRevenueEl.innerText = `₹${trulyPending.reduce((s, o) => s + o.totalAmount, 0)}`;
+    pendingCountEl.innerText = trulyPending.length;
+    
+    // Apply Tab Filtering
+    let displayOrders = currentOrders.filter(o => o.status !== 'Cancelled' && o.status !== 'Completed');
+    if (currentOrderTab === 'Instant') displayOrders = displayOrders.filter(o => o.deliveryType !== 'Routine');
+    if (currentOrderTab === 'Routine') displayOrders = displayOrders.filter(o => o.deliveryType === 'Routine');
+
+    if (currentOrderLayout === 'list') {
+        renderListView(displayOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing'));
+    } else {
+        renderKanbanView(displayOrders);
+    }
+    
+    updateBulkDispatchUI();
+}
+
+function renderListView(orders) {
+    ordersFeed.innerHTML = '';
+    if (orders.length === 0) { 
+        ordersFeed.innerHTML = `<p class="empty-state">No active orders in ${currentOrderTab}.</p>`; 
         return; 
     }
     
-    displayOrders.forEach(order => {
+    orders.forEach(order => {
         const isRoutine = order.deliveryType === 'Routine';
+        const isPacking = order.status === 'Packing';
         const cardWrapper = document.createElement('div');
         cardWrapper.style.display = 'flex'; 
         cardWrapper.style.alignItems = 'center'; 
@@ -273,10 +333,12 @@ function updateDashboard() {
         const card = document.createElement('div'); 
         card.classList.add('order-card');
         card.style.flex = '1';
+        if(isPacking) card.style.borderLeft = '4px solid #4338CA';
+
         card.innerHTML = `
             <div class="order-info">
                 <h4>Order #${order._id.toString().slice(-4).toUpperCase()}</h4>
-                <p class="order-meta">${order.customerName || 'Guest'} • ${isRoutine ? '📅 Routine' : '⚡ Instant'}</p>
+                <p class="order-meta">${order.customerName || 'Guest'} • ${isRoutine ? '📅 Routine' : '⚡ Instant'} ${isPacking ? '• 📦 Packing' : ''}</p>
             </div>
             <div class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</div>
         `;
@@ -286,8 +348,60 @@ function updateDashboard() {
         cardWrapper.appendChild(card);
         ordersFeed.appendChild(cardWrapper);
     });
-    
-    updateBulkDispatchUI();
+}
+
+function renderKanbanView(orders) {
+    const colNew = document.getElementById('kb-col-new');
+    const colPack = document.getElementById('kb-col-pack');
+    const colDisp = document.getElementById('kb-col-disp');
+
+    colNew.innerHTML = ''; colPack.innerHTML = ''; colDisp.innerHTML = '';
+    let countNew = 0, countPack = 0, countDisp = 0;
+
+    // Show dispatched only from today
+    const today = new Date();
+    today.setHours(0,0,0,0);
+
+    orders.forEach(order => {
+        if(order.status === 'Dispatched' && new Date(order.createdAt) < today) return; // Hide old dispatched
+
+        const isRoutine = order.deliveryType === 'Routine';
+        const card = document.createElement('div');
+        card.className = 'kanban-card';
+        card.onclick = () => openOrderModal(order);
+
+        let actionHtml = '';
+        if (order.status === 'Order Placed') {
+            actionHtml = `<div class="kanban-actions"><button class="kanban-btn btn-pack" onclick="updateOrderStatus('${order._id}', 'Packing', event)">Start Packing</button></div>`;
+            countNew++;
+        } else if (order.status === 'Packing') {
+            actionHtml = `<div class="kanban-actions"><button class="kanban-btn btn-dispatch" onclick="updateOrderStatus('${order._id}', 'Dispatched', event)">Dispatch Now</button></div>`;
+            countPack++;
+        } else if (order.status === 'Dispatched') {
+            actionHtml = `<span style="font-size: 11px; font-weight: 700; color: #16A34A;">🚚 Out for Delivery</span>`;
+            countDisp++;
+        }
+
+        const itemsPreview = order.items.map(i => `${i.qty}x ${i.name}`).join(', ').substring(0, 30) + '...';
+
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <h4>#${order._id.toString().slice(-4).toUpperCase()}</h4>
+                <span class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</span>
+            </div>
+            <p style="margin-bottom: 4px; font-weight: 600; color: var(--text-main);">${order.customerName || 'Guest'}</p>
+            <p>${itemsPreview}</p>
+            ${actionHtml}
+        `;
+
+        if (order.status === 'Order Placed') colNew.appendChild(card);
+        else if (order.status === 'Packing') colPack.appendChild(card);
+        else if (order.status === 'Dispatched') colDisp.appendChild(card);
+    });
+
+    document.getElementById('kb-count-new').innerText = countNew;
+    document.getElementById('kb-count-pack').innerText = countPack;
+    document.getElementById('kb-count-disp').innerText = countDisp;
 }
 
 function openOrderModal(order) {
@@ -305,6 +419,7 @@ function openOrderModal(order) {
         <span class="type-badge ${order.deliveryType === 'Routine' ? 'type-routine' : 'type-instant'}">
             ${order.deliveryType} ${order.deliveryType === 'Routine' ? '(' + order.scheduleTime + ')' : ''}
         </span>
+        <span class="order-status" style="margin-left: 8px;">${order.status}</span>
     `;
     
     document.getElementById('modal-total').innerText = `₹${order.totalAmount}`;
@@ -335,21 +450,18 @@ async function markOrderDispatched() {
     if (!activeOrder) return; 
     
     const targetOrderId = activeOrder._id;
-    currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
-    selectedOrders.delete(targetOrderId);
     
+    // Optimistic UI updates
+    const localOrder = currentOrders.find(o => o._id === targetOrderId);
+    if(localOrder) localOrder.status = 'Dispatched';
+    
+    selectedOrders.delete(targetOrderId);
     closeOrderModal(); 
     updateDashboard(); 
     showToast('Dispatching to rider... 📦');
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/orders/${targetOrderId}/dispatch`, { method: 'PUT' });
-        const result = await res.json();
-        
-        if (!result.success) { 
-            showToast('Database Error.'); 
-            fetchOrders(); 
-        }
+        await fetch(`${BACKEND_URL}/api/orders/${targetOrderId}/dispatch`, { method: 'PUT' });
     } catch (e) { 
         showToast('Network error updating database.'); 
         fetchOrders(); 
@@ -487,7 +599,6 @@ async function fetchAnalytics() {
 }
 
 function updateAnalyticsRange(daysLimit) {
-    // Update button UI
     document.querySelectorAll('.date-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`date-btn-${daysLimit === 999 ? 'all' : daysLimit}`).classList.add('active');
 
@@ -499,11 +610,9 @@ function updateAnalyticsRange(daysLimit) {
 
     const filteredOrders = allHistoricalOrders.filter(o => new Date(o.createdAt) >= cutoffDate && new Date(o.createdAt) <= today);
 
-    // 1. Process Chart Data
     let revenueMap = {};
     let labels = [];
     
-    // Pre-fill days based on selection (up to 30 days)
     const pointsToGraph = Math.min(daysLimit, 30);
     for (let i = pointsToGraph - 1; i >= 0; i--) {
         const d = new Date(today);
@@ -516,13 +625,11 @@ function updateAnalyticsRange(daysLimit) {
     let itemFrequency = {};
 
     filteredOrders.forEach(o => {
-        // Chart aggregation
         const orderDate = new Date(o.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         if (revenueMap[orderDate] !== undefined) {
             revenueMap[orderDate] += o.totalAmount;
         }
 
-        // Top items aggregation
         o.items.forEach(i => {
             const key = `${i.name} (${i.selectedVariant || i.weightOrVolume || 'Standard'})`;
             if (!itemFrequency[key]) itemFrequency[key] = { qty: 0, revenue: 0 };
@@ -534,11 +641,10 @@ function updateAnalyticsRange(daysLimit) {
     const data = labels.map(label => revenueMap[label]);
     renderChart(labels, data);
 
-    // 2. Process Top Items
     const topItems = Object.entries(itemFrequency)
         .map(([name, stats]) => ({ name, qty: stats.qty, revenue: stats.revenue }))
         .sort((a,b) => b.qty - a.qty)
-        .slice(0, 8); // Top 8
+        .slice(0, 8); 
 
     const feed = document.getElementById('top-items-feed');
     feed.innerHTML = '';
@@ -599,7 +705,6 @@ async function fetchCustomers() {
                 return;
             }
             
-            // Ensure we have historical orders for deep dive
             if (allHistoricalOrders.length === 0) {
                 const orderRes = await fetch(`${BACKEND_URL}/api/orders`);
                 const orderData = await orderRes.json();
@@ -634,7 +739,6 @@ async function openCustomerModal(phone, name) {
     document.getElementById('deep-dive-name').innerText = name;
     document.getElementById('deep-dive-phone').innerText = phone;
     
-    // 1. Fetch Order History
     const container = document.getElementById('customer-history-container');
     container.innerHTML = '';
 
@@ -660,7 +764,6 @@ async function openCustomerModal(phone, name) {
         });
     }
 
-    // 2. Fetch Credit Profile
     await fetchCustomerCreditProfile(phone);
 
     document.getElementById('customer-modal').classList.add('active');
@@ -671,16 +774,11 @@ function closeCustomerModal() {
     document.getElementById('customer-modal').classList.remove('active');
 }
 
-// ==========================================
-// --- CUSTOMER CREDIT FUNCTIONS ---
-// ==========================================
-
 async function fetchCustomerCreditProfile(phone) {
     const toggle = document.getElementById('credit-toggle');
     const details = document.getElementById('credit-details');
     const msg = document.getElementById('credit-disabled-msg');
     
-    // Reset UI while loading
     toggle.classList.remove('active');
     details.classList.add('hidden');
     msg.innerText = "Loading credit profile...";
@@ -703,7 +801,6 @@ async function fetchCustomerCreditProfile(phone) {
                 msg.innerText = "Credit facility is currently disabled for this user.";
             }
         } else {
-            // Show the inputs immediately to allow auto-creation.
             document.getElementById('credit-limit-input').value = 0;
             document.getElementById('credit-used-display').innerText = `₹0`;
             toggle.classList.remove('active');
@@ -728,7 +825,6 @@ async function toggleCredit() {
     const limitInput = document.getElementById('credit-limit-input').value || 0;
     const nameInput = document.getElementById('deep-dive-name').innerText;
     
-    // OPTIMISTIC UI UPDATE (Instant Feedback)
     if (newStatus) {
         toggle.classList.add('active');
         details.classList.remove('hidden');
@@ -750,12 +846,10 @@ async function toggleCredit() {
         
         if (result.success) {
             showToast(newStatus ? 'Credit Enabled!' : 'Credit Disabled!');
-            // Removed the redundant fetchCustomerCreditProfile() call to fix the lag
         } else {
             throw new Error(result.message || 'Failed to update credit status.');
         }
     } catch (e) {
-        // Revert UI if network request fails
         if (isCurrentlyActive) {
             toggle.classList.add('active');
             details.classList.remove('hidden');
@@ -1338,7 +1432,8 @@ function updateInventoryDashboard() {
     document.getElementById('stat-total-value').innerText = `₹${totalValue.toFixed(2)}`;
 }
 
-function generateReorderList() {
+// --- NEW SOURCING LOGIC (WHATSAPP MODAL) ---
+function openSourcingModal() {
     let reorderData = {};
     let totalItemsCount = 0;
 
@@ -1348,33 +1443,40 @@ function generateReorderList() {
                 if (v.stock <= (v.lowStockThreshold || 5)) {
                     const dist = p.distributorName || 'Unassigned Distributor';
                     if (!reorderData[dist]) reorderData[dist] = [];
-                    
-                    reorderData[dist].push(`- [ ] ${p.name} (${v.weightOrVolume}) | Current Stock: ${v.stock}`);
+                    reorderData[dist].push(`- ${p.name} (${v.weightOrVolume}) | Stock: ${v.stock}`);
                     totalItemsCount++;
                 }
             });
         }
     });
 
+    const container = document.getElementById('sourcing-list-container');
+    container.innerHTML = '';
+
     if (totalItemsCount === 0) {
-        return showToast("All stock levels are healthy! No reorder needed.");
+        container.innerHTML = `<p class="empty-state">All stock levels are healthy! No reorder needed.</p>`;
+    } else {
+        for (const [distributor, items] of Object.entries(reorderData)) {
+            const message = `Hi ${distributor},\n\nPlease process the following restock for DailyPick:\n\n${items.join('\n')}\n\nThanks.`;
+            const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            
+            container.innerHTML += `
+                <div class="sourcing-item">
+                    <div>
+                        <h4>${distributor}</h4>
+                        <p style="font-size: 12px; color: var(--text-muted);">${items.length} items low</p>
+                    </div>
+                    <a href="${waUrl}" target="_blank" class="primary-btn-small" style="background: #25D366; text-decoration: none;">💬 WhatsApp PO</a>
+                </div>
+            `;
+        }
     }
-
-    let reportText = `🛒 DailyPick Reorder List (${new Date().toLocaleDateString()})\n\n`;
-    
-    for (const [distributor, items] of Object.entries(reorderData)) {
-        reportText += `🚚 ${distributor}:\n`;
-        reportText += items.join('\n');
-        reportText += `\n\n`;
-    }
-
-    navigator.clipboard.writeText(reportText).then(() => {
-        showToast(`Reorder list (${totalItemsCount} items) copied to clipboard!`);
-    }).catch(err => {
-        console.error('Failed to copy text: ', err);
-        showToast("Error generating list. Please check permissions.");
-    });
+    document.getElementById('sourcing-modal').classList.add('active');
 }
+function closeSourcingModal() { document.getElementById('sourcing-modal').classList.remove('active'); }
+
+// Keeping original generator for fallback clipboard logic
+function generateReorderList() { openSourcingModal(); }
 
 // --- INVENTORY MANAGEMENT & FILTERS ---
 let searchTimeout;
@@ -1450,11 +1552,67 @@ function toggleInventorySelection(id, event) {
 
 function updateInventoryBulkUI() {
     const btn = document.getElementById('inv-bulk-btn');
+    const priceBtn = document.getElementById('inv-bulk-price-btn');
     if (selectedInventory.size > 0) {
         btn.innerText = `Deactivate Selected (${selectedInventory.size})`;
         btn.classList.add('visible');
+        priceBtn.innerText = `Edit Prices (${selectedInventory.size})`;
+        priceBtn.classList.add('visible');
     } else { 
         btn.classList.remove('visible'); 
+        priceBtn.classList.remove('visible'); 
+    }
+}
+
+// --- NEW BULK PRICE MATH LOGIC ---
+function openBulkPriceModal() {
+    if (selectedInventory.size === 0) return;
+    document.getElementById('bulk-price-count').innerText = `${selectedInventory.size} items selected`;
+    document.getElementById('bulk-price-modal').classList.add('active');
+}
+function closeBulkPriceModal() { document.getElementById('bulk-price-modal').classList.remove('active'); }
+
+async function applyBulkPriceEdit() {
+    if (selectedInventory.size === 0) return;
+    
+    const type = document.getElementById('bulk-price-type').value;
+    const valueStr = document.getElementById('bulk-price-value').value;
+    const value = parseFloat(valueStr);
+    
+    if (!value || isNaN(value)) return showToast("Enter a valid number");
+    
+    closeBulkPriceModal();
+    showToast(`Updating prices for ${selectedInventory.size} products...`);
+    
+    try {
+        const ids = Array.from(selectedInventory);
+        
+        await Promise.all(ids.map(async (id) => {
+            const product = currentInventory.find(p => p._id === id);
+            if(product && product.variants) {
+                product.variants.forEach(v => {
+                    if (type === 'increase_pct') v.price = v.price + (v.price * (value / 100));
+                    if (type === 'decrease_pct') v.price = v.price - (v.price * (value / 100));
+                    if (type === 'increase_fixed') v.price = v.price + value;
+                    if (type === 'decrease_fixed') v.price = v.price - value;
+                    if (v.price < 0) v.price = 0; // Prevent negative prices
+                    v.price = Math.round(v.price * 100) / 100; // Keep two decimals
+                });
+                
+                // Update in background
+                await fetch(`${BACKEND_URL}/api/products/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(product)
+                });
+            }
+        }));
+        
+        showToast("Prices Bulk Updated Successfully! 💰");
+        selectedInventory.clear();
+        fetchInventory(); // Refresh grid to show new prices
+    } catch (err) {
+        showToast("Error updating prices.");
     }
 }
 
@@ -1728,7 +1886,6 @@ function closeAddProductModal() {
     document.getElementById('add-product-modal').classList.remove('active'); 
 }
 
-// NEW: Client-Side Image Compression Tool
 function compressImage(file, maxWidth = 800, maxHeight = 800) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1776,9 +1933,7 @@ async function submitNewProduct(e) {
         let finalImageUrl = undefined; 
 
         if (fileInput.files.length > 0) {
-            // Compress the image before uploading to Cloudinary
             const compressedFile = await compressImage(fileInput.files[0]);
-            
             const formData = new FormData();
             formData.append('file', compressedFile);
             formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
@@ -1835,7 +1990,6 @@ async function submitNewProduct(e) {
     }
 }
 
-// --- CSV UTILITIES (Import Logic unchanged) ---
 function importInventoryCSV(event) {
     const file = event.target.files[0];
     if (!file) return;
