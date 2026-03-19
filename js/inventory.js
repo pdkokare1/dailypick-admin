@@ -1,9 +1,224 @@
 /* js/inventory.js */
 
-// ... (All existing functions above remain perfectly intact: submitNewCategory, openRestockModal, etc.)
-// [For brevity in this output but you would see ALL original functions here in the true file]
+// NEW: Unified special filter controller mapped to stat cards
+function toggleSpecialFilter(type) {
+    // Determine if we are clicking an already active filter to toggle it off
+    let turningOff = false;
+    if (type === 'out' && isOutStockFilterActive) turningOff = true;
+    if (type === 'low' && isLowStockFilterActive) turningOff = true;
+    if (type === 'dead' && isDeadStockFilterActive) turningOff = true;
 
-// I will output the entire file to adhere to the rule "always provide full replacement files".
+    // Reset all special filters in state
+    isLowStockFilterActive = false;
+    isOutStockFilterActive = false;
+    isDeadStockFilterActive = false;
+    
+    // Reset visual card borders
+    document.getElementById('card-out-stock').style.border = '1px solid rgba(0,0,0,0.04)';
+    document.getElementById('card-low-stock').style.border = '1px solid rgba(0,0,0,0.04)';
+    document.getElementById('card-dead-stock').style.border = '1px solid rgba(0,0,0,0.04)';
+    
+    // Reset low stock button specifically if it exists
+    const lowStockBtn = document.getElementById('low-stock-btn');
+    if(lowStockBtn) {
+        lowStockBtn.style.background = '#FEF2F2';
+        lowStockBtn.style.color = '#DC2626';
+    }
+
+    // Apply new filter if we aren't just turning it off
+    if (!turningOff) {
+        if (type === 'out') {
+            isOutStockFilterActive = true;
+            document.getElementById('card-out-stock').style.border = '2px solid #DC2626';
+        } else if (type === 'low') {
+            isLowStockFilterActive = true;
+            document.getElementById('card-low-stock').style.border = '2px solid #D97706';
+            if(lowStockBtn) {
+                lowStockBtn.style.background = '#DC2626';
+                lowStockBtn.style.color = 'white';
+            }
+        } else if (type === 'dead') {
+            isDeadStockFilterActive = true;
+            document.getElementById('card-dead-stock').style.border = '2px solid #D97706';
+        }
+    }
+    
+    inventoryPage = 1;
+    applyInventoryFilters();
+}
+
+// Updated existing function to route through unified logic smoothly
+function toggleLowStockFilter() {
+    if (isLowStockFilterActive) {
+        toggleSpecialFilter('clear');
+    } else {
+        toggleSpecialFilter('low');
+    }
+}
+
+async function fetchInventory() {
+    if (inventoryPage === 1) {
+        inventoryFeed.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
+    }
+    
+    const loadBtn = document.getElementById('load-more-btn');
+    if (loadBtn) { 
+        loadBtn.innerText = 'Loading...'; 
+        loadBtn.disabled = true; 
+    }
+
+    try {
+        let queryUrl = `${BACKEND_URL}/api/products?all=true&page=${inventoryPage}&limit=30`;
+        if (inventorySearchTerm) queryUrl += `&search=${encodeURIComponent(inventorySearchTerm)}`;
+        if (inventoryCategoryFilter !== 'All') queryUrl += `&category=${encodeURIComponent(inventoryCategoryFilter)}`;
+        
+        if (inventoryBrandFilter !== 'All') queryUrl += `&brand=${encodeURIComponent(inventoryBrandFilter)}`;
+        if (inventoryDistributorFilter !== 'All') queryUrl += `&distributor=${encodeURIComponent(inventoryDistributorFilter)}`;
+
+        const res = await fetch(queryUrl);
+        const result = await res.json();
+        
+        if (result.success) { 
+            let dataToRender = result.data;
+
+            // NEW: Expanded Filter interception logic
+            if (isLowStockFilterActive) {
+                dataToRender = dataToRender.filter(p => p.variants.some(v => v.stock > 0 && v.stock <= (v.lowStockThreshold || 5)));
+            } else if (isOutStockFilterActive) {
+                dataToRender = dataToRender.filter(p => p.variants.some(v => v.stock <= 0));
+            } else if (isDeadStockFilterActive) {
+                dataToRender = dataToRender.filter(p => p.variants.some(v => v.stock > 15));
+            }
+
+            if (inventoryPage === 1) {
+                currentInventory = dataToRender;
+            } else {
+                currentInventory = [...currentInventory, ...dataToRender];
+            }
+            
+            updateInventoryDashboard(); 
+            currentInventory = applyInventorySorting(currentInventory); 
+            renderInventory(dataToRender.length < 30); 
+        }
+    } catch (e) { 
+        if (inventoryPage === 1) {
+            inventoryFeed.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
+        }
+    } finally { 
+        if (loadBtn) { 
+            loadBtn.innerText = 'Load More Products'; 
+            loadBtn.disabled = false; 
+        } 
+    }
+}
+
+function renderInventory(isLastPage = true) {
+    if (inventoryPage === 1) {
+        inventoryFeed.innerHTML = '';
+    }
+    
+    if (currentInventory.length === 0) { 
+        inventoryFeed.innerHTML = '<p class="empty-state">No products found.</p>'; 
+        document.getElementById('load-more-btn').classList.add('hidden'); 
+        return; 
+    }
+    
+    const itemsToRender = inventoryPage === 1 
+        ? currentInventory 
+        : currentInventory.slice((inventoryPage - 1) * 30);
+
+    itemsToRender.forEach(p => {
+        const card = document.createElement('div'); 
+        card.classList.add('inventory-card');
+        
+        if (!p.isActive) card.classList.add('inactive');
+        
+        const checkboxHtml = `<input type="checkbox" class="order-checkbox" ${selectedInventory.has(p._id) ? 'checked' : ''} onclick="toggleInventorySelection('${p._id}', event)">`;
+        
+        const thumb = p.imageUrl 
+            ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
+            : `<div style="width:40px; height:40px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">📦</div>`;
+        
+        const vCount = p.variants ? p.variants.length : 0;
+        let totalStock = 0;
+        let lowestStockFlag = 'healthy'; 
+        
+        if (p.variants) {
+            p.variants.forEach(v => {
+                totalStock += v.stock;
+                if (v.stock <= 0) {
+                    lowestStockFlag = 'out';
+                } else if (lowestStockFlag !== 'out' && v.stock <= (v.lowStockThreshold || 5)) {
+                    lowestStockFlag = 'low';
+                }
+            });
+        }
+        
+        let stockBadge = `<span class="badge-healthy">Stock: ${totalStock}</span>`;
+        if (lowestStockFlag === 'out') stockBadge = `<span class="badge-out">Out of Stock</span>`;
+        else if (lowestStockFlag === 'low') stockBadge = `<span class="badge-low">Low Stock (${totalStock})</span>`;
+
+        const variantsHtml = (p.variants || []).map(v => {
+            let lastCost = 0;
+            if (v.purchaseHistory && v.purchaseHistory.length > 0) {
+                lastCost = v.purchaseHistory[v.purchaseHistory.length - 1].purchasingPrice;
+            }
+            let marginHtml = '';
+            if (lastCost > 0 && v.price > 0) {
+                const marginPercentage = (((v.price - lastCost) / v.price) * 100).toFixed(1);
+                marginHtml = `<span class="margin-badge">${marginPercentage}% Margin</span>`;
+            }
+
+            return `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #F8FAFC; border-radius: 8px; margin-bottom: 4px; font-size: 12px;" onclick="event.stopPropagation()">
+                <span>${v.weightOrVolume}</span>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span style="color: var(--text-muted);">₹</span>
+                    <input class="inline-edit-input" type="number" value="${v.price}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'price', this, event)" title="Press Enter to save">
+                    ${marginHtml}
+                    <span style="color: var(--text-muted); margin-left: 8px;">Qty:</span>
+                    <input class="inline-edit-input" type="number" value="${v.stock}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'stock', this, event)" title="Press Enter to save">
+                    <button class="quick-restock-btn" onclick="openRestockHistory('${p._id}', '${v._id}', event)" title="Restock History">🕒</button>
+                    <button class="quick-restock-btn" onclick="quickRestock('${p._id}', '${v._id}', event)" title="Quick Restock">📦</button>
+                </div>
+            </div>
+            `;
+        }).join('');
+
+        card.innerHTML = `
+            <div style="display:flex; align-items:center; width:100%; justify-content:space-between;">
+                <div style="display:flex; align-items:center;">
+                    ${checkboxHtml}
+                    ${thumb}
+                    <div class="inv-info">
+                        <h4 style="margin-bottom: 2px;">${p.name}</h4>
+                        <div style="display:flex; align-items:center;">
+                            <span class="inv-meta" style="font-size: 11px; color: var(--text-muted);">${vCount} Variant${vCount !== 1 ? 's' : ''}</span>
+                            ${stockBadge}
+                            ${vCount > 0 ? `<button class="variant-collapse-btn" onclick="toggleVariantView('${p._id}', event)">▼ Edit Inline</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <button class="edit-btn" onclick="openEditProductModal('${p._id}', event)">Full Edit</button>
+                    <button class="toggle-switch ${p.isActive ? 'active' : ''}" onclick="toggleProductStatus('${p._id}', this, event)"></button>
+                </div>
+            </div>
+            <div style="width: 100%; margin-top: 10px; display: none;" id="variants-${p._id}">
+                ${variantsHtml}
+            </div>
+        `;
+        
+        inventoryFeed.appendChild(card);
+    });
+
+    const loadBtn = document.getElementById('load-more-btn');
+    if (isLastPage || isLowStockFilterActive || isOutStockFilterActive || isDeadStockFilterActive) {
+        loadBtn.classList.add('hidden');
+    } else {
+        loadBtn.classList.remove('hidden');
+    }
+}
 
 function openAddCategoryModal() { 
     document.getElementById('add-category-form').reset(); 
@@ -411,7 +626,7 @@ function updateInventoryDashboard() {
     currentInventory.forEach(p => {
         if(p.variants) {
             p.variants.forEach(v => {
-                if (v.stock === 0) outOfStock++;
+                if (v.stock <= 0) outOfStock++;
                 else if (v.stock <= (v.lowStockThreshold || 5)) lowStock++;
                 else if (v.stock > 15) deadStock++; 
 
@@ -493,22 +708,6 @@ let searchTimeout;
 function debounceInventorySearch() { 
     clearTimeout(searchTimeout); 
     searchTimeout = setTimeout(applyInventoryFilters, 500); 
-}
-
-function toggleLowStockFilter() {
-    isLowStockFilterActive = !isLowStockFilterActive;
-    const btn = document.getElementById('low-stock-btn');
-    
-    if (isLowStockFilterActive) {
-        btn.style.background = '#DC2626'; 
-        btn.style.color = 'white';
-    } else {
-        btn.style.background = '#FEF2F2'; 
-        btn.style.color = '#DC2626';
-    }
-    
-    inventoryPage = 1;
-    applyInventoryFilters();
 }
 
 function applyInventoryFilters() { 
@@ -722,201 +921,6 @@ function toggleVariantView(productId, event) {
     }
 }
 
-async function fetchInventory() {
-    if (inventoryPage === 1) {
-        inventoryFeed.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
-    }
-    
-    const loadBtn = document.getElementById('load-more-btn');
-    if (loadBtn) { 
-        loadBtn.innerText = 'Loading...'; 
-        loadBtn.disabled = true; 
-    }
-
-    try {
-        let queryUrl = `${BACKEND_URL}/api/products?all=true&page=${inventoryPage}&limit=30`;
-        if (inventorySearchTerm) queryUrl += `&search=${encodeURIComponent(inventorySearchTerm)}`;
-        if (inventoryCategoryFilter !== 'All') queryUrl += `&category=${encodeURIComponent(inventoryCategoryFilter)}`;
-        
-        if (inventoryBrandFilter !== 'All') queryUrl += `&brand=${encodeURIComponent(inventoryBrandFilter)}`;
-        if (inventoryDistributorFilter !== 'All') queryUrl += `&distributor=${encodeURIComponent(inventoryDistributorFilter)}`;
-
-        const res = await fetch(queryUrl);
-        const result = await res.json();
-        
-        if (result.success) { 
-            let dataToRender = result.data;
-
-            if (isLowStockFilterActive) {
-                dataToRender = dataToRender.filter(p => {
-                    return p.variants.some(v => v.stock <= (v.lowStockThreshold || 5));
-                });
-            }
-
-            if (inventoryPage === 1) {
-                currentInventory = dataToRender;
-            } else {
-                currentInventory = [...currentInventory, ...dataToRender];
-            }
-            
-            updateInventoryDashboard(); 
-            currentInventory = applyInventorySorting(currentInventory); 
-            renderInventory(dataToRender.length < 30); 
-        }
-    } catch (e) { 
-        if (inventoryPage === 1) {
-            inventoryFeed.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
-        }
-    } finally { 
-        if (loadBtn) { 
-            loadBtn.innerText = 'Load More Products'; 
-            loadBtn.disabled = false; 
-        } 
-    }
-}
-
-function renderInventory(isLastPage = true) {
-    if (inventoryPage === 1) {
-        inventoryFeed.innerHTML = '';
-    }
-    
-    if (currentInventory.length === 0) { 
-        inventoryFeed.innerHTML = '<p class="empty-state">No products found.</p>'; 
-        document.getElementById('load-more-btn').classList.add('hidden'); 
-        return; 
-    }
-    
-    const itemsToRender = inventoryPage === 1 
-        ? currentInventory 
-        : currentInventory.slice((inventoryPage - 1) * 30);
-
-    itemsToRender.forEach(p => {
-        const card = document.createElement('div'); 
-        card.classList.add('inventory-card');
-        
-        if (!p.isActive) card.classList.add('inactive');
-        
-        const checkboxHtml = `<input type="checkbox" class="order-checkbox" ${selectedInventory.has(p._id) ? 'checked' : ''} onclick="toggleInventorySelection('${p._id}', event)">`;
-        
-        const thumb = p.imageUrl 
-            ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
-            : `<div style="width:40px; height:40px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">📦</div>`;
-        
-        const vCount = p.variants ? p.variants.length : 0;
-        let totalStock = 0;
-        let lowestStockFlag = 'healthy'; 
-        
-        if (p.variants) {
-            p.variants.forEach(v => {
-                totalStock += v.stock;
-                if (v.stock === 0) {
-                    lowestStockFlag = 'out';
-                } else if (lowestStockFlag !== 'out' && v.stock <= (v.lowStockThreshold || 5)) {
-                    lowestStockFlag = 'low';
-                }
-            });
-        }
-        
-        let stockBadge = `<span class="badge-healthy">Stock: ${totalStock}</span>`;
-        if (lowestStockFlag === 'out') stockBadge = `<span class="badge-out">Out of Stock</span>`;
-        else if (lowestStockFlag === 'low') stockBadge = `<span class="badge-low">Low Stock (${totalStock})</span>`;
-
-        const variantsHtml = (p.variants || []).map(v => {
-            let lastCost = 0;
-            if (v.purchaseHistory && v.purchaseHistory.length > 0) {
-                lastCost = v.purchaseHistory[v.purchaseHistory.length - 1].purchasingPrice;
-            }
-            let marginHtml = '';
-            if (lastCost > 0 && v.price > 0) {
-                const marginPercentage = (((v.price - lastCost) / v.price) * 100).toFixed(1);
-                marginHtml = `<span class="margin-badge">${marginPercentage}% Margin</span>`;
-            }
-
-            return `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #F8FAFC; border-radius: 8px; margin-bottom: 4px; font-size: 12px;" onclick="event.stopPropagation()">
-                <span>${v.weightOrVolume}</span>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <span style="color: var(--text-muted);">₹</span>
-                    <input class="inline-edit-input" type="number" value="${v.price}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'price', this, event)" title="Press Enter to save">
-                    ${marginHtml}
-                    <span style="color: var(--text-muted); margin-left: 8px;">Qty:</span>
-                    <input class="inline-edit-input" type="number" value="${v.stock}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'stock', this, event)" title="Press Enter to save">
-                    <button class="quick-restock-btn" onclick="openRestockHistory('${p._id}', '${v._id}', event)" title="Restock History">🕒</button>
-                    <button class="quick-restock-btn" onclick="quickRestock('${p._id}', '${v._id}', event)" title="Quick Restock">📦</button>
-                </div>
-            </div>
-            `;
-        }).join('');
-
-        card.innerHTML = `
-            <div style="display:flex; align-items:center; width:100%; justify-content:space-between;">
-                <div style="display:flex; align-items:center;">
-                    ${checkboxHtml}
-                    ${thumb}
-                    <div class="inv-info">
-                        <h4 style="margin-bottom: 2px;">${p.name}</h4>
-                        <div style="display:flex; align-items:center;">
-                            <span class="inv-meta" style="font-size: 11px; color: var(--text-muted);">${vCount} Variant${vCount !== 1 ? 's' : ''}</span>
-                            ${stockBadge}
-                            ${vCount > 0 ? `<button class="variant-collapse-btn" onclick="toggleVariantView('${p._id}', event)">▼ Edit Inline</button>` : ''}
-                        </div>
-                    </div>
-                </div>
-                <div style="display:flex; align-items:center;">
-                    <button class="edit-btn" onclick="openEditProductModal('${p._id}', event)">Full Edit</button>
-                    <button class="toggle-switch ${p.isActive ? 'active' : ''}" onclick="toggleProductStatus('${p._id}', this, event)"></button>
-                </div>
-            </div>
-            <div style="width: 100%; margin-top: 10px; display: none;" id="variants-${p._id}">
-                ${variantsHtml}
-            </div>
-        `;
-        
-        inventoryFeed.appendChild(card);
-    });
-
-    const loadBtn = document.getElementById('load-more-btn');
-    if (isLastPage || isLowStockFilterActive) {
-        loadBtn.classList.add('hidden');
-    } else {
-        loadBtn.classList.remove('hidden');
-    }
-}
-
-async function toggleProductStatus(id, btn, e) {
-    e.stopPropagation();
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' });
-        const result = await res.json();
-        
-        if (result.success) { 
-            btn.classList.toggle('active'); 
-            btn.closest('.inventory-card').classList.toggle('inactive'); 
-        }
-    } catch (err) { 
-        console.error("Toggle Error:", err); 
-    }
-}
-
-// NEW: Appended Barcode print button to the variant row template
-function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold = '5') {
-    const container = document.getElementById('variants-container');
-    const row = document.createElement('div');
-    row.classList.add('variant-row');
-    row.innerHTML = `
-        <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" required style="min-width: 90px;">
-        <input type="number" placeholder="Price (₹)" class="var-price" value="${price}" required style="width: 70px; flex: none;">
-        <input type="number" placeholder="Stock" class="var-stock" value="${stock}" required style="width: 65px; flex: none;">
-        <input type="number" placeholder="Alert At" class="var-threshold" value="${threshold}" title="Low Stock Alert Threshold" required style="width: 65px; flex: none;">
-        <input type="text" placeholder="SKU/Barcode" class="var-sku" value="${sku}" style="min-width: 90px;">
-        <button type="button" class="scan-sku-btn" onclick="startScannerForSku(this)" title="Scan Barcode">📷</button>
-        <button type="button" class="scan-sku-btn" onclick="printBarcode(this)" title="Generate & Print Label">🖨️</button>
-        <button type="button" class="remove-variant-btn" onclick="this.parentElement.remove()">✕</button>
-    `;
-    container.appendChild(row);
-}
-
-// NEW: Logic to physically generate a print the Barcode using JsBarcode
 function printBarcode(btnElement) {
     const sku = btnElement.parentElement.querySelector('.var-sku').value.trim();
     if(!sku) return showToast("Enter a SKU first to generate a barcode.");
@@ -931,7 +935,6 @@ function printBarcode(btnElement) {
     container.classList.remove('active-print');
 }
 
-// NEW: Physical Audit Mode Logic
 function openAuditMode() {
     document.getElementById('audit-scan-input').value = '';
     document.getElementById('audit-result-area').classList.add('hidden');
@@ -1000,6 +1003,23 @@ async function submitAuditCorrection() {
     document.getElementById('audit-result-area').classList.add('hidden');
     document.getElementById('audit-scan-input').value = '';
     document.getElementById('audit-scan-input').focus();
+}
+
+function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold = '5') {
+    const container = document.getElementById('variants-container');
+    const row = document.createElement('div');
+    row.classList.add('variant-row');
+    row.innerHTML = `
+        <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" required style="min-width: 90px;">
+        <input type="number" placeholder="Price (₹)" class="var-price" value="${price}" required style="width: 70px; flex: none;">
+        <input type="number" placeholder="Stock" class="var-stock" value="${stock}" required style="width: 65px; flex: none;">
+        <input type="number" placeholder="Alert At" class="var-threshold" value="${threshold}" title="Low Stock Alert Threshold" required style="width: 65px; flex: none;">
+        <input type="text" placeholder="SKU/Barcode" class="var-sku" value="${sku}" style="min-width: 90px;">
+        <button type="button" class="scan-sku-btn" onclick="startScannerForSku(this)" title="Scan Barcode">📷</button>
+        <button type="button" class="scan-sku-btn" onclick="printBarcode(this)" title="Generate & Print Label">🖨️</button>
+        <button type="button" class="remove-variant-btn" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.appendChild(row);
 }
 
 function openAddProductModal() { 
