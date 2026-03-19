@@ -127,12 +127,12 @@
         <main class="dashboard-container pos-layout">
             
             <div class="pos-left">
-                <div class="chart-container" style="padding: 16px; margin-bottom: 0;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                <div class="chart-container" style="padding: 16px; margin-bottom: 0; text-align: center;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; text-align: left;">
                         <h2 style="font-size: 14px;">Live Scanner</h2>
                         <span class="pulse-indicator" style="background:#DCFCE7; color:#16A34A; padding:4px 8px; font-size:10px;">Active</span>
                     </div>
-                    <div id="pos-continuous-reader" style="width: 100%; border-radius: 12px; overflow: hidden; background: #000; min-height: 200px;"></div>
+                    <div id="pos-continuous-reader" style="width: 100%; max-width: 250px; margin: 0 auto; border-radius: 12px; overflow: hidden; background: #000; min-height: 200px;"></div>
                 </div>
 
                 <div class="section-header" style="margin-bottom: 8px;">
@@ -153,7 +153,7 @@
                     </div>
                 </div>
                 
-                <div id="pos-cart-items-container" class="pos-cart-list">
+                <div id="pos-cart-items-container" class="pos-cart-list" style="max-height: 250px;">
                     <p class="empty-state" style="margin-top: 40px;">Cart is empty.<br><span style="font-size: 12px;">Scan or tap an item to begin.</span></p>
                 </div>
 
@@ -263,14 +263,18 @@
                 <button id="date-btn-all" class="date-btn" onclick="updateAnalyticsRange(999)">All Time</button>
             </div>
 
-            <div class="chart-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; align-items: center;">
-                <div>
+            <div class="chart-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; align-items: start;">
+                <div style="width: 100%;">
                     <h3 style="font-size:14px; margin-bottom:12px; color: var(--text-muted); text-transform: uppercase;">Revenue Trend</h3>
-                    <canvas id="revenueChart" height="200"></canvas>
+                    <div style="position: relative; height: 220px; width: 100%;">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
                 </div>
-                <div>
+                <div style="width: 100%;">
                     <h3 style="font-size:14px; margin-bottom:12px; color: var(--text-muted); text-transform: uppercase;">Category Distribution</h3>
-                    <canvas id="categoryChart" height="200"></canvas>
+                    <div style="position: relative; height: 220px; width: 100%;">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
                 </div>
             </div>
 
