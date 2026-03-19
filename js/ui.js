@@ -83,7 +83,14 @@ function switchView(viewName) {
 let globalBarcodeBuffer = '';
 let globalBarcodeTimeout = null;
 
+// NEW: Global F-Key Listener appended for POS
 document.addEventListener('keydown', (e) => {
+    if (document.getElementById('pos-view').classList.contains('active')) {
+        if(e.key === 'F1') { e.preventDefault(); processPosCheckout('Cash'); return; }
+        if(e.key === 'F2') { e.preventDefault(); processPosCheckout('UPI'); return; }
+        if(e.key === 'F4') { e.preventDefault(); clearPosCart(); return; }
+    }
+
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         openCommandSearch();
@@ -192,7 +199,6 @@ function renderOverview() {
         offlineCard.style.display = 'none';
     }
 
-    // NEW PHASE 3: Daily Target Progress Bar Logic
     const todayStr = new Date().toDateString();
     const todayRevenue = currentOrders
         .filter(o => new Date(o.createdAt).toDateString() === todayStr && o.status !== 'Cancelled')
@@ -207,10 +213,37 @@ function renderOverview() {
         progressBar.style.width = `${progressPct}%`;
         progressText.innerText = `₹${todayRevenue.toFixed(2)} (${progressPct}%)`;
         if (progressPct >= 100) {
-            progressBar.style.background = '#3b82f6'; // Turn blue when goal is hit
+            progressBar.style.background = '#3b82f6';
             progressText.innerText = `🎉 Goal Reached! ₹${todayRevenue.toFixed(2)}`;
         } else {
             progressBar.style.background = '#10b981';
+        }
+    }
+
+    // NEW: Action Center Injection
+    const actionFeed = document.getElementById('action-center-feed');
+    if (actionFeed) {
+        actionFeed.innerHTML = '';
+        let negativeStock = [];
+        let deadStockItems = [];
+        
+        currentInventory.forEach(p => {
+            if(p.variants) {
+                p.variants.forEach(v => {
+                    if (v.stock < 0) negativeStock.push(`${p.name} (${v.weightOrVolume})`);
+                    if (v.stock > 15) deadStockItems.push(`${p.name} (${v.weightOrVolume})`);
+                });
+            }
+        });
+        
+        if (negativeStock.length > 0) {
+            actionFeed.innerHTML += `<div class="stat-card" style="border-left: 4px solid #ef4444; padding: 12px;"><h4 style="color:#ef4444; margin-bottom:4px;">⚠️ Critical: Negative Stock</h4><p style="font-size:12px;">${negativeStock.length} items have negative stock quantities.</p></div>`;
+        }
+        if (deadStockItems.length > 0) {
+            actionFeed.innerHTML += `<div class="stat-card" style="border-left: 4px solid #f59e0b; padding: 12px;"><h4 style="color:#f59e0b; margin-bottom:4px;">📦 Overstocked / Dead Stock</h4><p style="font-size:12px;">${deadStockItems.length} items are currently heavily overstocked (>15 units).</p></div>`;
+        }
+        if (actionFeed.innerHTML === '') {
+            actionFeed.innerHTML = '<p class="empty-state">No critical actions required today.</p>';
         }
     }
 }
