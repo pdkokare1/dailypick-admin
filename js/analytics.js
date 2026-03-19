@@ -1,3 +1,7 @@
+/* js/analytics.js */
+
+let categoryChartInstance = null; // NEW PHASE 4
+
 async function exportOrdersCSV() {
     showToast('Fetching orders for export...');
     try {
@@ -151,6 +155,7 @@ function updateAnalyticsRange(daysLimit) {
     }
 
     let itemFrequency = {};
+    let categoryRevenue = {}; // NEW PHASE 4
 
     filteredOrders.forEach(o => {
         const orderDate = new Date(o.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -163,11 +168,24 @@ function updateAnalyticsRange(daysLimit) {
             if (!itemFrequency[key]) itemFrequency[key] = { qty: 0, revenue: 0 };
             itemFrequency[key].qty += i.qty;
             itemFrequency[key].revenue += (i.price * i.qty);
+
+            // NEW PHASE 4: Category distribution map
+            let catName = 'Uncategorized';
+            const invItem = currentInventory.find(inv => inv.name === i.name);
+            if (invItem && invItem.category) catName = invItem.category;
+
+            if (!categoryRevenue[catName]) categoryRevenue[catName] = 0;
+            categoryRevenue[catName] += (i.price * i.qty);
         });
     });
 
     const data = labels.map(label => revenueMap[label]);
     renderChart(labels, data);
+
+    // Render new category chart
+    const catLabels = Object.keys(categoryRevenue);
+    const catData = Object.values(categoryRevenue);
+    renderCategoryChart(catLabels, catData);
 
     const topItems = Object.entries(itemFrequency)
         .map(([name, stats]) => ({ name, qty: stats.qty, revenue: stats.revenue }))
@@ -211,8 +229,39 @@ function renderChart(labels, data) {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+// NEW PHASE 4: Doughnut Chart Renderer
+function renderCategoryChart(labels, data) {
+    const ctx = document.getElementById('categoryChart').getContext('2d');
+    if (categoryChartInstance) categoryChartInstance.destroy();
+    
+    const backgroundColors = [
+        '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', 
+        '#14b8a6', '#f43f5e', '#84cc16', '#6366f1', '#eab308'
+    ];
+
+    categoryChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: backgroundColors.slice(0, labels.length),
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { 
+                legend: { position: 'right', labels: { boxWidth: 12, font: {size: 10} } } 
+            }
         }
     });
 }
