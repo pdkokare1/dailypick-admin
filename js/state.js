@@ -1,3 +1,5 @@
+/* js/state.js */
+
 const BACKEND_URL = 'https://dailypick-backend-production-05d6.up.railway.app';
 const CLOUDINARY_CLOUD_NAME = 'YOUR_CLOUD_NAME'; 
 const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET'; 
@@ -45,6 +47,7 @@ const pendingCountEl = document.getElementById('pending-count');
 const ordersFeed = document.getElementById('orders-list-view'); 
 const ordersKanban = document.getElementById('orders-kanban-view');
 const orderModalOverlay = document.getElementById('order-modal-overlay');
+const inventoryFeed = document.getElementById('inventory-feed'); // FIX APPLIED HERE
 
 // Expanded View Routing 
 const views = { 
