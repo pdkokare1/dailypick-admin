@@ -57,6 +57,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: 0.3s; }
 .toggle-switch.active { background: var(--accent); }
 .toggle-switch.active::after { transform: translateX(20px); }
+#credit-toggle.active { background: #10b981; }
 
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: 0.3s; }
 .modal-overlay.active { opacity: 1; pointer-events: auto; }
@@ -94,7 +95,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .order-tabs { display: flex; background: #E2E8F0; padding: 4px; border-radius: 10px; gap: 4px; }
 .tab-btn { padding: 6px 16px; border: none; background: transparent; border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
 .tab-btn.active { background: var(--surface); color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-.bulk-btn { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: none; }
+.bulk-btn { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; display: none; margin-left: auto; }
 .bulk-btn.visible { display: block; animation: fadeIn 0.2s ease; }
 .order-checkbox { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; margin-right: 10px; }
 
@@ -148,7 +149,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .whatsapp-btn { background: #25D366; color: white; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 12px; display: inline-block; margin-right: 8px; }
 .history-btn { background: #E2E8F0; color: var(--text-main); padding: 8px 16px; border-radius: 8px; border: none; font-weight: 700; font-size: 12px; cursor: pointer; }
 
-/* NEW Phase 6: Export Grid & Updates */
+/* PHASE 6: Export Grid & Updates */
 .export-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
 .date-picker-row { display: flex; gap: 8px; margin-bottom: 16px; background: #E2E8F0; padding: 4px; border-radius: 10px; width: fit-content; }
 .date-btn { padding: 6px 16px; border: none; background: transparent; border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
@@ -156,8 +157,22 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .customer-history-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .history-order-card { background: #F8FAFC; padding: 12px; border-radius: 12px; border: 1px solid #E2E8F0; }
 
-/* Credit Toggle Modifier */
-#credit-toggle.active { background: #10b981; }
+/* NEW PHASE 7: Kanban & Bulk Edit Styles */
+.kanban-board { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 16px; align-items: flex-start; min-height: 500px; }
+.kanban-col { flex: 0 0 320px; background: #F8FAFC; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; border: 1px solid #E2E8F0; }
+.kanban-col-header { font-weight: 800; font-size: 14px; margin-bottom: 8px; display: flex; justify-content: space-between; color: var(--text-main); }
+.kanban-card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); border: 1px solid #F1F5F9; cursor: pointer; transition: 0.2s; }
+.kanban-card:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.05); }
+.kanban-card h4 { font-size: 14px; margin-bottom: 4px; }
+.kanban-card p { font-size: 11px; color: var(--text-muted); margin-bottom: 12px; }
+.kanban-actions { display: flex; gap: 8px; }
+.kanban-btn { flex: 1; padding: 8px; border-radius: 8px; font-size: 11px; font-weight: 700; border: none; cursor: pointer; }
+.btn-pack { background: #E0E7FF; color: #4338CA; }
+.btn-dispatch { background: #DCFCE7; color: #16A34A; }
+
+.sourcing-list { display: flex; flex-direction: column; gap: 12px; }
+.sourcing-item { background: #F8FAFC; padding: 16px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #E2E8F0; }
+.sourcing-item h4 { font-size: 14px; margin-bottom: 4px; }
 
 /* Thermal Print Setup */
 #print-receipt-container { display: none; }
