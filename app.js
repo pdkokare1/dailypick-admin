@@ -48,9 +48,10 @@ const ordersFeed = document.getElementById('orders-list-view');
 const ordersKanban = document.getElementById('orders-kanban-view');
 const orderModalOverlay = document.getElementById('order-modal-overlay');
 
-// Expanded View Routing
+// Expanded View Routing (MODIFIED for Overview Dashboard)
 const views = { 
-    pos: document.getElementById('pos-view'), // NEW
+    overview: document.getElementById('overview-view'), // NEW
+    pos: document.getElementById('pos-view'), 
     orders: document.getElementById('orders-view'), 
     inventory: document.getElementById('inventory-view'),
     analytics: document.getElementById('analytics-view'),
@@ -58,12 +59,33 @@ const views = {
 }; 
 
 const navBtns = { 
-    pos: document.getElementById('nav-pos'), // NEW
+    overview: document.getElementById('nav-overview'), // NEW
+    pos: document.getElementById('nav-pos'), 
     orders: document.getElementById('nav-orders'), 
     inventory: document.getElementById('nav-inventory'),
     analytics: document.getElementById('nav-analytics'),
     customers: document.getElementById('nav-customers') 
 };
+
+// --- NEW PHASE 1: AUDIO ALERTS ---
+function playNewOrderAudio() {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const playNote = (freq, startTime, duration) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime + startTime);
+        gain.gain.setValueAtTime(1, audioCtx.currentTime + startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTime + duration);
+        osc.start(audioCtx.currentTime + startTime);
+        osc.stop(audioCtx.currentTime + startTime + duration);
+    };
+    // Double beep
+    playNote(600, 0, 0.15);
+    playNote(800, 0.2, 0.15);
+}
 
 // --- REAL-TIME CONNECTION ---
 function connectAdminLiveStream() {
@@ -76,6 +98,7 @@ function connectAdminLiveStream() {
         if (data.type === 'NEW_ORDER') {
             currentOrders.unshift(data.order);
             updateDashboard();
+            playNewOrderAudio(); // NEW
             showToast('🚨 New Order Arrived!');
         }
     };
@@ -90,7 +113,8 @@ function connectAdminLiveStream() {
 
 function switchView(viewName) {
     const titles = {
-        pos: 'In-Store Register', // NEW
+        overview: 'Store Overview', // NEW
+        pos: 'In-Store Register', 
         orders: 'Live Operations Center',
         inventory: 'Inventory Management',
         analytics: 'Business Insights',
@@ -125,10 +149,140 @@ function switchView(viewName) {
     if (viewName === 'inventory' && currentInventory.length === 0) fetchInventory();
     if (viewName === 'analytics') fetchAnalytics();
     if (viewName === 'customers') fetchCustomers();
+    if (viewName === 'overview') renderOverview(); // NEW
 }
 
 // ==========================================
-// --- NEW: IN-STORE POS LOGIC ---
+// --- NEW PHASE 1: HARDWARE SCANNER & GLOBAL CMD ---
+// ==========================================
+let globalBarcodeBuffer = '';
+let globalBarcodeTimeout = null;
+
+document.addEventListener('keydown', (e) => {
+    // 1. Check for Ctrl+K (Command Search)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        openCommandSearch();
+        return;
+    }
+
+    // Ignore generic typing if user is already inside an input field
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        return;
+    }
+
+    // 2. Hardware Scanner Check (Rapid Keypresses ending in Enter)
+    if (e.key === 'Enter' && globalBarcodeBuffer.length > 3) {
+        // If POS is active, add to cart. If not, open search results for it.
+        if (document.getElementById('pos-view').classList.contains('active')) {
+            handlePosScan(globalBarcodeBuffer);
+        } else {
+            openCommandSearch();
+            document.getElementById('command-input').value = globalBarcodeBuffer;
+            handleCommandSearch(globalBarcodeBuffer);
+        }
+        globalBarcodeBuffer = '';
+        return;
+    }
+
+    if (e.key.length === 1) {
+        globalBarcodeBuffer += e.key;
+        clearTimeout(globalBarcodeTimeout);
+        // Scanners typically type faster than 50ms per character
+        globalBarcodeTimeout = setTimeout(() => { globalBarcodeBuffer = ''; }, 50);
+    }
+});
+
+function openCommandSearch() {
+    const modal = document.getElementById('command-search-modal');
+    modal.classList.add('active');
+    document.getElementById('command-input').focus();
+    document.getElementById('command-results').innerHTML = '<p style="padding: 16px; font-size: 12px; color: var(--text-muted);">Start typing to find products, orders, or customers...</p>';
+}
+
+function closeCommandSearch() {
+    document.getElementById('command-search-modal').classList.remove('active');
+    document.getElementById('command-input').value = '';
+}
+
+function handleCommandSearch(query) {
+    const resultsContainer = document.getElementById('command-results');
+    query = query.toLowerCase().trim();
+    if (query.length < 2) {
+        resultsContainer.innerHTML = '';
+        return;
+    }
+
+    let resultsHTML = '';
+
+    // Search Orders (by ID or Phone)
+    const orderMatches = currentOrders.filter(o => o._id.toLowerCase().includes(query) || (o.customerPhone && o.customerPhone.includes(query))).slice(0, 3);
+    orderMatches.forEach(o => {
+        resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); openOrderModalById('${o._id}')">
+            <div>
+                <p style="font-weight:700; font-size:13px;">Order #${o._id.slice(-4).toUpperCase()}</p>
+                <p style="font-size:11px; color:var(--text-muted);">${o.customerName || 'Guest'} • ₹${o.totalAmount}</p>
+            </div>
+            <span style="font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:4px;">Order</span>
+        </div>`;
+    });
+
+    // Search Products (by Name or SKU)
+    const productMatches = currentInventory.filter(p => p.name.toLowerCase().includes(query) || (p.variants && p.variants.some(v => v.sku.toLowerCase().includes(query)))).slice(0, 5);
+    productMatches.forEach(p => {
+        resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); switchView('inventory'); openEditProductModal('${p._id}', event)">
+            <div>
+                <p style="font-weight:700; font-size:13px;">${p.name}</p>
+                <p style="font-size:11px; color:var(--text-muted);">${p.category} • ${p.variants ? p.variants.length : 0} Variants</p>
+            </div>
+            <span style="font-size:10px; background:#dcfce7; color:#16a34a; padding:2px 6px; border-radius:4px;">Product</span>
+        </div>`;
+    });
+
+    if (resultsHTML === '') resultsHTML = '<p style="padding: 16px; font-size: 12px; color: var(--text-muted);">No matching results found.</p>';
+    resultsContainer.innerHTML = resultsHTML;
+}
+
+function openOrderModalById(id) {
+    const order = currentOrders.find(o => o._id === id);
+    if(order) {
+        switchView('orders');
+        openOrderModal(order);
+    }
+}
+
+// ==========================================
+// --- NEW PHASE 1: OVERVIEW DASHBOARD ---
+// ==========================================
+function renderOverview() {
+    // Pending Orders count
+    const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
+    document.getElementById('ov-pending-count').innerText = trulyPending.length;
+
+    // Low stock count calculation
+    let lowStockCount = 0;
+    currentInventory.forEach(p => {
+        if (p.variants) {
+            p.variants.forEach(v => {
+                if (v.stock <= (v.lowStockThreshold || 5)) lowStockCount++;
+            });
+        }
+    });
+    document.getElementById('ov-low-stock-count').innerText = lowStockCount;
+
+    // Offline sync count display
+    const offlineQueue = JSON.parse(localStorage.getItem('dailypick_offline_pos') || '[]');
+    const offlineCard = document.getElementById('ov-offline-card');
+    if (offlineQueue.length > 0) {
+        offlineCard.style.display = 'block';
+        document.getElementById('ov-offline-count').innerText = offlineQueue.length;
+    } else {
+        offlineCard.style.display = 'none';
+    }
+}
+
+// ==========================================
+// --- IN-STORE POS LOGIC & OFFLINE ---
 // ==========================================
 
 function startPosScanner() {
@@ -294,6 +448,7 @@ function renderPosCart() {
     totalEl.innerText = `₹${total.toFixed(2)}`;
 }
 
+// MODIFIED PHASE 1: Try/Catch wrapper for Offline Sync
 async function processPosCheckout(paymentMethod) {
     if (posCart.length === 0) return showToast('Cart is empty.');
     
@@ -304,7 +459,8 @@ async function processPosCheckout(paymentMethod) {
         customerPhone: phone,
         items: posCart,
         totalAmount: total,
-        paymentMethod: paymentMethod
+        paymentMethod: paymentMethod,
+        timestamp: new Date().toISOString() // Added for offline tracking
     };
 
     showToast('Processing payment...');
@@ -320,21 +476,66 @@ async function processPosCheckout(paymentMethod) {
         
         if (result.success) {
             showToast('Transaction Complete! 🧾');
-            
-            // Re-use existing print logic by mocking the activeOrder structure
             activeOrder = result.orderData;
             printReceipt();
-            
             clearPosCart();
-            // Silently fetch inventory in background to update local stock levels
             fetchInventory(); 
         } else {
             showToast(result.message || 'Checkout failed.');
         }
     } catch (e) {
-        showToast('Network error during checkout.');
+        // NEW OFFLINE LOGIC
+        showToast('Network offline. Saving transaction locally...');
+        let offlineQueue = JSON.parse(localStorage.getItem('dailypick_offline_pos') || '[]');
+        offlineQueue.push(payload);
+        localStorage.setItem('dailypick_offline_pos', JSON.stringify(offlineQueue));
+        
+        // Mock receipt printing for offline transaction
+        activeOrder = {
+            _id: 'OFFL' + Date.now().toString().slice(-4),
+            createdAt: new Date(),
+            customerName: 'In-Store Customer (Offline)',
+            customerPhone: phone,
+            deliveryAddress: 'In-Store Purchase',
+            deliveryType: 'Instant',
+            items: posCart,
+            totalAmount: total,
+            paymentMethod: paymentMethod
+        };
+        printReceipt();
+        clearPosCart();
+        renderOverview(); // Updates the UI counter
     }
 }
+
+// NEW PHASE 1: Sync Offline Queue Interval
+async function syncOfflinePOS() {
+    let offlineQueue = JSON.parse(localStorage.getItem('dailypick_offline_pos') || '[]');
+    if (offlineQueue.length === 0) return;
+
+    // Only try syncing if online
+    if (!navigator.onLine) return;
+
+    try {
+        const itemToSync = offlineQueue[0]; // Try syncing the oldest one
+        const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(itemToSync)
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            offlineQueue.shift(); // Remove from queue on success
+            localStorage.setItem('dailypick_offline_pos', JSON.stringify(offlineQueue));
+            showToast('Offline POS transaction synced! ✅');
+            renderOverview(); // Update UI
+        }
+    } catch (e) {
+        console.log('Sync attempted, still offline or server unreachable.');
+    }
+}
+setInterval(syncOfflinePOS, 30000); // Check every 30 seconds
 
 // --- ORDER HANDLING & ACTIONS ---
 function printReceipt() {
@@ -532,6 +733,7 @@ function updateDashboard() {
     }
     
     updateBulkDispatchUI();
+    if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); // Keep Overview up to date
 }
 
 function renderListView(orders) {
@@ -806,7 +1008,7 @@ function triggerCSVDownload(csvContent, filename) {
     document.body.removeChild(link);
 }
 
-// --- ANALYTICS (NEW DYNAMIC DATE RANGES) ---
+// --- ANALYTICS ---
 async function fetchAnalytics() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/orders`);
@@ -1653,6 +1855,8 @@ function updateInventoryDashboard() {
     document.getElementById('stat-low-stock').innerText = lowStock;
     document.getElementById('stat-dead-stock').innerText = deadStock; 
     document.getElementById('stat-total-value').innerText = `₹${totalValue.toFixed(2)}`;
+    
+    if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); // keep overview synced
 }
 
 function openSourcingModal() {
@@ -2067,6 +2271,7 @@ function openAddProductModal() {
     document.getElementById('modal-form-title').innerText = 'Add New Product';
     document.getElementById('current-image-text').style.display = 'none';
     document.getElementById('variants-container').innerHTML = ''; 
+    document.getElementById('drop-zone').classList.remove('dragover');
     
     addVariantRow(); 
     document.getElementById('add-product-modal').classList.add('active'); 
@@ -2139,6 +2344,28 @@ function compressImage(file, maxWidth = 800, maxHeight = 800) {
     });
 }
 
+// NEW PHASE 1: Drag and Drop Listeners for Image Upload
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('new-image');
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        showToast('Image attached!');
+    }
+});
+
 async function submitNewProduct(e) {
     e.preventDefault();
     const btn = document.getElementById('submit-product-btn');
@@ -2208,66 +2435,6 @@ async function submitNewProduct(e) {
     }
 }
 
-function importInventoryCSV(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        const text = e.target.result;
-        const rows = text.split('\n').map(row => row.trim()).filter(row => row);
-        const productsToImport = [];
-        
-        for (let i = 1; i < rows.length; i++) {
-            const cols = rows[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
-            if (cols && cols.length >= 7) { 
-                let variantsArr = [];
-                try { 
-                    variantsArr = JSON.parse(cols[6].replace(/(^"|"$)/g, '').replace(/""/g, '"')); 
-                } catch(e) { console.log('Error parsing JSON row', i); }
-                
-                productsToImport.push({
-                    name: cols[0].replace(/(^"|"$)/g, '').trim(), 
-                    category: cols[1].replace(/(^"|"$)/g, '').trim(), 
-                    brand: cols[2].replace(/(^"|"$)/g, '').trim(), 
-                    distributorName: cols[3].replace(/(^"|"$)/g, '').trim(), 
-                    imageUrl: cols[4].replace(/(^"|"$)/g, '').trim(), 
-                    searchTags: cols[5].replace(/(^"|"$)/g, '').replace(/;/g, ',').trim(), 
-                    variants: variantsArr
-                });
-            }
-        }
-        
-        if (productsToImport.length === 0) { 
-            event.target.value = ''; 
-            return showToast('No valid rows found.'); 
-        }
-        
-        showToast(`Uploading ${productsToImport.length} items to database...`);
-        try {
-            const res = await fetch(`${BACKEND_URL}/api/products/bulk`, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ products: productsToImport }) 
-            });
-            const result = await res.json();
-            
-            if (result.success) { 
-                showToast(result.message); 
-                inventoryPage = 1; 
-                fetchInventory(); 
-            } else { 
-                showToast('Database Error.'); 
-            }
-        } catch (err) { 
-            console.error("Import Error:", err); 
-            showToast('Network error.'); 
-        }
-        event.target.value = ''; 
-    };
-    reader.readAsText(file);
-}
-
 function showToast(m) { 
     const t = document.createElement('div'); 
     t.classList.add('toast'); 
@@ -2281,3 +2448,4 @@ fetchCategories();
 fetchBrands();
 fetchDistributors();
 fetchOrders();
+renderOverview(); // Initialize Overview screen numbers on load
