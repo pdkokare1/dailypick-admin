@@ -33,7 +33,7 @@ let html5QrcodeScanner = null;
 let currentSkuInputTarget = null; 
 let restockSelectedVariant = null; 
 
-// NEW: POS State
+// POS State
 let posContinuousScanner = null;
 let posScanCooldown = false;
 let posCart = [];
@@ -48,9 +48,9 @@ const ordersFeed = document.getElementById('orders-list-view');
 const ordersKanban = document.getElementById('orders-kanban-view');
 const orderModalOverlay = document.getElementById('order-modal-overlay');
 
-// Expanded View Routing (MODIFIED for Overview Dashboard)
+// Expanded View Routing 
 const views = { 
-    overview: document.getElementById('overview-view'), // NEW
+    overview: document.getElementById('overview-view'), 
     pos: document.getElementById('pos-view'), 
     orders: document.getElementById('orders-view'), 
     inventory: document.getElementById('inventory-view'),
@@ -59,7 +59,7 @@ const views = {
 }; 
 
 const navBtns = { 
-    overview: document.getElementById('nav-overview'), // NEW
+    overview: document.getElementById('nav-overview'), 
     pos: document.getElementById('nav-pos'), 
     orders: document.getElementById('nav-orders'), 
     inventory: document.getElementById('nav-inventory'),
@@ -67,7 +67,7 @@ const navBtns = {
     customers: document.getElementById('nav-customers') 
 };
 
-// --- NEW PHASE 1: AUDIO ALERTS ---
+// --- AUDIO ALERTS ---
 function playNewOrderAudio() {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const playNote = (freq, startTime, duration) => {
@@ -82,7 +82,6 @@ function playNewOrderAudio() {
         osc.start(audioCtx.currentTime + startTime);
         osc.stop(audioCtx.currentTime + startTime + duration);
     };
-    // Double beep
     playNote(600, 0, 0.15);
     playNote(800, 0.2, 0.15);
 }
@@ -98,7 +97,7 @@ function connectAdminLiveStream() {
         if (data.type === 'NEW_ORDER') {
             currentOrders.unshift(data.order);
             updateDashboard();
-            playNewOrderAudio(); // NEW
+            playNewOrderAudio(); 
             showToast('🚨 New Order Arrived!');
         }
     };
@@ -113,7 +112,7 @@ function connectAdminLiveStream() {
 
 function switchView(viewName) {
     const titles = {
-        overview: 'Store Overview', // NEW
+        overview: 'Store Overview', 
         pos: 'In-Store Register', 
         orders: 'Live Operations Center',
         inventory: 'Inventory Management',
@@ -149,11 +148,11 @@ function switchView(viewName) {
     if (viewName === 'inventory' && currentInventory.length === 0) fetchInventory();
     if (viewName === 'analytics') fetchAnalytics();
     if (viewName === 'customers') fetchCustomers();
-    if (viewName === 'overview') renderOverview(); // NEW
+    if (viewName === 'overview') renderOverview(); 
 }
 
 // ==========================================
-// --- NEW PHASE 1: HARDWARE SCANNER & GLOBAL CMD ---
+// --- HARDWARE SCANNER & GLOBAL CMD ---
 // ==========================================
 let globalBarcodeBuffer = '';
 let globalBarcodeTimeout = null;
@@ -173,7 +172,6 @@ document.addEventListener('keydown', (e) => {
 
     // 2. Hardware Scanner Check (Rapid Keypresses ending in Enter)
     if (e.key === 'Enter' && globalBarcodeBuffer.length > 3) {
-        // If POS is active, add to cart. If not, open search results for it.
         if (document.getElementById('pos-view').classList.contains('active')) {
             handlePosScan(globalBarcodeBuffer);
         } else {
@@ -188,7 +186,6 @@ document.addEventListener('keydown', (e) => {
     if (e.key.length === 1) {
         globalBarcodeBuffer += e.key;
         clearTimeout(globalBarcodeTimeout);
-        // Scanners typically type faster than 50ms per character
         globalBarcodeTimeout = setTimeout(() => { globalBarcodeBuffer = ''; }, 50);
     }
 });
@@ -252,14 +249,12 @@ function openOrderModalById(id) {
 }
 
 // ==========================================
-// --- NEW PHASE 1: OVERVIEW DASHBOARD ---
+// --- OVERVIEW DASHBOARD ---
 // ==========================================
 function renderOverview() {
-    // Pending Orders count
     const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
     document.getElementById('ov-pending-count').innerText = trulyPending.length;
 
-    // Low stock count calculation
     let lowStockCount = 0;
     currentInventory.forEach(p => {
         if (p.variants) {
@@ -270,7 +265,6 @@ function renderOverview() {
     });
     document.getElementById('ov-low-stock-count').innerText = lowStockCount;
 
-    // Offline sync count display
     const offlineQueue = JSON.parse(localStorage.getItem('dailypick_offline_pos') || '[]');
     const offlineCard = document.getElementById('ov-offline-card');
     if (offlineQueue.length > 0) {
@@ -287,16 +281,9 @@ function renderOverview() {
 
 function startPosScanner() {
     if (posContinuousScanner) return;
-    
-    // Slight delay to ensure DOM is fully visible before attaching camera
     setTimeout(() => {
         posContinuousScanner = new Html5Qrcode("pos-continuous-reader");
-        const config = { 
-            fps: 10, 
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0 
-        };
-        
+        const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
         posContinuousScanner.start(
             { facingMode: "environment" },
             config,
@@ -304,11 +291,10 @@ function startPosScanner() {
                 if (posScanCooldown) return;
                 posScanCooldown = true;
                 handlePosScan(decodedText);
-                setTimeout(() => { posScanCooldown = false; }, 1500); // Prevent duplicate rapid scans
+                setTimeout(() => { posScanCooldown = false; }, 1500); 
             },
-            (errorMessage) => { /* Ignore background frame errors */ }
+            (errorMessage) => { }
         ).catch(err => {
-            console.log("POS Camera failed to start", err);
             document.getElementById('pos-continuous-reader').innerHTML = '<p style="color:white; text-align:center; margin-top:80px; font-size:12px;">Camera not available.</p>';
         });
     }, 300);
@@ -324,7 +310,6 @@ function stopPosScanner() {
 }
 
 function handlePosScan(skuOrName) {
-    // Search inventory for matching SKU or Barcode
     let foundProduct = null;
     let foundVariant = null;
 
@@ -353,11 +338,10 @@ function renderPosQuickTap() {
     const grid = document.getElementById('pos-quick-tap-grid');
     grid.innerHTML = '';
     
-    // Grab the first 15 active items with valid variants to use as "Quick Taps"
     let quickItems = [];
     currentInventory.forEach(p => {
         if (p.isActive && p.variants && p.variants.length > 0 && quickItems.length < 15) {
-            quickItems.push({ product: p, variant: p.variants[0] }); // Just grab default variant
+            quickItems.push({ product: p, variant: p.variants[0] }); 
         }
     });
 
@@ -448,7 +432,6 @@ function renderPosCart() {
     totalEl.innerText = `₹${total.toFixed(2)}`;
 }
 
-// MODIFIED PHASE 1: Try/Catch wrapper for Offline Sync
 async function processPosCheckout(paymentMethod) {
     if (posCart.length === 0) return showToast('Cart is empty.');
     
@@ -460,7 +443,7 @@ async function processPosCheckout(paymentMethod) {
         items: posCart,
         totalAmount: total,
         paymentMethod: paymentMethod,
-        timestamp: new Date().toISOString() // Added for offline tracking
+        timestamp: new Date().toISOString() 
     };
 
     showToast('Processing payment...');
@@ -484,13 +467,11 @@ async function processPosCheckout(paymentMethod) {
             showToast(result.message || 'Checkout failed.');
         }
     } catch (e) {
-        // NEW OFFLINE LOGIC
         showToast('Network offline. Saving transaction locally...');
         let offlineQueue = JSON.parse(localStorage.getItem('dailypick_offline_pos') || '[]');
         offlineQueue.push(payload);
         localStorage.setItem('dailypick_offline_pos', JSON.stringify(offlineQueue));
         
-        // Mock receipt printing for offline transaction
         activeOrder = {
             _id: 'OFFL' + Date.now().toString().slice(-4),
             createdAt: new Date(),
@@ -504,20 +485,18 @@ async function processPosCheckout(paymentMethod) {
         };
         printReceipt();
         clearPosCart();
-        renderOverview(); // Updates the UI counter
+        renderOverview(); 
     }
 }
 
-// NEW PHASE 1: Sync Offline Queue Interval
 async function syncOfflinePOS() {
     let offlineQueue = JSON.parse(localStorage.getItem('dailypick_offline_pos') || '[]');
     if (offlineQueue.length === 0) return;
 
-    // Only try syncing if online
     if (!navigator.onLine) return;
 
     try {
-        const itemToSync = offlineQueue[0]; // Try syncing the oldest one
+        const itemToSync = offlineQueue[0]; 
         const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -526,16 +505,16 @@ async function syncOfflinePOS() {
         
         const result = await res.json();
         if (result.success) {
-            offlineQueue.shift(); // Remove from queue on success
+            offlineQueue.shift(); 
             localStorage.setItem('dailypick_offline_pos', JSON.stringify(offlineQueue));
             showToast('Offline POS transaction synced! ✅');
-            renderOverview(); // Update UI
+            renderOverview(); 
         }
     } catch (e) {
         console.log('Sync attempted, still offline or server unreachable.');
     }
 }
-setInterval(syncOfflinePOS, 30000); // Check every 30 seconds
+setInterval(syncOfflinePOS, 30000); 
 
 // --- ORDER HANDLING & ACTIONS ---
 function printReceipt() {
@@ -572,6 +551,21 @@ function printReceipt() {
     `;
     
     window.print();
+}
+
+// NEW PHASE 2: WhatsApp Receipt Sender
+function sendWhatsAppReceipt() {
+    if (!activeOrder) return;
+    const phone = activeOrder.customerPhone;
+    
+    if (!phone || phone.length < 10) {
+        return showToast("No valid phone number for this order.");
+    }
+
+    const itemsText = activeOrder.items.map(i => `${i.qty}x ${i.name} - ₹${(i.price * i.qty).toFixed(2)}`).join('%0A');
+    const text = `*DailyPick Receipt*%0AOrder ID: #${activeOrder._id.slice(-4).toUpperCase()}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: ₹${activeOrder.totalAmount.toFixed(2)}*%0APayment: ${activeOrder.paymentMethod}%0A%0AThank you for shopping with us!`;
+
+    window.open(`https://wa.me/91${phone}?text=${text}`, '_blank');
 }
 
 async function cancelOrder() {
@@ -733,7 +727,7 @@ function updateDashboard() {
     }
     
     updateBulkDispatchUI();
-    if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); // Keep Overview up to date
+    if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); 
 }
 
 function renderListView(orders) {
@@ -1115,6 +1109,7 @@ function renderChart(labels, data) {
 }
 
 // --- CRM LOGIC & CUSTOMER DEEP-DIVE ---
+// MODIFIED PHASE 2: Replaced template generation string to include VIP and Churn Badge logic.
 async function fetchCustomers() {
     const feed = document.getElementById('crm-feed');
     feed.innerHTML = '<p class="empty-state">Loading customers...</p>';
@@ -1136,11 +1131,25 @@ async function fetchCustomers() {
                 if(orderData.success) allHistoricalOrders = orderData.data;
             }
 
+            const today = new Date();
+
             result.data.forEach(c => {
                 const wLink = `https://wa.me/91${c.phone}?text=Hi%20${c.name.split(' ')[0]},%20here%20is%20a%20special%20offer%20from%20DailyPick!`;
+                
+                // NEW PHASE 2: Badge Logic
+                let badges = '';
+                if (c.lifetimeValue > 2000) {
+                    badges += `<span class="badge-vip">🌟 VIP</span>`;
+                }
+                const lastOrderDate = new Date(c.lastOrderDate);
+                const daysSinceLastOrder = (today - lastOrderDate) / (1000 * 60 * 60 * 24);
+                if (daysSinceLastOrder > 30) {
+                    badges += `<span class="badge-churn">⚠️ Churn Risk</span>`;
+                }
+
                 feed.innerHTML += `
                     <div class="customer-card" onclick="openCustomerModal('${c.phone}', '${c.name.replace(/'/g, "\\'")}')">
-                        <h3>${c.name}</h3>
+                        <h3>${c.name} ${badges}</h3>
                         <p>📞 ${c.phone}</p>
                         <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700; margin-bottom: 12px;">
                             <span>Orders: ${c.orderCount}</span>
@@ -1856,9 +1865,10 @@ function updateInventoryDashboard() {
     document.getElementById('stat-dead-stock').innerText = deadStock; 
     document.getElementById('stat-total-value').innerText = `₹${totalValue.toFixed(2)}`;
     
-    if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); // keep overview synced
+    if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); 
 }
 
+// MODIFIED PHASE 2: Replaced template string to calculate Dynamic Restock Suggestions
 function openSourcingModal() {
     let reorderData = {};
     let totalItemsCount = 0;
@@ -1869,7 +1879,20 @@ function openSourcingModal() {
                 if (v.stock <= (v.lowStockThreshold || 5)) {
                     const dist = p.distributorName || 'Unassigned Distributor';
                     if (!reorderData[dist]) reorderData[dist] = [];
-                    reorderData[dist].push(`- ${p.name} (${v.weightOrVolume}) | Stock: ${v.stock}`);
+                    
+                    // NEW PHASE 2: Calculate Suggested Qty based on history
+                    let suggestedQty = 20; // Default assumption
+                    if (v.purchaseHistory && v.purchaseHistory.length >= 2) {
+                        const firstPurchase = new Date(v.purchaseHistory[0].date);
+                        const lastPurchase = new Date(v.purchaseHistory[v.purchaseHistory.length - 1].date);
+                        const daysDiff = Math.max(1, (lastPurchase - firstPurchase) / (1000 * 60 * 60 * 24));
+                        const totalBought = v.purchaseHistory.reduce((sum, h) => sum + h.addedQuantity, 0);
+                        const dailyVelocity = totalBought / daysDiff;
+                        suggestedQty = Math.ceil(dailyVelocity * 14); // Suggest enough for 14 days
+                        if (suggestedQty < 10) suggestedQty = 10;
+                    }
+
+                    reorderData[dist].push(`- ${p.name} (${v.weightOrVolume}) | Current: ${v.stock} | Suggested Order: ${suggestedQty}`);
                     totalItemsCount++;
                 }
             });
@@ -2344,7 +2367,6 @@ function compressImage(file, maxWidth = 800, maxHeight = 800) {
     });
 }
 
-// NEW PHASE 1: Drag and Drop Listeners for Image Upload
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('new-image');
 
@@ -2443,9 +2465,20 @@ function showToast(m) {
     setTimeout(() => t.remove(), 3000); 
 }
 
+// NEW PHASE 2: Infinite Scroll Observer implementation
+const invSentinel = document.getElementById('inventory-scroll-sentinel');
+if (invSentinel) {
+    const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !document.getElementById('load-more-btn').classList.contains('hidden') && document.getElementById('inventory-view').classList.contains('active')) {
+            loadMoreInventory();
+        }
+    }, { rootMargin: '200px' });
+    observer.observe(invSentinel);
+}
+
 // Initialize
 fetchCategories(); 
 fetchBrands();
 fetchDistributors();
 fetchOrders();
-renderOverview(); // Initialize Overview screen numbers on load
+renderOverview();
