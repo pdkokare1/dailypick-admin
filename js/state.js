@@ -47,7 +47,7 @@ const pendingCountEl = document.getElementById('pending-count');
 const ordersFeed = document.getElementById('orders-list-view'); 
 const ordersKanban = document.getElementById('orders-kanban-view');
 const orderModalOverlay = document.getElementById('order-modal-overlay');
-const inventoryFeed = document.getElementById('inventory-feed'); // FIX APPLIED HERE
+const inventoryFeed = document.getElementById('inventory-feed'); // Fix applied here
 
 // Expanded View Routing 
 const views = { 
