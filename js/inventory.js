@@ -1,3 +1,5 @@
+/* js/inventory.js */
+
 function openAddCategoryModal() { 
     document.getElementById('add-category-form').reset(); 
     document.getElementById('add-category-modal').classList.add('active'); 
@@ -173,6 +175,7 @@ function openRestockModal() {
     document.getElementById('restock-form').reset(); 
     document.getElementById('restock-selected-item').classList.add('hidden'); 
     document.getElementById('restock-search-results').innerHTML = ''; 
+    document.getElementById('margin-display').innerText = 'Margin: --% | Profit: ₹--';
     restockSelectedVariant = null; 
     document.getElementById('submit-restock-btn').disabled = true; 
     document.getElementById('restock-modal').classList.add('active'); 
@@ -243,6 +246,35 @@ function selectItemForRestock(product, variant) {
     
     document.getElementById('restock-selected-item').classList.remove('hidden'); 
     document.getElementById('submit-restock-btn').disabled = false;
+}
+
+// NEW PHASE 3: Margin Calculator
+function calculateMargin() {
+    const costInput = document.getElementById('restock-cost').value;
+    const sellInput = document.getElementById('restock-sell').value;
+    const display = document.getElementById('margin-display');
+    
+    if (!display) return;
+
+    const cost = parseFloat(costInput);
+    const sell = parseFloat(sellInput);
+
+    if (cost > 0 && sell > 0) {
+        const profit = sell - cost;
+        const margin = ((profit / sell) * 100).toFixed(1);
+        display.innerText = `Margin: ${margin}% | Profit: ₹${profit.toFixed(2)}`;
+        if (profit < 0) {
+            display.style.color = '#991b1b';
+            display.style.background = '#fef2f2';
+        } else {
+            display.style.color = '#0c4a6e';
+            display.style.background = '#e0f2fe';
+        }
+    } else {
+        display.innerText = `Margin: --% | Profit: ₹--`;
+        display.style.color = '#0c4a6e';
+        display.style.background = '#e0f2fe';
+    }
 }
 
 async function submitRestock(e) {
@@ -526,14 +558,82 @@ function toggleInventorySelection(id, event) {
 function updateInventoryBulkUI() {
     const btn = document.getElementById('inv-bulk-btn');
     const priceBtn = document.getElementById('inv-bulk-price-btn');
+    const assignBtn = document.getElementById('inv-bulk-assign-btn'); // NEW PHASE 3
+    
     if (selectedInventory.size > 0) {
         btn.innerText = `Deactivate Selected (${selectedInventory.size})`;
         btn.classList.add('visible');
         priceBtn.innerText = `Edit Prices (${selectedInventory.size})`;
         priceBtn.classList.add('visible');
+        if (assignBtn) {
+            assignBtn.innerText = `Move (${selectedInventory.size})`;
+            assignBtn.classList.add('visible');
+        }
     } else { 
         btn.classList.remove('visible'); 
         priceBtn.classList.remove('visible'); 
+        if (assignBtn) assignBtn.classList.remove('visible');
+    }
+}
+
+// NEW PHASE 3: Bulk Assign Move Modals
+function openBulkAssignModal() {
+    if (selectedInventory.size === 0) return;
+    document.getElementById('bulk-assign-count').innerText = `${selectedInventory.size} items selected`;
+    
+    const catSelect = document.getElementById('bulk-assign-category');
+    const brandSelect = document.getElementById('bulk-assign-brand');
+    
+    catSelect.innerHTML = '<option value="">-- No Change --</option>';
+    currentCategories.forEach(cat => {
+        catSelect.innerHTML += `<option value="${cat.name}">${cat.name}</option>`;
+    });
+
+    brandSelect.innerHTML = '<option value="">-- No Change --</option>';
+    currentBrands.forEach(b => {
+        brandSelect.innerHTML += `<option value="${b.name}">${b.name}</option>`;
+    });
+
+    document.getElementById('bulk-assign-modal').classList.add('active');
+}
+
+function closeBulkAssignModal() {
+    document.getElementById('bulk-assign-modal').classList.remove('active');
+}
+
+async function applyBulkAssign() {
+    if (selectedInventory.size === 0) return;
+    
+    const newCat = document.getElementById('bulk-assign-category').value;
+    const newBrand = document.getElementById('bulk-assign-brand').value;
+    
+    if (!newCat && !newBrand) return showToast("No changes selected.");
+    
+    closeBulkAssignModal();
+    showToast(`Moving ${selectedInventory.size} products...`);
+    
+    try {
+        const ids = Array.from(selectedInventory);
+        
+        await Promise.all(ids.map(async (id) => {
+            const product = currentInventory.find(p => p._id === id);
+            if(product) {
+                if (newCat) product.category = newCat;
+                if (newBrand) product.brand = newBrand;
+                
+                await fetch(`${BACKEND_URL}/api/products/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(product)
+                });
+            }
+        }));
+        
+        showToast("Items moved successfully! 📦");
+        selectedInventory.clear();
+        fetchInventory(); 
+    } catch (err) {
+        showToast("Error moving items.");
     }
 }
 
