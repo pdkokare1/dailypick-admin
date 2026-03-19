@@ -1,3 +1,5 @@
+/* js/ui.js */
+
 function showToast(m) { 
     const t = document.createElement('div'); 
     t.classList.add('toast'); 
@@ -188,5 +190,27 @@ function renderOverview() {
         document.getElementById('ov-offline-count').innerText = offlineQueue.length;
     } else {
         offlineCard.style.display = 'none';
+    }
+
+    // NEW PHASE 3: Daily Target Progress Bar Logic
+    const todayStr = new Date().toDateString();
+    const todayRevenue = currentOrders
+        .filter(o => new Date(o.createdAt).toDateString() === todayStr && o.status !== 'Cancelled')
+        .reduce((sum, o) => sum + o.totalAmount, 0);
+    
+    const target = 10000;
+    const progressPct = Math.min((todayRevenue / target) * 100, 100).toFixed(1);
+    
+    const progressBar = document.getElementById('ov-progress-bar');
+    const progressText = document.getElementById('ov-progress-text');
+    if (progressBar && progressText) {
+        progressBar.style.width = `${progressPct}%`;
+        progressText.innerText = `₹${todayRevenue.toFixed(2)} (${progressPct}%)`;
+        if (progressPct >= 100) {
+            progressBar.style.background = '#3b82f6'; // Turn blue when goal is hit
+            progressText.innerText = `🎉 Goal Reached! ₹${todayRevenue.toFixed(2)}`;
+        } else {
+            progressBar.style.background = '#10b981';
+        }
     }
 }
