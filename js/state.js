@@ -24,7 +24,10 @@ let inventorySearchTerm = '';
 let inventoryCategoryFilter = 'All';
 let inventoryBrandFilter = 'All';      
 let inventoryDistributorFilter = 'All'; 
+
 let isLowStockFilterActive = false; 
+let isOutStockFilterActive = false;  // Added for clickable stat cards
+let isDeadStockFilterActive = false; // Added for clickable stat cards
 
 let revenueChartInstance = null; 
 
@@ -47,7 +50,7 @@ const pendingCountEl = document.getElementById('pending-count');
 const ordersFeed = document.getElementById('orders-list-view'); 
 const ordersKanban = document.getElementById('orders-kanban-view');
 const orderModalOverlay = document.getElementById('order-modal-overlay');
-const inventoryFeed = document.getElementById('inventory-feed'); // Fix applied here
+const inventoryFeed = document.getElementById('inventory-feed'); 
 
 // Expanded View Routing 
 const views = { 
