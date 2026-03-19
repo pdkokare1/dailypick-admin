@@ -157,7 +157,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .customer-history-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .history-order-card { background: #F8FAFC; padding: 12px; border-radius: 12px; border: 1px solid #E2E8F0; }
 
-/* NEW PHASE 7: Kanban & Bulk Edit Styles */
+/* PHASE 7: Kanban & Bulk Edit Styles */
 .kanban-board { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 16px; align-items: flex-start; min-height: 500px; }
 .kanban-col { flex: 0 0 320px; background: #F8FAFC; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; border: 1px solid #E2E8F0; }
 .kanban-col-header { font-weight: 800; font-size: 14px; margin-bottom: 8px; display: flex; justify-content: space-between; color: var(--text-main); }
@@ -169,10 +169,24 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .kanban-btn { flex: 1; padding: 8px; border-radius: 8px; font-size: 11px; font-weight: 700; border: none; cursor: pointer; }
 .btn-pack { background: #E0E7FF; color: #4338CA; }
 .btn-dispatch { background: #DCFCE7; color: #16A34A; }
-
 .sourcing-list { display: flex; flex-direction: column; gap: 12px; }
 .sourcing-item { background: #F8FAFC; padding: 16px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #E2E8F0; }
 .sourcing-item h4 { font-size: 14px; margin-bottom: 4px; }
+
+/* NEW PHASE 8: POS Styles */
+.pos-layout { display: flex; gap: 20px; flex-wrap: wrap; }
+.pos-left { flex: 1.5; min-width: 300px; display: flex; flex-direction: column; gap: 16px; }
+.pos-right { flex: 1; min-width: 320px; background: var(--surface); padding: 20px; border-radius: 16px; border: 1px solid #E2E8F0; box-shadow: 0 4px 15px rgba(0,0,0,0.02); display: flex; flex-direction: column; }
+.pos-quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+.pos-quick-card { background: var(--surface); border: 1px solid #E2E8F0; border-radius: 12px; padding: 12px 8px; text-align: center; cursor: pointer; transition: 0.1s; }
+.pos-quick-card:active { transform: scale(0.95); background: #F1F5F9; }
+.pos-quick-card img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; margin-bottom: 6px; }
+.pos-quick-card p { font-size: 11px; font-weight: 600; line-height: 1.2; margin-bottom: 4px; }
+.pos-quick-card span { font-size: 11px; color: var(--primary); font-weight: 800; }
+.pos-cart-list { flex: 1; overflow-y: auto; max-height: 400px; padding-right: 4px; margin-bottom: 16px; }
+.pos-cart-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #E2E8F0; }
+.pos-qty-controls { display: flex; align-items: center; gap: 8px; background: #F1F5F9; border-radius: 6px; padding: 2px; }
+.pos-qty-btn { background: white; border: none; width: 24px; height: 24px; border-radius: 4px; font-weight: bold; cursor: pointer; }
 
 /* Thermal Print Setup */
 #print-receipt-container { display: none; }
