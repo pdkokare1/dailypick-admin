@@ -74,8 +74,58 @@
                         <div id="kb-col-disp" style="display: flex; flex-direction: column; gap: 12px;"></div>
                     </div>
                 </div>
-
             </section>
+        </main>
+    </article>
+
+    <article id="pos-view" class="view-section hidden">
+        <main class="dashboard-container pos-layout">
+            
+            <div class="pos-left">
+                <div class="chart-container" style="padding: 16px; margin-bottom: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                        <h2 style="font-size: 14px;">Live Scanner</h2>
+                        <span class="pulse-indicator" style="background:#DCFCE7; color:#16A34A; padding:4px 8px; font-size:10px;">Active</span>
+                    </div>
+                    <div id="pos-continuous-reader" style="width: 100%; border-radius: 12px; overflow: hidden; background: #000; min-height: 200px;"></div>
+                </div>
+
+                <div class="section-header" style="margin-bottom: 8px;">
+                    <h2 style="font-size: 14px;">Quick Tap Items</h2>
+                </div>
+                <div id="pos-quick-tap-grid" class="pos-quick-grid">
+                    <p class="empty-state" style="grid-column: 1/-1;">Loading quick items...</p>
+                </div>
+            </div>
+
+            <div class="pos-right">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+                    <h2 style="font-size: 16px;">Current Order</h2>
+                    <button class="danger-btn-small" onclick="clearPosCart()">Clear</button>
+                </div>
+                
+                <div id="pos-cart-items-container" class="pos-cart-list">
+                    <p class="empty-state" style="margin-top: 40px;">Cart is empty.<br><span style="font-size: 12px;">Scan or tap an item to begin.</span></p>
+                </div>
+
+                <div style="border-top: 2px dashed #E2E8F0; padding-top: 16px; margin-top: auto;">
+                    <div style="display:flex; justify-content: space-between; font-size: 18px; font-weight: 800; color: var(--primary); margin-bottom: 16px;">
+                        <span>Total:</span>
+                        <span id="pos-cart-total">₹0.00</span>
+                    </div>
+                    
+                    <div class="input-group" style="margin-bottom: 12px;">
+                        <input type="tel" id="pos-customer-phone" placeholder="Customer Phone (Optional for Loyalty)">
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button class="primary-btn" style="background: #10b981; flex: 1; padding: 12px;" onclick="processPosCheckout('Cash')">💵 Cash</button>
+                        <button class="primary-btn" style="background: #0ea5e9; flex: 1; padding: 12px;" onclick="processPosCheckout('UPI')">📱 UPI</button>
+                        <button class="primary-btn" style="background: #f59e0b; flex: 1; padding: 12px;" onclick="processPosCheckout('Pay Later')">⏳ Pay Later</button>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </article>
 
@@ -478,17 +528,20 @@
     <div id="toast-container"></div>
 
     <nav class="bottom-nav">
+        <button id="nav-pos" class="nav-item" onclick="switchView('pos')">
+            <span class="nav-icon" style="font-size: 18px;">🏪</span><span class="nav-label">POS</span>
+        </button>
         <button id="nav-orders" class="nav-item active" onclick="switchView('orders')">
-            <span class="nav-icon">📦</span><span class="nav-label">Orders</span>
+            <span class="nav-icon" style="font-size: 18px;">📦</span><span class="nav-label">Orders</span>
         </button>
         <button id="nav-inventory" class="nav-item" onclick="switchView('inventory')">
-            <span class="nav-icon">📊</span><span class="nav-label">Inventory</span>
+            <span class="nav-icon" style="font-size: 18px;">📊</span><span class="nav-label">Inventory</span>
         </button>
         <button id="nav-analytics" class="nav-item" onclick="switchView('analytics')">
-            <span class="nav-icon">📈</span><span class="nav-label">Analytics</span>
+            <span class="nav-icon" style="font-size: 18px;">📈</span><span class="nav-label">Analytics</span>
         </button>
         <button id="nav-customers" class="nav-item" onclick="switchView('customers')">
-            <span class="nav-icon">👥</span><span class="nav-label">Customers</span>
+            <span class="nav-icon" style="font-size: 18px;">👥</span><span class="nav-label">Customers</span>
         </button>
     </nav>
     <script src="app.js"></script>
