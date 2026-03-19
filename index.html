@@ -12,7 +12,25 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    
     <link rel="stylesheet" href="styles.css">
+    
+    <style id="advanced-print-styles">
+        #print-packing-slip-container { display: none; }
+        #print-barcode-container { display: none; }
+        @media print {
+            #print-packing-slip-container.active-print {
+                display: block !important;
+                position: absolute; left: 0; top: 0; width: 100%; padding: 20px;
+                font-family: sans-serif; font-size: 16px; background: white; z-index: 9999;
+            }
+            #print-barcode-container.active-print {
+                display: flex !important; align-items: center; justify-content: center;
+                position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: white; z-index: 9999;
+            }
+        }
+    </style>
 </head>
 <body>
     <header class="admin-header">
@@ -58,6 +76,13 @@
                     <p id="ov-offline-count" style="color: #d97706;">1</p>
                     <p style="font-size: 11px; color: #92400e; margin-top: 4px;">Transactions pending cloud sync.</p>
                 </div>
+            </div>
+
+            <div class="section-header" style="margin-top: 24px;">
+                <h2>Action Center</h2>
+            </div>
+            <div id="action-center-feed" style="display:flex; flex-direction:column; gap:12px;">
+                <p class="empty-state">Analyzing operations...</p>
             </div>
         </main>
     </article>
@@ -146,10 +171,11 @@
             <div class="pos-right">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
                     <h2 style="font-size: 16px;">Current Order</h2>
-                    <div style="display:flex; gap: 8px;">
+                    <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="primary-btn-small" style="background: #0f172a;" onclick="addCustomPosItem()">+ Custom</button>
                         <button class="primary-btn-small" style="background: #8b5cf6;" onclick="holdCurrentCart()">⏸ Hold</button>
                         <button class="primary-btn-small" style="background: #3b82f6;" onclick="openHeldCartsModal()">📋 Carts</button>
-                        <button class="danger-btn-small" onclick="clearPosCart()">Clear</button>
+                        <button class="danger-btn-small" onclick="clearPosCart()" title="Shortcut: F4">Clear (F4)</button>
                     </div>
                 </div>
                 
@@ -168,9 +194,9 @@
                     </div>
                     
                     <div style="display: flex; gap: 8px;">
-                        <button class="primary-btn" style="background: #10b981; flex: 1; padding: 12px;" onclick="processPosCheckout('Cash')">💵 Cash</button>
-                        <button class="primary-btn" style="background: #0ea5e9; flex: 1; padding: 12px;" onclick="processPosCheckout('UPI')">📱 UPI</button>
-                        <button class="primary-btn" style="background: #f59e0b; flex: 1; padding: 12px;" onclick="processPosCheckout('Pay Later')">⏳ Pay Later</button>
+                        <button class="primary-btn" style="background: #10b981; flex: 1; padding: 12px; font-size: 11px;" onclick="processPosCheckout('Cash')" title="Shortcut: F1">💵 Cash (F1)</button>
+                        <button class="primary-btn" style="background: #0ea5e9; flex: 1; padding: 12px; font-size: 11px;" onclick="processPosCheckout('UPI')" title="Shortcut: F2">📱 UPI (F2)</button>
+                        <button class="primary-btn" style="background: #f59e0b; flex: 1; padding: 12px; font-size: 11px;" onclick="processPosCheckout('Pay Later')">⏳ Pay Later</button>
                     </div>
                 </div>
             </div>
@@ -184,6 +210,7 @@
                 <h2>Live Catalog</h2>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="primary-btn-small" style="background: #334155;" onclick="exportInventoryCSV()">⬇️ Export</button>
+                    <button class="primary-btn-small" style="background: #ef4444;" onclick="openAuditMode()">📋 Audit Mode</button>
                     <button class="primary-btn-small" style="background: #25D366;" onclick="openSourcingModal()">💬 Supplier Sourcing</button>
                     <button class="primary-btn-small" style="background: #0284C7;" onclick="openAddCategoryModal()">+ Category</button>
                     <button class="primary-btn-small" style="background: #0ea5e9;" onclick="openAddBrandModal()">+ Brand</button>
@@ -312,6 +339,8 @@
     </article>
 
     <div id="print-receipt-container"></div>
+    <div id="print-packing-slip-container"></div>
+    <div id="print-barcode-container"></div>
 
     <div id="sourcing-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
         <div class="form-card" style="max-width: 500px; max-height: 90vh; overflow-y: auto;">
@@ -323,6 +352,41 @@
             <div id="sourcing-list-container" class="sourcing-list">
                 <p class="empty-state">Generating lists...</p>
             </div>
+        </div>
+    </div>
+
+    <div id="audit-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 300;">
+        <div class="form-card" style="max-width: 500px; max-height: 90vh; overflow-y: auto; text-align: center;">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Physical Stock Audit</h2>
+                <button class="close-btn" onclick="closeAuditMode()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <div class="input-group">
+                <input type="text" id="audit-scan-input" placeholder="Scan barcode or type SKU..." style="text-align: center; font-size: 16px;" onkeydown="handleAuditScan(event)">
+            </div>
+            <div id="audit-result-area" class="hidden" style="background: #F8FAFC; padding: 16px; border-radius: 12px; margin-top: 16px; border: 1px solid #E2E8F0;">
+                <h4 id="audit-item-name" style="margin-bottom: 8px;">-</h4>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Recorded Stock: <strong id="audit-expected-stock" style="color: var(--primary); font-size: 16px;">0</strong></p>
+                <div class="input-group">
+                    <label>Actual Physical Count</label>
+                    <div style="display: flex; gap: 8px; justify-content: center;">
+                        <input type="number" id="audit-actual-stock" style="width: 100px; text-align: center;">
+                        <button class="primary-btn-small" style="background: #10b981;" onclick="submitAuditCorrection()">Save Correction</button>
+                    </div>
+                </div>
+                <input type="hidden" id="audit-pid"><input type="hidden" id="audit-vid">
+            </div>
+        </div>
+    </div>
+
+    <div id="pos-quick-view-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 250;">
+        <div class="form-card" style="text-align: center;">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="qv-product-name">Product Info</h2>
+                <button class="close-btn" onclick="closePosQuickView()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <div id="qv-variants-list" style="display: flex; flex-direction: column; gap: 8px; text-align: left;">
+                </div>
         </div>
     </div>
 
@@ -467,8 +531,9 @@
                 <p>Payment: <span id="modal-payment">COD</span></p>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
-                <button class="primary-btn-small" style="background: #334155;" onclick="printReceipt()">🖨️ Print Receipt</button>
-                <button class="primary-btn-small" style="background: #25D366;" onclick="sendWhatsAppReceipt()">💬 WhatsApp Receipt</button>
+                <button class="primary-btn-small" style="background: #f59e0b;" onclick="printPackingSlip()">📦 Packing Slip</button>
+                <button class="primary-btn-small" style="background: #334155;" onclick="printReceipt()">🖨️ Receipt</button>
+                <button class="primary-btn-small" style="background: #25D366;" onclick="sendWhatsAppReceipt()">💬 WhatsApp</button>
                 <button class="danger-btn-small" onclick="cancelOrder()">❌ Cancel</button>
             </div>
             <button class="primary-btn" style="margin-top: 10px;" onclick="markOrderDispatched()">Mark as Dispatched</button>
