@@ -1,3 +1,18 @@
+/* js/orders.js */
+
+let currentOrderDateFilter = 'All'; // NEW PHASE 3
+
+function setOrderDateFilter(range) {
+    currentOrderDateFilter = range;
+    ['All', 'Today', 'Yesterday', '7Days'].forEach(id => {
+        const el = document.getElementById(`date-${id}`);
+        if(el) el.classList.remove('active');
+    });
+    const activeEl = document.getElementById(`date-${range}`);
+    if(activeEl) activeEl.classList.add('active');
+    updateDashboard();
+}
+
 function printReceipt() {
     if (!activeOrder) return;
     const pContainer = document.getElementById('print-receipt-container');
@@ -200,6 +215,22 @@ function updateDashboard() {
     if (currentOrderTab === 'Instant') displayOrders = displayOrders.filter(o => o.deliveryType !== 'Routine');
     if (currentOrderTab === 'Routine') displayOrders = displayOrders.filter(o => o.deliveryType === 'Routine');
 
+    // NEW PHASE 3: Smart Date Filtering Application
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    if (currentOrderDateFilter === 'Today') {
+        displayOrders = displayOrders.filter(o => new Date(o.createdAt) >= today);
+    } else if (currentOrderDateFilter === 'Yesterday') {
+        displayOrders = displayOrders.filter(o => new Date(o.createdAt) >= yesterday && new Date(o.createdAt) < today);
+    } else if (currentOrderDateFilter === '7Days') {
+        displayOrders = displayOrders.filter(o => new Date(o.createdAt) >= sevenDaysAgo);
+    }
+
     if (currentOrderLayout === 'list') {
         renderListView(displayOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing'));
     } else {
@@ -213,7 +244,7 @@ function updateDashboard() {
 function renderListView(orders) {
     ordersFeed.innerHTML = '';
     if (orders.length === 0) { 
-        ordersFeed.innerHTML = `<p class="empty-state">No active orders in ${currentOrderTab}.</p>`; 
+        ordersFeed.innerHTML = `<p class="empty-state">No active orders in ${currentOrderTab} / ${currentOrderDateFilter}.</p>`; 
         return; 
     }
     
