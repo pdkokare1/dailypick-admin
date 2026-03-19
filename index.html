@@ -221,6 +221,8 @@
             </div>
             
             <button id="load-more-btn" class="load-more-btn hidden" onclick="loadMoreInventory()">Load More Products</button>
+            <div id="inventory-scroll-sentinel" style="height: 20px;"></div>
+
         </main>
     </article>
 
@@ -405,9 +407,10 @@
                 <p>Total Amount: <strong id="modal-total">₹0</strong></p>
                 <p>Payment: <span id="modal-payment">COD</span></p>
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
                 <button class="primary-btn-small" style="background: #334155;" onclick="printReceipt()">🖨️ Print Receipt</button>
-                <button class="danger-btn-small" onclick="cancelOrder()">❌ Cancel & Refund</button>
+                <button class="primary-btn-small" style="background: #25D366;" onclick="sendWhatsAppReceipt()">💬 WhatsApp Receipt</button>
+                <button class="danger-btn-small" onclick="cancelOrder()">❌ Cancel</button>
             </div>
             <button class="primary-btn" style="margin-top: 10px;" onclick="markOrderDispatched()">Mark as Dispatched</button>
         </div>
