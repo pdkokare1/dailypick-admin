@@ -80,10 +80,17 @@ function switchView(viewName) {
     if (viewName === 'overview') renderOverview(); 
 }
 
+// NEW: Helper function to bridge Overview Dashboard click to Inventory logic
+function jumpToInventoryWithFilter(type) {
+    switchView('inventory');
+    if (typeof toggleSpecialFilter === 'function') {
+        toggleSpecialFilter(type);
+    }
+}
+
 let globalBarcodeBuffer = '';
 let globalBarcodeTimeout = null;
 
-// NEW: Global F-Key Listener appended for POS
 document.addEventListener('keydown', (e) => {
     if (document.getElementById('pos-view').classList.contains('active')) {
         if(e.key === 'F1') { e.preventDefault(); processPosCheckout('Cash'); return; }
@@ -213,14 +220,13 @@ function renderOverview() {
         progressBar.style.width = `${progressPct}%`;
         progressText.innerText = `₹${todayRevenue.toFixed(2)} (${progressPct}%)`;
         if (progressPct >= 100) {
-            progressBar.style.background = '#3b82f6';
+            progressBar.style.background = '#3b82f6'; 
             progressText.innerText = `🎉 Goal Reached! ₹${todayRevenue.toFixed(2)}`;
         } else {
             progressBar.style.background = '#10b981';
         }
     }
 
-    // NEW: Action Center Injection
     const actionFeed = document.getElementById('action-center-feed');
     if (actionFeed) {
         actionFeed.innerHTML = '';
