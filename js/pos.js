@@ -26,7 +26,6 @@ function startPosScanner() {
 function stopPosScanner() {
     if (posContinuousScanner) {
         try {
-            // Gracefully catch the library's synchronous throw if already paused/stopped
             posContinuousScanner.stop().then(() => {
                 posContinuousScanner.clear();
                 posContinuousScanner = null;
@@ -83,7 +82,6 @@ function renderPosQuickTap() {
     }
 
     quickItems.forEach(item => {
-        // Fix applied here: Removed external via.placeholder dependency
         const thumbHtml = item.product.imageUrl 
             ? `<img src="${item.product.imageUrl}" alt="${item.product.name}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px; margin-bottom: 6px;">`
             : `<div style="width: 40px; height: 40px; border-radius: 8px; background: #E2E8F0; display: flex; align-items: center; justify-content: center; font-size: 20px; margin: 0 auto 6px auto;">📦</div>`;
@@ -152,7 +150,10 @@ function renderPosCart() {
         div.className = 'pos-cart-item';
         div.innerHTML = `
             <div style="flex: 1;">
-                <h4 style="font-size: 13px; margin-bottom: 4px;">${item.name}</h4>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <h4 style="font-size: 13px;">${item.name}</h4>
+                    ${item.productId && !item.productId.startsWith('CUSTOM') ? `<button style="background:none; border:none; cursor:pointer;" onclick="openPosQuickView('${item.productId}')">ℹ️</button>` : ''}
+                </div>
                 <p style="font-size: 11px; color: var(--text-muted);">${item.selectedVariant} • ₹${item.price}</p>
             </div>
             <div class="pos-qty-controls">
@@ -167,6 +168,53 @@ function renderPosCart() {
 
     totalEl.innerText = `₹${total.toFixed(2)}`;
 }
+
+// NEW: POS Quick Add Custom Item Logic
+function addCustomPosItem() {
+    const name = prompt("Enter Custom Item Name:");
+    if (!name) return;
+    const priceRaw = prompt("Enter Price (₹):");
+    if (!priceRaw) return;
+    const price = parseFloat(priceRaw);
+    if (isNaN(price)) return showToast("Invalid Price");
+
+    posCart.push({
+        productId: 'CUSTOM_' + Date.now(),
+        variantId: 'CUSTOM_VAR',
+        name: name,
+        selectedVariant: 'Misc',
+        price: price,
+        qty: 1
+    });
+    playBeep();
+    renderPosCart();
+}
+
+// NEW: POS Quick View Modal Logic
+function openPosQuickView(productId) {
+    const product = currentInventory.find(p => p._id === productId);
+    if (!product) return;
+    
+    document.getElementById('qv-product-name').innerText = product.name;
+    const list = document.getElementById('qv-variants-list');
+    list.innerHTML = '';
+    
+    if(product.variants) {
+        product.variants.forEach(v => {
+            list.innerHTML += `
+                <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; border: 1px solid #e2e8f0;">
+                    <div>
+                        <strong style="font-size: 13px;">${v.weightOrVolume}</strong>
+                        <p style="font-size: 11px; color: var(--text-muted);">Stock: ${v.stock}</p>
+                    </div>
+                    <button class="primary-btn-small" onclick="addToPosCart({_id: '${product._id}', name: '${product.name}'}, {_id: '${v._id}', weightOrVolume: '${v.weightOrVolume}', price: ${v.price}}); closePosQuickView();">Add ₹${v.price}</button>
+                </div>
+            `;
+        });
+    }
+    document.getElementById('pos-quick-view-modal').classList.add('active');
+}
+function closePosQuickView() { document.getElementById('pos-quick-view-modal').classList.remove('active'); }
 
 function holdCurrentCart() {
     if (posCart.length === 0) return showToast('Cart is already empty.');
