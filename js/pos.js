@@ -1,6 +1,6 @@
 /* js/pos.js */
 
-let heldCarts = JSON.parse(localStorage.getItem('dailypick_held_carts') || '[]'); // NEW PHASE 4
+let heldCarts = JSON.parse(localStorage.getItem('dailypick_held_carts') || '[]'); 
 
 function startPosScanner() {
     if (posContinuousScanner) return;
@@ -25,10 +25,19 @@ function startPosScanner() {
 
 function stopPosScanner() {
     if (posContinuousScanner) {
-        posContinuousScanner.stop().then(() => {
+        try {
+            // Gracefully catch the library's synchronous throw if already paused/stopped
+            posContinuousScanner.stop().then(() => {
+                posContinuousScanner.clear();
+                posContinuousScanner = null;
+            }).catch(err => {
+                posContinuousScanner.clear();
+                posContinuousScanner = null;
+            });
+        } catch (e) {
             posContinuousScanner.clear();
             posContinuousScanner = null;
-        }).catch(err => console.log("Failed to stop POS scanner", err));
+        }
     }
 }
 
@@ -74,11 +83,15 @@ function renderPosQuickTap() {
     }
 
     quickItems.forEach(item => {
-        const thumb = item.product.imageUrl || 'https://via.placeholder.com/40';
+        // Fix applied here: Removed external via.placeholder dependency
+        const thumbHtml = item.product.imageUrl 
+            ? `<img src="${item.product.imageUrl}" alt="${item.product.name}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px; margin-bottom: 6px;">`
+            : `<div style="width: 40px; height: 40px; border-radius: 8px; background: #E2E8F0; display: flex; align-items: center; justify-content: center; font-size: 20px; margin: 0 auto 6px auto;">📦</div>`;
+        
         const card = document.createElement('div');
         card.className = 'pos-quick-card';
         card.innerHTML = `
-            <img src="${thumb}" alt="${item.product.name}">
+            ${thumbHtml}
             <p>${item.product.name.substring(0, 15)}</p>
             <span>₹${item.variant.price}</span>
         `;
@@ -155,7 +168,6 @@ function renderPosCart() {
     totalEl.innerText = `₹${total.toFixed(2)}`;
 }
 
-// NEW PHASE 4: Hold Cart Logic
 function holdCurrentCart() {
     if (posCart.length === 0) return showToast('Cart is already empty.');
     
