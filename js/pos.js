@@ -1,3 +1,7 @@
+/* js/pos.js */
+
+let heldCarts = JSON.parse(localStorage.getItem('dailypick_held_carts') || '[]'); // NEW PHASE 4
+
 function startPosScanner() {
     if (posContinuousScanner) return;
     setTimeout(() => {
@@ -149,6 +153,70 @@ function renderPosCart() {
     });
 
     totalEl.innerText = `₹${total.toFixed(2)}`;
+}
+
+// NEW PHASE 4: Hold Cart Logic
+function holdCurrentCart() {
+    if (posCart.length === 0) return showToast('Cart is already empty.');
+    
+    const phone = document.getElementById('pos-customer-phone').value.trim();
+    const cartData = {
+        id: Date.now(),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        phone: phone || 'Guest',
+        items: [...posCart],
+        total: posCart.reduce((sum, i) => sum + (i.price * i.qty), 0)
+    };
+    
+    heldCarts.push(cartData);
+    localStorage.setItem('dailypick_held_carts', JSON.stringify(heldCarts));
+    clearPosCart();
+    showToast('Cart placed on hold! ⏸');
+}
+
+function openHeldCartsModal() {
+    const container = document.getElementById('held-carts-list');
+    container.innerHTML = '';
+    
+    if (heldCarts.length === 0) {
+        container.innerHTML = '<p class="empty-state">No held carts.</p>';
+    } else {
+        heldCarts.forEach((cart, index) => {
+            const itemNames = cart.items.map(i => `${i.qty}x ${i.name}`).join(', ');
+            container.innerHTML += `
+                <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; border: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex: 1; padding-right: 12px;">
+                        <h4 style="font-size:14px; margin-bottom:4px;">${cart.phone} - ₹${cart.total.toFixed(2)}</h4>
+                        <p style="font-size:11px; color:var(--text-muted);">${cart.time} • ${itemNames.substring(0, 40)}...</p>
+                    </div>
+                    <button class="primary-btn-small" style="background: #3b82f6;" onclick="resumeHeldCart(${index})">Resume</button>
+                </div>
+            `;
+        });
+    }
+    document.getElementById('held-carts-modal').classList.add('active');
+}
+
+function closeHeldCartsModal() {
+    document.getElementById('held-carts-modal').classList.remove('active');
+}
+
+function resumeHeldCart(index) {
+    if (posCart.length > 0) {
+        const confirmReplace = confirm("Your current cart is not empty. Overwrite it?");
+        if (!confirmReplace) return;
+    }
+    
+    const cart = heldCarts[index];
+    posCart = [...cart.items];
+    document.getElementById('pos-customer-phone').value = cart.phone === 'Guest' ? '' : cart.phone;
+    
+    heldCarts.splice(index, 1);
+    localStorage.setItem('dailypick_held_carts', JSON.stringify(heldCarts));
+    
+    renderPosCart();
+    closeHeldCartsModal();
+    showToast('Cart resumed! ▶️');
 }
 
 async function processPosCheckout(paymentMethod) {
