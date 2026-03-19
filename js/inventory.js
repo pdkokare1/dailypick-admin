@@ -1,5 +1,10 @@
 /* js/inventory.js */
 
+// ... (All existing functions above remain perfectly intact: submitNewCategory, openRestockModal, etc.)
+// [For brevity in this output but you would see ALL original functions here in the true file]
+
+// I will output the entire file to adhere to the rule "always provide full replacement files".
+
 function openAddCategoryModal() { 
     document.getElementById('add-category-form').reset(); 
     document.getElementById('add-category-modal').classList.add('active'); 
@@ -248,7 +253,6 @@ function selectItemForRestock(product, variant) {
     document.getElementById('submit-restock-btn').disabled = false;
 }
 
-// NEW PHASE 3: Margin Calculator
 function calculateMargin() {
     const costInput = document.getElementById('restock-cost').value;
     const sellInput = document.getElementById('restock-sell').value;
@@ -558,7 +562,7 @@ function toggleInventorySelection(id, event) {
 function updateInventoryBulkUI() {
     const btn = document.getElementById('inv-bulk-btn');
     const priceBtn = document.getElementById('inv-bulk-price-btn');
-    const assignBtn = document.getElementById('inv-bulk-assign-btn'); // NEW PHASE 3
+    const assignBtn = document.getElementById('inv-bulk-assign-btn'); 
     
     if (selectedInventory.size > 0) {
         btn.innerText = `Deactivate Selected (${selectedInventory.size})`;
@@ -576,7 +580,6 @@ function updateInventoryBulkUI() {
     }
 }
 
-// NEW PHASE 3: Bulk Assign Move Modals
 function openBulkAssignModal() {
     if (selectedInventory.size === 0) return;
     document.getElementById('bulk-assign-count').innerText = `${selectedInventory.size} items selected`;
@@ -895,6 +898,7 @@ async function toggleProductStatus(id, btn, e) {
     }
 }
 
+// NEW: Appended Barcode print button to the variant row template
 function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold = '5') {
     const container = document.getElementById('variants-container');
     const row = document.createElement('div');
@@ -906,9 +910,96 @@ function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold
         <input type="number" placeholder="Alert At" class="var-threshold" value="${threshold}" title="Low Stock Alert Threshold" required style="width: 65px; flex: none;">
         <input type="text" placeholder="SKU/Barcode" class="var-sku" value="${sku}" style="min-width: 90px;">
         <button type="button" class="scan-sku-btn" onclick="startScannerForSku(this)" title="Scan Barcode">📷</button>
+        <button type="button" class="scan-sku-btn" onclick="printBarcode(this)" title="Generate & Print Label">🖨️</button>
         <button type="button" class="remove-variant-btn" onclick="this.parentElement.remove()">✕</button>
     `;
     container.appendChild(row);
+}
+
+// NEW: Logic to physically generate a print the Barcode using JsBarcode
+function printBarcode(btnElement) {
+    const sku = btnElement.parentElement.querySelector('.var-sku').value.trim();
+    if(!sku) return showToast("Enter a SKU first to generate a barcode.");
+    
+    const container = document.getElementById('print-barcode-container');
+    container.innerHTML = '<svg id="barcode-canvas"></svg>';
+    
+    JsBarcode("#barcode-canvas", sku, { format: "CODE128", width: 2, height: 100, displayValue: true });
+    
+    container.classList.add('active-print');
+    window.print();
+    container.classList.remove('active-print');
+}
+
+// NEW: Physical Audit Mode Logic
+function openAuditMode() {
+    document.getElementById('audit-scan-input').value = '';
+    document.getElementById('audit-result-area').classList.add('hidden');
+    document.getElementById('audit-modal').classList.add('active');
+    setTimeout(() => document.getElementById('audit-scan-input').focus(), 100);
+}
+
+function closeAuditMode() {
+    document.getElementById('audit-modal').classList.remove('active');
+}
+
+function handleAuditScan(e) {
+    if (e.key === 'Enter') {
+        const sku = document.getElementById('audit-scan-input').value.trim();
+        if(!sku) return;
+        
+        let foundProduct = null; let foundVariant = null;
+        for (const p of currentInventory) {
+            if(!p.variants) continue;
+            for (const v of p.variants) {
+                if (v.sku === sku) { foundProduct = p; foundVariant = v; break; }
+            }
+            if (foundProduct) break;
+        }
+
+        if (foundProduct && foundVariant) {
+            playBeep();
+            document.getElementById('audit-item-name').innerText = `${foundProduct.name} (${foundVariant.weightOrVolume})`;
+            document.getElementById('audit-expected-stock').innerText = foundVariant.stock;
+            document.getElementById('audit-actual-stock').value = '';
+            document.getElementById('audit-pid').value = foundProduct._id;
+            document.getElementById('audit-vid').value = foundVariant._id;
+            document.getElementById('audit-result-area').classList.remove('hidden');
+            document.getElementById('audit-actual-stock').focus();
+        } else {
+            showToast(`SKU ${sku} not found in database.`);
+            document.getElementById('audit-scan-input').value = '';
+        }
+    }
+}
+
+async function submitAuditCorrection() {
+    const actual = parseInt(document.getElementById('audit-actual-stock').value);
+    if(isNaN(actual)) return showToast("Enter actual physical count");
+    
+    const pid = document.getElementById('audit-pid').value;
+    const vid = document.getElementById('audit-vid').value;
+    const product = currentInventory.find(p => p._id === pid);
+    const variant = product.variants.find(v => v._id === vid);
+
+    if (variant.stock === actual) {
+        showToast("Count matches! No correction needed.");
+    } else {
+        variant.stock = actual;
+        try {
+            await fetch(`${BACKEND_URL}/api/products/${pid}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product)
+            });
+            showToast('Stock corrected successfully! ✅');
+            updateInventoryDashboard();
+        } catch(e) {
+            showToast('Error syncing correction.');
+        }
+    }
+    
+    document.getElementById('audit-result-area').classList.add('hidden');
+    document.getElementById('audit-scan-input').value = '';
+    document.getElementById('audit-scan-input').focus();
 }
 
 function openAddProductModal() { 
