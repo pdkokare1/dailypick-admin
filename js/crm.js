@@ -233,3 +233,55 @@ async function submitPayment() {
         showToast('Network error processing payment.');
     }
 }
+
+// --- NEW PHASE 5: Khata Reminders Logic ---
+async function openKhataReminders() {
+    document.getElementById('khata-reminders-modal').classList.add('active');
+    const container = document.getElementById('khata-reminders-list');
+    container.innerHTML = '<p class="empty-state">Scanning customer ledgers...</p>';
+
+    try {
+        // Fetch the raw CRM data (since your backend handles profiling on interaction, we'll scan the DB locally for now, 
+        // or call an endpoint if you create one. Since we are strictly not deleting/altering backend logic without permission, 
+        // we will fetch all profiles or simulate it if a dedicated endpoint isn't built yet).
+        
+        // For Option A, we will assume you have a 'customers' endpoint or we'll filter local data.
+        // If your GET /api/orders/customers doesn't include creditUsed, you might need a dedicated route later.
+        // Assuming your backend has a /api/customers endpoint based on the Customer model uploaded:
+        const res = await fetch(`${BACKEND_URL}/api/customers`); 
+        
+        if (res.ok) {
+            const result = await res.json();
+            const debtors = result.data.filter(c => c.creditUsed > 0);
+            
+            if (debtors.length === 0) {
+                container.innerHTML = '<p class="empty-state">🎉 Great news! No customers currently owe any Khata balances.</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            debtors.forEach(c => {
+                const message = `Hi ${c.name.split(' ')[0]}, a gentle reminder from DailyPick that your pending Khata balance is ₹${c.creditUsed}. Please settle it at your earliest convenience. Thank you!`;
+                const wLink = `https://wa.me/91${c.phone}?text=${encodeURIComponent(message)}`;
+                
+                container.innerHTML += `
+                    <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; border: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div>
+                            <h4 style="margin: 0; font-size: 14px; color: var(--text-main);">${c.name}</h4>
+                            <p style="margin: 4px 0 0 0; font-size: 12px; color: #DC2626; font-weight: 700;">Owes: ₹${c.creditUsed}</p>
+                        </div>
+                        <a href="${wLink}" target="_blank" class="primary-btn-small" style="background: #25D366; text-decoration: none;">💬 WhatsApp</a>
+                    </div>
+                `;
+            });
+        } else {
+            container.innerHTML = '<p class="empty-state">Please create the GET /api/customers route in backend to load debtors.</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p class="empty-state">Network Error fetching ledgers.</p>';
+    }
+}
+function closeKhataReminders() {
+    document.getElementById('khata-reminders-modal').classList.remove('active');
+}
+// ------------------------------------------
