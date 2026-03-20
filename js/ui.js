@@ -80,7 +80,6 @@ function switchView(viewName) {
     if (viewName === 'overview') renderOverview(); 
 }
 
-// NEW: Helper function to bridge Overview Dashboard click to Inventory logic
 function jumpToInventoryWithFilter(type) {
     switchView('inventory');
     if (typeof toggleSpecialFilter === 'function') {
@@ -220,7 +219,7 @@ function renderOverview() {
         progressBar.style.width = `${progressPct}%`;
         progressText.innerText = `₹${todayRevenue.toFixed(2)} (${progressPct}%)`;
         if (progressPct >= 100) {
-            progressBar.style.background = '#3b82f6'; 
+            progressBar.style.background = '#3b82f6';
             progressText.innerText = `🎉 Goal Reached! ₹${todayRevenue.toFixed(2)}`;
         } else {
             progressBar.style.background = '#10b981';
@@ -251,5 +250,51 @@ function renderOverview() {
         if (actionFeed.innerHTML === '') {
             actionFeed.innerHTML = '<p class="empty-state">No critical actions required today.</p>';
         }
+    }
+}
+
+// NEW PHASE 6: End of Day Reconciliation Logic
+function openEodReport() {
+    const todayStr = new Date().toDateString();
+    let cash = 0, upi = 0, payLater = 0;
+    
+    currentOrders.filter(o => new Date(o.createdAt).toDateString() === todayStr && o.status !== 'Cancelled').forEach(o => {
+        if (o.paymentMethod === 'Cash') cash += o.totalAmount;
+        else if (o.paymentMethod === 'UPI') upi += o.totalAmount;
+        else if (o.paymentMethod === 'Pay Later') payLater += o.totalAmount;
+    });
+    
+    document.getElementById('eod-expected-cash').innerText = cash.toFixed(2);
+    document.getElementById('eod-expected-upi').innerText = upi.toFixed(2);
+    document.getElementById('eod-expected-paylater').innerText = payLater.toFixed(2);
+    document.getElementById('eod-total-revenue').innerText = (cash + upi + payLater).toFixed(2);
+    
+    document.getElementById('eod-actual-cash').value = '';
+    document.getElementById('eod-discrepancy-result').innerHTML = '';
+    
+    document.getElementById('eod-modal').classList.add('active');
+}
+
+function closeEodReport() { 
+    document.getElementById('eod-modal').classList.remove('active'); 
+}
+
+function calculateEodDiscrepancy() {
+    const expectedCash = parseFloat(document.getElementById('eod-expected-cash').innerText);
+    const actualCash = parseFloat(document.getElementById('eod-actual-cash').value);
+    const resultDiv = document.getElementById('eod-discrepancy-result');
+    
+    if(isNaN(actualCash)) {
+        resultDiv.innerHTML = '<span style="color: #ef4444;">Please enter a valid physical cash amount.</span>';
+        return;
+    }
+    
+    const diff = actualCash - expectedCash;
+    if (diff === 0) {
+        resultDiv.innerHTML = '<span style="color: #10b981; font-weight: bold;">Perfect Match! ⚖️ All cash accounted for.</span>';
+    } else if (diff < 0) {
+        resultDiv.innerHTML = `<span style="color: #ef4444; font-weight: bold;">Shortage Warning: You are short ₹${Math.abs(diff).toFixed(2)} ⚠️</span>`;
+    } else {
+        resultDiv.innerHTML = `<span style="color: #f59e0b; font-weight: bold;">Overage Note: You are over by ₹${Math.abs(diff).toFixed(2)} 📈</span>`;
     }
 }
