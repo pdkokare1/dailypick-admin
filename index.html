@@ -8,6 +8,7 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3514/3514491.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -606,7 +607,8 @@
             </div>
             <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
                 <button class="primary-btn-small" style="background: #f59e0b;" onclick="printPackingSlip()">📦 Packing Slip</button>
-                <button class="primary-btn-small" style="background: #334155;" onclick="printReceipt()">🖨️ Receipt</button>
+                <button class="primary-btn-small" style="background: #334155;" onclick="printReceipt()">🖨️ Web Receipt</button>
+                <button class="primary-btn-small" style="background: #0ea5e9;" onclick="printHardwareReceipt()">🖨️ POS Printer</button>
                 <button class="primary-btn-small" style="background: #25D366;" onclick="sendWhatsAppReceipt()">💬 WhatsApp</button>
                 <button class="danger-btn-small" onclick="cancelOrder()">❌ Cancel</button>
             </div>
@@ -823,5 +825,5 @@
             });
         }
     </script>
-    </body>
+</body>
 </html>
