@@ -26,8 +26,8 @@ let inventoryBrandFilter = 'All';
 let inventoryDistributorFilter = 'All'; 
 
 let isLowStockFilterActive = false; 
-let isOutStockFilterActive = false;  // Added for clickable stat cards
-let isDeadStockFilterActive = false; // Added for clickable stat cards
+let isOutStockFilterActive = false; 
+let isDeadStockFilterActive = false; 
 
 let revenueChartInstance = null; 
 
@@ -43,6 +43,9 @@ let posCart = [];
 
 // Credit tracking
 let currentCustomerPhone = null;
+
+// Daily Expenses
+let dailyExpenses = JSON.parse(localStorage.getItem('dailypick_expenses') || '[]');
 
 // DOM Elements
 const dailyRevenueEl = document.getElementById('daily-revenue'); 
