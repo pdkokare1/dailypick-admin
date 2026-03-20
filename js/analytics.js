@@ -1,6 +1,7 @@
 /* js/analytics.js */
 
-let categoryChartInstance = null; // NEW PHASE 4
+let categoryChartInstance = null; 
+let hourlyChartInstance = null; // NEW PHASE 6
 
 async function exportOrdersCSV() {
     showToast('Fetching orders for export...');
@@ -155,7 +156,8 @@ function updateAnalyticsRange(daysLimit) {
     }
 
     let itemFrequency = {};
-    let categoryRevenue = {}; // NEW PHASE 4
+    let categoryRevenue = {}; 
+    let hourlyDistribution = new Array(24).fill(0); // NEW PHASE 6: Heatmap Tracking
 
     filteredOrders.forEach(o => {
         const orderDate = new Date(o.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -169,7 +171,6 @@ function updateAnalyticsRange(daysLimit) {
             itemFrequency[key].qty += i.qty;
             itemFrequency[key].revenue += (i.price * i.qty);
 
-            // NEW PHASE 4: Category distribution map
             let catName = 'Uncategorized';
             const invItem = currentInventory.find(inv => inv.name === i.name);
             if (invItem && invItem.category) catName = invItem.category;
@@ -177,15 +178,26 @@ function updateAnalyticsRange(daysLimit) {
             if (!categoryRevenue[catName]) categoryRevenue[catName] = 0;
             categoryRevenue[catName] += (i.price * i.qty);
         });
+
+        // NEW PHASE 6: Track by hour
+        const hour = new Date(o.createdAt).getHours();
+        hourlyDistribution[hour]++;
     });
 
     const data = labels.map(label => revenueMap[label]);
     renderChart(labels, data);
 
-    // Render new category chart
     const catLabels = Object.keys(categoryRevenue);
     const catData = Object.values(categoryRevenue);
     renderCategoryChart(catLabels, catData);
+
+    // NEW PHASE 6: Format and render hourly chart
+    const hourLabels = Array.from({length: 24}, (_, i) => {
+        const ampm = i >= 12 ? 'PM' : 'AM';
+        const h = i % 12 || 12;
+        return `${h} ${ampm}`;
+    });
+    renderHourlyChart(hourLabels, hourlyDistribution);
 
     const topItems = Object.entries(itemFrequency)
         .map(([name, stats]) => ({ name, qty: stats.qty, revenue: stats.revenue }))
@@ -236,7 +248,6 @@ function renderChart(labels, data) {
     });
 }
 
-// NEW PHASE 4: Doughnut Chart Renderer
 function renderCategoryChart(labels, data) {
     const ctx = document.getElementById('categoryChart').getContext('2d');
     if (categoryChartInstance) categoryChartInstance.destroy();
@@ -261,6 +272,34 @@ function renderCategoryChart(labels, data) {
             maintainAspectRatio: false,
             plugins: { 
                 legend: { position: 'right', labels: { boxWidth: 12, font: {size: 10} } } 
+            }
+        }
+    });
+}
+
+// NEW PHASE 6: Busiest Hours Renderer
+function renderHourlyChart(labels, data) {
+    const ctx = document.getElementById('hourlyChart').getContext('2d');
+    if (hourlyChartInstance) hourlyChartInstance.destroy();
+    
+    hourlyChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Total Orders',
+                data: data,
+                backgroundColor: '#3b82f6',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { 
+                y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                x: { ticks: { maxRotation: 45, minRotation: 45, font: {size: 9} } }
             }
         }
     });
