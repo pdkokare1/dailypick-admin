@@ -253,7 +253,59 @@ function renderOverview() {
     }
 }
 
-// NEW PHASE 6: End of Day Reconciliation Logic
+// NEW: Expense Ledger Logic
+function openExpenseModal() {
+    renderExpenseList();
+    document.getElementById('expense-modal').classList.add('active');
+}
+
+function closeExpenseModal() {
+    document.getElementById('expense-modal').classList.remove('active');
+}
+
+function submitExpense(e) {
+    e.preventDefault();
+    const desc = document.getElementById('expense-desc').value.trim();
+    const amt = parseFloat(document.getElementById('expense-amount').value);
+    if(!desc || isNaN(amt)) return;
+    
+    dailyExpenses.push({
+        id: Date.now(),
+        date: new Date().toDateString(),
+        desc: desc,
+        amount: amt,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    localStorage.setItem('dailypick_expenses', JSON.stringify(dailyExpenses));
+    
+    document.getElementById('expense-desc').value = '';
+    document.getElementById('expense-amount').value = '';
+    renderExpenseList();
+    showToast('Expense logged! 💸');
+}
+
+function renderExpenseList() {
+    const container = document.getElementById('expense-list-container');
+    container.innerHTML = '';
+    const todayStr = new Date().toDateString();
+    const todaysExpenses = dailyExpenses.filter(ex => ex.date === todayStr);
+    
+    if(todaysExpenses.length === 0) {
+        container.innerHTML = '<p class="empty-state">No expenses logged today.</p>';
+        return;
+    }
+    
+    todaysExpenses.forEach((ex) => {
+        container.innerHTML += `
+            <div style="background: #fef2f2; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; border: 1px solid #fecaca;">
+                <div><strong style="font-size: 13px; color: #991b1b;">${ex.desc}</strong><br><span style="font-size: 10px; color: #b91c1c;">${ex.time}</span></div>
+                <div style="font-weight: bold; color: #dc2626;">₹${ex.amount.toFixed(2)}</div>
+            </div>
+        `;
+    });
+}
+
+// MODIFIED: Injected Expense & Net Profit Math
 function openEodReport() {
     const todayStr = new Date().toDateString();
     let cash = 0, upi = 0, payLater = 0;
@@ -264,10 +316,22 @@ function openEodReport() {
         else if (o.paymentMethod === 'Pay Later') payLater += o.totalAmount;
     });
     
+    const totalRev = cash + upi + payLater;
+    
+    // Calculate total expenses for today
+    const todaysExpenses = dailyExpenses.filter(ex => ex.date === todayStr);
+    const totalExp = todaysExpenses.reduce((sum, ex) => sum + ex.amount, 0);
+    const netProfit = totalRev - totalExp;
+    
     document.getElementById('eod-expected-cash').innerText = cash.toFixed(2);
     document.getElementById('eod-expected-upi').innerText = upi.toFixed(2);
     document.getElementById('eod-expected-paylater').innerText = payLater.toFixed(2);
-    document.getElementById('eod-total-revenue').innerText = (cash + upi + payLater).toFixed(2);
+    document.getElementById('eod-total-revenue').innerText = totalRev.toFixed(2);
+    
+    const expEl = document.getElementById('eod-total-expenses');
+    const netEl = document.getElementById('eod-net-profit');
+    if(expEl) expEl.innerText = totalExp.toFixed(2);
+    if(netEl) netEl.innerText = netProfit.toFixed(2);
     
     document.getElementById('eod-actual-cash').value = '';
     document.getElementById('eod-discrepancy-result').innerHTML = '';
