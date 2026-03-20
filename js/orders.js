@@ -24,6 +24,20 @@ function printReceipt() {
         </div>
     `).join('');
 
+    // --- NEW PHASE 4: Inject Tax and Discount fields if they exist in the order ---
+    let extraTotalsHtml = '';
+    if (activeOrder.taxAmount !== undefined || activeOrder.discountAmount !== undefined) {
+        const tax = activeOrder.taxAmount || 0;
+        const discount = activeOrder.discountAmount || 0;
+        const subtotal = activeOrder.totalAmount - tax + discount; 
+        
+        extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Subtotal: ₹${subtotal.toFixed(2)}</div>`;
+        if (discount > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal; color:#10b981;">Discount: -₹${discount.toFixed(2)}</div>`;
+        if (tax > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Tax (GST): ₹${tax.toFixed(2)}</div>`;
+        extraTotalsHtml += `<hr style="border: 0; border-top: 1px dashed black; margin: 4px 0;">`;
+    }
+    // -----------------------------------------------------------------------------
+
     pContainer.innerHTML = `
         <div style="text-align: center; border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
             <h2 style="margin:0; font-size:18px;">DAILYPICK</h2>
@@ -41,6 +55,7 @@ function printReceipt() {
             ${itemsHtml}
         </div>
         <div style="text-align: right; font-weight: bold; font-size: 14px;">
+            ${extraTotalsHtml}
             TOTAL: ₹${activeOrder.totalAmount.toFixed(2)}<br>
             PAYMENT: ${activeOrder.paymentMethod}
         </div>
@@ -215,7 +230,6 @@ function updateDashboard() {
     if (currentOrderTab === 'Instant') displayOrders = displayOrders.filter(o => o.deliveryType !== 'Routine');
     if (currentOrderTab === 'Routine') displayOrders = displayOrders.filter(o => o.deliveryType === 'Routine');
 
-    // NEW PHASE 3: Smart Date Filtering Application
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const yesterday = new Date(today);
@@ -395,5 +409,71 @@ async function markOrderDispatched() {
     } catch (e) { 
         showToast('Network error updating database.'); 
         fetchOrders(); 
+    }
+}
+
+// --- NEW PHASE 4: Web Serial API for Raw Thermal Printing ---
+async function printHardwareReceipt() {
+    if (!activeOrder) return showToast("No active order to print.");
+    
+    // Check if browser supports Web Serial (Chrome/Edge desktop)
+    if (!('serial' in navigator)) {
+        return showToast("Hardware printing requires Chrome or Edge on Desktop.");
+    }
+    
+    try {
+        // Prompts the user to select their plugged-in USB printer
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 }); // Standard baud rate for POS printers
+        
+        const writer = port.writable.getWriter();
+        const encoder = new TextEncoder();
+        
+        // Standard ESC/POS commands
+        const init = encoder.encode('\x1B\x40'); 
+        const alignLeft = encoder.encode('\x1B\x61\x00');
+        const cutPaper = encoder.encode('\x1D\x56\x00');
+        
+        // Build the receipt text specifically for 58mm/80mm thermal paper
+        let text = "          DAILYPICK          \n";
+        text += `Order #${activeOrder._id.toString().slice(-4).toUpperCase()}\n`;
+        text += `Date: ${new Date(activeOrder.createdAt).toLocaleString()}\n`;
+        text += "--------------------------------\n";
+        
+        activeOrder.items.forEach(i => {
+            text += `${i.qty}x ${i.name.substring(0, 20)}\n`;
+            text += `   Rs. ${(i.price * i.qty).toFixed(2)}\n`;
+        });
+        
+        text += "--------------------------------\n";
+        
+        if (activeOrder.taxAmount !== undefined || activeOrder.discountAmount !== undefined) {
+            const tax = activeOrder.taxAmount || 0;
+            const discount = activeOrder.discountAmount || 0;
+            const subtotal = activeOrder.totalAmount - tax + discount;
+            text += `Subtotal: Rs. ${subtotal.toFixed(2)}\n`;
+            if (discount > 0) text += `Discount: -Rs. ${discount.toFixed(2)}\n`;
+            if (tax > 0) text += `Tax (GST): Rs. ${tax.toFixed(2)}\n`;
+        }
+        
+        text += `GRAND TOTAL: Rs. ${activeOrder.totalAmount.toFixed(2)}\n`;
+        text += `Payment: ${activeOrder.paymentMethod}\n`;
+        text += "--------------------------------\n";
+        text += "     Thank you for shopping!    \n\n\n\n";
+        
+        // Send commands to printer
+        await writer.write(init);
+        await writer.write(alignLeft);
+        await writer.write(encoder.encode(text));
+        await writer.write(cutPaper);
+        
+        writer.releaseLock();
+        await port.close();
+        
+        showToast("Hardware Print Complete! 🖨️");
+        
+    } catch (err) {
+        console.error("Hardware Print Error:", err);
+        showToast("Hardware Print Cancelled or Failed.");
     }
 }
