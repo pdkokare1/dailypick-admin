@@ -1,3 +1,6 @@
+// NEW: Added to store active promotions from Phase 1
+let currentPromotions = []; 
+
 function connectAdminLiveStream() {
     if (adminEventSource) return; 
     
@@ -125,3 +128,17 @@ async function fetchDistributors() {
         console.error("Error loading distributors", e); 
     }
 }
+
+// --- NEW: PHASE 2 FUNCTION ---
+async function fetchPromotions() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/promotions?all=false`);
+        const result = await res.json();
+        if (result.success) {
+            currentPromotions = result.data;
+        }
+    } catch (e) {
+        console.error("Error loading promotions", e);
+    }
+}
+// -----------------------------
