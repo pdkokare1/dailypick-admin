@@ -360,7 +360,10 @@
         <main class="dashboard-container">
             <div class="section-header">
                 <h2>Customer Directory</h2>
-                <button class="refresh-btn" onclick="fetchCustomers()">↻ Refresh</button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="primary-btn-small" style="background: #10b981;" onclick="openKhataReminders()">📣 Khata Reminders</button>
+                    <button class="refresh-btn" onclick="fetchCustomers()">↻ Refresh</button>
+                </div>
             </div>
             <div id="crm-feed" class="crm-grid">
                 <p class="empty-state">Loading customers...</p>
@@ -772,6 +775,17 @@
         </div>
     </div>
 
+    <div id="khata-reminders-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 250;">
+        <div class="form-card" style="max-width: 500px; max-height: 90vh; overflow-y: auto;">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Khata (Pay Later) Debtors</h2>
+                <button class="close-btn" onclick="closeKhataReminders()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Click WhatsApp to send a pre-filled, friendly payment reminder directly to the customer.</p>
+            <div id="khata-reminders-list" style="display: flex; flex-direction: column; gap: 8px;">
+                </div>
+        </div>
+    </div>
     <div id="command-search-modal" class="modal-overlay hidden-modal" style="align-items: flex-start; padding-top: 10vh; z-index: 300;" onclick="closeCommandSearch()">
         <div class="form-card" style="padding: 0; overflow: hidden;" onclick="event.stopPropagation()">
             <input type="text" id="command-input" class="command-input" placeholder="Search orders, products, customers..." oninput="handleCommandSearch(this.value)">
