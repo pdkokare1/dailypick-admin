@@ -2,7 +2,6 @@
 
 let heldCarts = JSON.parse(localStorage.getItem('dailypick_held_carts') || '[]'); 
 
-// NEW: Global variables to store calculated totals for checkout submission
 let currentCalculatedTax = 0;
 let currentCalculatedDiscount = 0;
 let currentGrandTotal = 0;
@@ -116,7 +115,6 @@ function addToPosCart(product, variant) {
             selectedVariant: variant.weightOrVolume,
             price: variant.price,
             qty: 1,
-            // --- NEW: PHASE 2 TAX FIELDS ---
             taxRate: product.taxRate || 0,
             taxType: product.taxType || 'Inclusive',
             hsnCode: product.hsnCode || ''
@@ -143,7 +141,6 @@ function renderPosCart() {
     const container = document.getElementById('pos-cart-items-container');
     const totalEl = document.getElementById('pos-cart-total');
     
-    // NEW: Phase 2 DOM Elements
     const subtotalEl = document.getElementById('pos-cart-subtotal');
     const discountEl = document.getElementById('pos-cart-discount');
     const taxEl = document.getElementById('pos-cart-tax');
@@ -168,7 +165,6 @@ function renderPosCart() {
         const itemTotal = item.qty * item.price;
         subtotal += itemTotal;
         
-        // NEW: Phase 2 Tax Calculation Engine
         let tRate = item.taxRate || 0;
         if (tRate > 0) {
             if (item.taxType === 'Exclusive') {
@@ -198,7 +194,6 @@ function renderPosCart() {
         container.appendChild(div);
     });
 
-    // NEW: Phase 2 Promotion Engine Calculation
     if (typeof currentPromotions !== 'undefined') {
         currentPromotions.forEach(promo => {
             if (promo.isActive) {
@@ -211,24 +206,19 @@ function renderPosCart() {
         });
     }
 
-    // Determine Grand Total
-    // (If taxes were exclusively added on top, we'd add them here. Assuming base subtotal for inclusive)
     let hasExclusive = posCart.some(i => i.taxType === 'Exclusive');
     let grandTotal = subtotal - totalDiscount + (hasExclusive ? totalTax : 0);
     
-    // Save to globals for checkout
     currentCalculatedTax = totalTax;
     currentCalculatedDiscount = totalDiscount;
     currentGrandTotal = grandTotal;
 
-    // Update UI elements
     if(subtotalEl) subtotalEl.innerText = `₹${subtotal.toFixed(2)}`;
     if(discountEl) discountEl.innerText = `-₹${totalDiscount.toFixed(2)}`;
     if(taxEl) taxEl.innerText = `₹${totalTax.toFixed(2)}`;
     totalEl.innerText = `₹${grandTotal.toFixed(2)}`;
 }
 
-// NEW: POS Quick Add Custom Item Logic
 function addCustomPosItem() {
     const name = prompt("Enter Custom Item Name:");
     if (!name) return;
@@ -244,7 +234,6 @@ function addCustomPosItem() {
         selectedVariant: 'Misc',
         price: price,
         qty: 1,
-        // --- NEW: PHASE 2 DEFAULT TAX FIELDS ---
         taxRate: 0,
         taxType: 'Inclusive',
         hsnCode: ''
@@ -253,7 +242,6 @@ function addCustomPosItem() {
     renderPosCart();
 }
 
-// NEW: POS Quick View Modal Logic
 function openPosQuickView(productId) {
     const product = currentInventory.find(p => p._id === productId);
     if (!product) return;
@@ -347,13 +335,12 @@ async function processPosCheckout(paymentMethod) {
     
     const phone = document.getElementById('pos-customer-phone').value.trim();
     
-    // NEW: Phase 2 - Include the advanced totals in the payload
     const payload = {
         customerPhone: phone,
         items: posCart,
         totalAmount: currentGrandTotal,
-        taxAmount: currentCalculatedTax,           // Added
-        discountAmount: currentCalculatedDiscount, // Added
+        taxAmount: currentCalculatedTax,           
+        discountAmount: currentCalculatedDiscount, 
         paymentMethod: paymentMethod,
         timestamp: new Date().toISOString() 
     };
@@ -370,9 +357,9 @@ async function processPosCheckout(paymentMethod) {
         const result = await res.json();
         
         if (result.success) {
-            showToast('Transaction Complete! 🧾');
+            showToast('Transaction Complete! ✅');
             activeOrder = result.orderData;
-            printReceipt();
+            // DELETED: printReceipt();
             clearPosCart();
             fetchInventory(); 
         } else {
@@ -397,7 +384,7 @@ async function processPosCheckout(paymentMethod) {
             discountAmount: currentCalculatedDiscount,
             paymentMethod: paymentMethod
         };
-        printReceipt();
+        // DELETED: printReceipt();
         clearPosCart();
         renderOverview(); 
     }
