@@ -1,5 +1,24 @@
 /* js/ui.js */
 
+// RESTORED: The mapping dictionaries required for navigation to work!
+const views = {
+    overview: document.getElementById('overview-view'),
+    pos: document.getElementById('pos-view'),
+    orders: document.getElementById('orders-view'),
+    inventory: document.getElementById('inventory-view'),
+    analytics: document.getElementById('analytics-view'),
+    customers: document.getElementById('customers-view')
+};
+
+const navBtns = {
+    overview: document.getElementById('nav-overview'),
+    pos: document.getElementById('nav-pos'),
+    orders: document.getElementById('nav-orders'),
+    inventory: document.getElementById('nav-inventory'),
+    analytics: document.getElementById('nav-analytics'),
+    customers: document.getElementById('nav-customers')
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     const isDark = localStorage.getItem('dailypick_dark_mode') === 'true';
     if (isDark) {
@@ -68,35 +87,47 @@ function switchView(viewName) {
         analytics: 'Business Insights',
         customers: 'Customer Directory'
     };
-    document.getElementById('header-subtitle').innerText = titles[viewName];
+    
+    const subtitleEl = document.getElementById('header-subtitle');
+    if (subtitleEl) subtitleEl.innerText = titles[viewName] || '';
+    
+    // Safety check to ensure mapping exists
+    if (!views || !views.overview) return;
     
     Object.keys(views).forEach(key => {
-        if (key === viewName) { 
-            views[key].classList.add('active'); 
-            views[key].classList.remove('hidden'); 
-            navBtns[key].classList.add('active'); 
-        } else { 
-            views[key].classList.remove('active'); 
-            views[key].classList.add('hidden'); 
-            navBtns[key].classList.remove('active'); 
+        if (views[key]) {
+            if (key === viewName) { 
+                views[key].classList.add('active'); 
+                views[key].classList.remove('hidden'); 
+                if (navBtns[key]) navBtns[key].classList.add('active'); 
+            } else { 
+                views[key].classList.remove('active'); 
+                views[key].classList.add('hidden'); 
+                if (navBtns[key]) navBtns[key].classList.remove('active'); 
+            }
         }
     });
 
     if (viewName === 'pos') {
         if (currentInventory.length === 0) {
-            fetchInventory().then(() => { renderPosQuickTap(); startPosScanner(); });
+            if (typeof fetchInventory === 'function') {
+                fetchInventory().then(() => { 
+                    if (typeof renderPosQuickTap === 'function') renderPosQuickTap(); 
+                    if (typeof startPosScanner === 'function') startPosScanner(); 
+                }).catch(err => console.log("Inventory fetch error on POS load", err));
+            }
         } else {
-            renderPosQuickTap();
-            startPosScanner();
+            if (typeof renderPosQuickTap === 'function') renderPosQuickTap();
+            if (typeof startPosScanner === 'function') startPosScanner();
         }
     } else {
-        stopPosScanner();
+        if (typeof stopPosScanner === 'function') stopPosScanner();
     }
     
-    if (viewName === 'inventory' && currentInventory.length === 0) fetchInventory();
-    if (viewName === 'analytics') fetchAnalytics();
-    if (viewName === 'customers') fetchCustomers();
-    if (viewName === 'overview') renderOverview(); 
+    if (viewName === 'inventory' && currentInventory.length === 0 && typeof fetchInventory === 'function') fetchInventory();
+    if (viewName === 'analytics' && typeof fetchAnalytics === 'function') fetchAnalytics();
+    if (viewName === 'customers' && typeof fetchCustomers === 'function') fetchCustomers();
+    if (viewName === 'overview' && typeof renderOverview === 'function') renderOverview(); 
 }
 
 function jumpToInventoryWithFilter(type) {
@@ -110,7 +141,8 @@ let globalBarcodeBuffer = '';
 let globalBarcodeTimeout = null;
 
 document.addEventListener('keydown', (e) => {
-    if (document.getElementById('pos-view').classList.contains('active')) {
+    const posView = document.getElementById('pos-view');
+    if (posView && posView.classList.contains('active')) {
         if(e.key === 'F1') { e.preventDefault(); processPosCheckout('Cash'); return; }
         if(e.key === 'F2') { e.preventDefault(); processPosCheckout('UPI'); return; }
         if(e.key === 'F4') { e.preventDefault(); clearPosCart(); return; }
@@ -127,7 +159,7 @@ document.addEventListener('keydown', (e) => {
     }
 
     if (e.key === 'Enter' && globalBarcodeBuffer.length > 3) {
-        if (document.getElementById('pos-view').classList.contains('active')) {
+        if (posView && posView.classList.contains('active')) {
             handlePosScan(globalBarcodeBuffer);
         } else {
             openCommandSearch();
@@ -201,7 +233,6 @@ function openOrderModalById(id) {
     }
 }
 
-// MODIFIED: Changed to an async function to accommodate the IndexedDB query
 async function renderOverview() {
     const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
     document.getElementById('ov-pending-count').innerText = trulyPending.length;
@@ -216,15 +247,18 @@ async function renderOverview() {
     });
     document.getElementById('ov-low-stock-count').innerText = lowStockCount;
 
-    // Fetching from IndexedDB instead of localStorage
-    const offlineCount = await getOfflineCount();
-    const offlineCard = document.getElementById('ov-offline-card');
-    
-    if (offlineCount > 0) {
-        offlineCard.style.display = 'block';
-        document.getElementById('ov-offline-count').innerText = offlineCount;
-    } else {
-        offlineCard.style.display = 'none';
+    if (typeof getOfflineCount === 'function') {
+        try {
+            const offlineCount = await getOfflineCount();
+            const offlineCard = document.getElementById('ov-offline-card');
+            
+            if (offlineCount > 0) {
+                offlineCard.style.display = 'block';
+                document.getElementById('ov-offline-count').innerText = offlineCount;
+            } else {
+                offlineCard.style.display = 'none';
+            }
+        } catch(e) {}
     }
 
     const todayStr = new Date().toDateString();
@@ -334,6 +368,10 @@ function openEodReport() {
         if (o.paymentMethod === 'Cash') cash += o.totalAmount;
         else if (o.paymentMethod === 'UPI') upi += o.totalAmount;
         else if (o.paymentMethod === 'Pay Later') payLater += o.totalAmount;
+        else if (o.paymentMethod === 'Split' && o.splitDetails) {
+            cash += (o.splitDetails.cash || 0);
+            upi += (o.splitDetails.upi || 0);
+        }
     });
     
     const totalRev = cash + upi + payLater;
