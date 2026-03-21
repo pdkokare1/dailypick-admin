@@ -173,7 +173,6 @@ function renderInventory(isLastPage = true) {
                 }
             }
 
-            // MODIFIED: Injected the new RTV (Return) button at the end of the action row
             return `
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #F8FAFC; border-radius: 8px; margin-bottom: 4px; font-size: 12px;" onclick="event.stopPropagation()">
                 <span>${v.weightOrVolume} ${expiryHtml}</span>
@@ -554,7 +553,6 @@ function quickRestock(productId, variantId, event) {
     selectItemForRestock(product, variant);
 }
 
-// --- NEW RTV (Return To Vendor) LOGIC ---
 let rtvSelectedVariant = null;
 
 function openRTVModal(productId, variantId, event) {
@@ -664,7 +662,6 @@ function generateReturnChallanPDF(distributor, itemName, qty, refund, reason) {
         showToast("RTV processed, but PDF failed to generate.");
     }
 }
-// ------------------------------------------
 
 function openRestockHistory(productId, variantId, event) {
     event.stopPropagation();
@@ -926,10 +923,12 @@ function toggleInventorySelection(id, event) {
     updateInventoryBulkUI();
 }
 
+// MODIFIED: Injected the Label Printing button logic into the Bulk UI
 function updateInventoryBulkUI() {
     const btn = document.getElementById('inv-bulk-btn');
     const priceBtn = document.getElementById('inv-bulk-price-btn');
     const assignBtn = document.getElementById('inv-bulk-assign-btn'); 
+    const printBtn = document.getElementById('inv-bulk-print-btn'); 
     
     if (selectedInventory.size > 0) {
         btn.innerText = `Deactivate Selected (${selectedInventory.size})`;
@@ -940,11 +939,73 @@ function updateInventoryBulkUI() {
             assignBtn.innerText = `Move (${selectedInventory.size})`;
             assignBtn.classList.add('visible');
         }
+        if (printBtn) {
+            printBtn.innerText = `🖨️ Print Labels (${selectedInventory.size})`;
+            printBtn.classList.add('visible');
+        }
     } else { 
         btn.classList.remove('visible'); 
         priceBtn.classList.remove('visible'); 
         if (assignBtn) assignBtn.classList.remove('visible');
+        if (printBtn) printBtn.classList.remove('visible');
     }
+}
+
+// NEW: Dynamically generates a CSS-Grid of labels and triggers the browser print dialog
+function generateBulkShelfLabels() {
+    if (selectedInventory.size === 0) return;
+    
+    const container = document.getElementById('print-bulk-labels-container');
+    container.innerHTML = '';
+    
+    const ids = Array.from(selectedInventory);
+    let labelCount = 0;
+
+    ids.forEach(id => {
+        const product = currentInventory.find(p => p._id === id);
+        if (product && product.variants) {
+            product.variants.forEach(v => {
+                if (v.sku) {
+                    const labelDiv = document.createElement('div');
+                    labelDiv.className = 'shelf-label';
+                    const svgId = `bulk-barcode-${v._id}-${labelCount}`;
+                    
+                    labelDiv.innerHTML = `
+                        <h4>${product.name.substring(0,25)} (${v.weightOrVolume})</h4>
+                        <div class="price">₹${v.price}</div>
+                        <svg id="${svgId}"></svg>
+                        <div style="font-size:8px; color:#666; margin-top:2px;">SKU: ${v.sku}</div>
+                    `;
+                    container.appendChild(labelDiv);
+                    
+                    // Allow the DOM to render the SVG before JsBarcode draws on it
+                    setTimeout(() => {
+                        try {
+                            JsBarcode(`#${svgId}`, v.sku, { format: "CODE128", width: 1.5, height: 35, displayValue: false, margin: 0 });
+                        } catch(e) {}
+                    }, 50);
+                    labelCount++;
+                }
+            });
+        }
+    });
+
+    if (labelCount === 0) {
+        return showToast("Selected items have no SKUs/Barcodes assigned.");
+    }
+
+    showToast(`Generating ${labelCount} labels...`);
+
+    // Give JsBarcode time to finish drawing all elements before firing the print dialog
+    setTimeout(() => {
+        container.classList.add('active-print');
+        window.print();
+        container.classList.remove('active-print');
+        
+        selectedInventory.clear();
+        updateInventoryBulkUI();
+        fetchInventory(); 
+    }, 800);
 }
 
 function openBulkAssignModal() {
