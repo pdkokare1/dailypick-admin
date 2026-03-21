@@ -25,6 +25,8 @@
     <style id="advanced-print-styles">
         #print-packing-slip-container { display: none; }
         #print-barcode-container { display: none; }
+        #print-bulk-labels-container { display: none; }
+        
         @media print {
             #print-packing-slip-container.active-print {
                 display: block !important;
@@ -35,6 +37,30 @@
                 display: flex !important; align-items: center; justify-content: center;
                 position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: white; z-index: 9999;
             }
+            #print-bulk-labels-container.active-print {
+                display: grid !important;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 4mm;
+                padding: 5mm;
+                width: 100%;
+                background: white;
+                position: absolute; left: 0; top: 0; z-index: 9999;
+            }
+            .shelf-label {
+                border: 1px dashed #ccc;
+                padding: 8px;
+                text-align: center;
+                font-family: sans-serif;
+                height: 38mm;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                page-break-inside: avoid;
+            }
+            .shelf-label h4 { font-size: 12px; margin: 0 0 4px 0; max-height: 28px; overflow: hidden; }
+            .shelf-label .price { font-size: 18px; font-weight: 800; margin: 0 0 4px 0; color: black; }
+            .shelf-label svg { max-width: 100%; height: 35px; margin: 0; }
         }
     </style>
 </head>
@@ -295,6 +321,7 @@
                 
                 <button id="inv-bulk-assign-btn" class="bulk-btn" onclick="openBulkAssignModal()" style="background: #8b5cf6;">Move (0)</button>
                 <button id="inv-bulk-price-btn" class="bulk-btn" onclick="openBulkPriceModal()" style="background: #0ea5e9;">Edit Prices (0)</button>
+                <button id="inv-bulk-print-btn" class="bulk-btn" onclick="generateBulkShelfLabels()" style="background: #10b981;">🖨️ Print Labels (0)</button>
                 <button id="inv-bulk-btn" class="bulk-btn" onclick="bulkDeactivateInventory()">Deactivate Selected (0)</button>
             </div>
 
@@ -381,6 +408,7 @@
     <div id="print-receipt-container"></div>
     <div id="print-packing-slip-container"></div>
     <div id="print-barcode-container"></div>
+    <div id="print-bulk-labels-container"></div>
 
     <div id="expense-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 300;">
         <div class="form-card" style="max-width: 400px; text-align: center;">
