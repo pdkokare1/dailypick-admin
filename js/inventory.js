@@ -173,6 +173,7 @@ function renderInventory(isLastPage = true) {
                 }
             }
 
+            // MODIFIED: Injected the new RTV (Return) button at the end of the action row
             return `
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #F8FAFC; border-radius: 8px; margin-bottom: 4px; font-size: 12px;" onclick="event.stopPropagation()">
                 <span>${v.weightOrVolume} ${expiryHtml}</span>
@@ -184,6 +185,7 @@ function renderInventory(isLastPage = true) {
                     <input class="inline-edit-input" type="number" value="${v.stock}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'stock', this, event)" title="Press Enter to save">
                     <button class="quick-restock-btn" onclick="openRestockHistory('${p._id}', '${v._id}', event)" title="Restock History">🕒</button>
                     <button class="quick-restock-btn" onclick="quickRestock('${p._id}', '${v._id}', event)" title="Quick Restock">📦</button>
+                    <button class="quick-restock-btn" style="color: #dc2626; border-color: #fca5a5; background: #fef2f2;" onclick="openRTVModal('${p._id}', '${v._id}', event)" title="Return to Vendor (RTV)">🔙</button>
                 </div>
             </div>
             `;
@@ -552,6 +554,118 @@ function quickRestock(productId, variantId, event) {
     selectItemForRestock(product, variant);
 }
 
+// --- NEW RTV (Return To Vendor) LOGIC ---
+let rtvSelectedVariant = null;
+
+function openRTVModal(productId, variantId, event) {
+    event.stopPropagation();
+    const product = currentInventory.find(p => p._id === productId);
+    if (!product) return;
+    const variant = product.variants.find(v => v._id === variantId);
+    if (!variant) return;
+    
+    rtvSelectedVariant = { productId, variantId };
+    
+    document.getElementById('rtv-form').reset();
+    document.getElementById('rtv-item-name').innerText = product.name;
+    document.getElementById('rtv-item-variant').innerText = `${variant.weightOrVolume} (Current Stock: ${variant.stock})`;
+    document.getElementById('rtv-distributor').value = product.distributorName || '';
+    document.getElementById('rtv-max-qty').innerText = variant.stock;
+    document.getElementById('rtv-qty').max = variant.stock;
+    
+    document.getElementById('rtv-modal').classList.add('active');
+}
+
+function closeRTVModal() {
+    document.getElementById('rtv-modal').classList.remove('active');
+    rtvSelectedVariant = null;
+}
+
+async function submitRTV(e) {
+    e.preventDefault();
+    if (!rtvSelectedVariant) return;
+    
+    const btn = document.getElementById('submit-rtv-btn');
+    btn.innerText = 'Processing...';
+    btn.disabled = true;
+    
+    const payload = {
+        variantId: rtvSelectedVariant.variantId,
+        distributorName: document.getElementById('rtv-distributor').value,
+        returnedQuantity: parseInt(document.getElementById('rtv-qty').value),
+        refundAmount: parseFloat(document.getElementById('rtv-refund').value) || 0,
+        reason: document.getElementById('rtv-reason').value
+    };
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/products/${rtvSelectedVariant.productId}/rtv`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const result = await res.json();
+        
+        if (result.success) {
+            showToast('Return Processed Successfully! 🔙');
+            generateReturnChallanPDF(
+                payload.distributorName, 
+                document.getElementById('rtv-item-name').innerText, 
+                payload.returnedQuantity, 
+                payload.refundAmount, 
+                payload.reason
+            );
+            closeRTVModal();
+            fetchInventory();
+        } else {
+            showToast(result.message || 'Failed to process return.');
+        }
+    } catch (err) {
+        showToast('Network error.');
+    } finally {
+        btn.innerText = 'Process Return';
+        btn.disabled = false;
+    }
+}
+
+function generateReturnChallanPDF(distributor, itemName, qty, refund, reason) {
+    try {
+        const doc = new window.jspdf.jsPDF();
+        
+        doc.setFontSize(22);
+        doc.setTextColor(10, 54, 34); 
+        doc.text("DAILYPICK.", 14, 20);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(100);
+        doc.text("RETURN CHALLAN (RTV)", 14, 28);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(0);
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 40);
+        doc.text(`Distributor: ${distributor}`, 14, 46);
+        doc.text(`Challan Ref: RTV-${Date.now().toString().slice(-6)}`, 14, 52);
+        
+        doc.autoTable({
+            startY: 60,
+            head: [['Item Description', 'Qty Returned', 'Reason', 'Expected Refund']],
+            body: [[itemName, qty, reason, `Rs. ${refund.toFixed(2)}`]],
+            theme: 'grid',
+            headStyles: { fillColor: [220, 38, 38] } 
+        });
+        
+        const finalY = doc.lastAutoTable.finalY || 60;
+        doc.text("Authorized Signature: ____________________", 14, finalY + 30);
+        doc.text("Driver Signature: ________________________", 100, finalY + 30);
+        
+        doc.save(`RTV_${distributor.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch(e) {
+        console.error("PDF Error:", e);
+        showToast("RTV processed, but PDF failed to generate.");
+    }
+}
+// ------------------------------------------
+
 function openRestockHistory(productId, variantId, event) {
     event.stopPropagation();
     const product = currentInventory.find(p => p._id === productId);
@@ -651,7 +765,6 @@ function updateInventoryDashboard() {
     if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); 
 }
 
-// MODIFIED: Injected the new PDF generation button and data passing
 function openSourcingModal() {
     let reorderData = {};
     let totalItemsCount = 0;
@@ -691,7 +804,6 @@ function openSourcingModal() {
             const message = `Hi ${distributor},\n\nPlease process the following restock for DailyPick:\n\n${items.join('\n')}\n\nThanks.`;
             const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
             
-            // Encode the array safely for the HTML onclick handler
             const safeItemsArray = encodeURIComponent(JSON.stringify(items));
             
             container.innerHTML += `
@@ -712,12 +824,9 @@ function openSourcingModal() {
 }
 function closeSourcingModal() { document.getElementById('sourcing-modal').classList.remove('active'); }
 
-// NEW: Generates and downloads a branded PDF Purchase Order
 function generatePurchaseOrderPDF(distributor, encodedItems) {
     try {
         const items = JSON.parse(decodeURIComponent(encodedItems));
-        
-        // Ensure jsPDF is loaded via the CDN in index.html
         const doc = new window.jspdf.jsPDF();
         
         doc.setFontSize(22);
