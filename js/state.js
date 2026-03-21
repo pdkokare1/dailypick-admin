@@ -29,12 +29,10 @@ let isOutStockFilterActive = false;
 let isDeadStockFilterActive = false;
 let selectedInventory = new Set();
 
-let dailyExpenses = JSON.parse(localStorage.getItem('dailypick_expenses') || '[]');
+const CLOUDINARY_CLOUD_NAME = 'dz2q2tq30'; 
+const CLOUDINARY_UPLOAD_PRESET = 'dailypick_preset'; 
 
-const CLOUDINARY_CLOUD_NAME = 'dz2q2tq30'; // Replace with your actual Cloudinary name
-const CLOUDINARY_UPLOAD_PRESET = 'dailypick_preset'; // Replace with your actual preset
-
-// --- NEW: IndexedDB Offline Queue Logic ---
+// --- IndexedDB Offline Queue Logic ---
 const dbName = "DailyPickDB";
 const storeName = "offlineOrders";
 let db;
@@ -45,7 +43,6 @@ function initDB() {
         request.onupgradeneeded = (e) => {
             let database = e.target.result;
             if (!database.objectStoreNames.contains(storeName)) {
-                // Auto-increment ID so we can easily delete items one by one after syncing
                 database.createObjectStore(storeName, { keyPath: "id", autoIncrement: true });
             }
         };
@@ -101,5 +98,4 @@ async function getOfflineCount() {
     });
 }
 
-// Initialize the database on load
 initDB().catch(console.error);
