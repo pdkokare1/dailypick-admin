@@ -6,6 +6,9 @@ let currentCalculatedTax = 0;
 let currentCalculatedDiscount = 0;
 let currentGrandTotal = 0;
 
+// NEW: Phase 1 Accountability Shift tracking
+let currentActiveShift = null;
+
 function startPosScanner() {
     if (posContinuousScanner) return;
     setTimeout(() => {
@@ -333,6 +336,11 @@ function resumeHeldCart(index) {
 async function processPosCheckout(paymentMethod, splitDetails = null) {
     if (posCart.length === 0) return showToast('Cart is empty.');
     
+    // NEW: Security Check - Require an active shift to process money
+    if (!currentActiveShift) {
+        return showToast('Register is Closed. Please open a shift first!');
+    }
+    
     const phone = document.getElementById('pos-customer-phone').value.trim();
     
     const payload = {
@@ -368,7 +376,6 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
     } catch (e) {
         showToast('Network offline. Saving transaction to IndexedDB...');
         
-        // MODIFIED: Replacing localStorage with IndexedDB save function
         await saveToIDB(payload);
         
         activeOrder = {
@@ -391,7 +398,6 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
     }
 }
 
-// MODIFIED: Now fetches from IndexedDB asynchronously and deletes by ID after success
 async function syncOfflinePOS() {
     if (!navigator.onLine) return;
 
@@ -401,7 +407,6 @@ async function syncOfflinePOS() {
 
         const itemToSync = offlineQueue[0]; 
         
-        // Don't send the local auto-incremented ID to the backend
         const { id, ...payloadToSync } = itemToSync;
 
         const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
@@ -468,4 +473,96 @@ function processSplitPayment() {
     
     closeSplitPaymentModal();
     processPosCheckout('Split', { cash: cash, upi: upi });
+}
+
+// --- NEW: Phase 1 Shift Management & Accountability Functions ---
+async function checkCurrentShift() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/shifts/current`);
+        const result = await res.json();
+        if (result.success && result.data) {
+            currentActiveShift = result.data;
+        } else {
+            currentActiveShift = null;
+        }
+    } catch(e) {
+        console.error("Shift check failed", e);
+    }
+}
+
+function openShiftModal() {
+    const openView = document.getElementById('shift-open-view');
+    const closeView = document.getElementById('shift-close-view');
+    
+    if (currentActiveShift) {
+        openView.classList.add('hidden');
+        closeView.classList.remove('hidden');
+        document.getElementById('shift-open-time').innerText = new Date(currentActiveShift.startTime).toLocaleTimeString();
+        document.getElementById('shift-display-float').innerText = currentActiveShift.startingFloat.toFixed(2);
+        document.getElementById('shift-actual-cash').value = '';
+    } else {
+        openView.classList.remove('hidden');
+        closeView.classList.add('hidden');
+        document.getElementById('shift-starting-float').value = '';
+    }
+    
+    document.getElementById('shift-modal').classList.add('active');
+}
+
+function closeShiftModal() {
+    document.getElementById('shift-modal').classList.remove('active');
+}
+
+async function submitOpenShift() {
+    const floatAmt = document.getElementById('shift-starting-float').value;
+    if (!floatAmt || floatAmt < 0) return showToast("Enter a valid starting float amount.");
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/shifts/open`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userName: currentUser ? currentUser.name : 'Unknown Staff',
+                startingFloat: floatAmt
+            })
+        });
+        const result = await res.json();
+        if (result.success) {
+            currentActiveShift = result.data;
+            showToast('Register Opened! 🏪 Ready for sales.');
+            closeShiftModal();
+        } else {
+            showToast(result.message);
+        }
+    } catch(e) {
+        showToast('Network error opening shift.');
+    }
+}
+
+async function submitCloseShift() {
+    const actualCash = document.getElementById('shift-actual-cash').value;
+    if (!actualCash) return showToast("Enter the actual physical cash counted.");
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/shifts/close`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                shiftId: currentActiveShift._id,
+                actualCash: actualCash
+            })
+        });
+        const result = await res.json();
+        if (result.success) {
+            currentActiveShift = null;
+            const disc = result.discrepancy;
+            let msg = disc === 0 ? "Perfect Match!" : (disc < 0 ? `Short by ₹${Math.abs(disc).toFixed(2)}` : `Over by ₹${Math.abs(disc).toFixed(2)}`);
+            showToast(`Register Closed. ${msg}`);
+            closeShiftModal();
+        } else {
+            showToast(result.message);
+        }
+    } catch(e) {
+        showToast('Network error closing shift.');
+    }
 }
