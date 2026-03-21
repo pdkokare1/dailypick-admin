@@ -206,3 +206,81 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .cmd-result-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.03); display: flex; justify-content: space-between; align-items: center; }
 .cmd-result-item:hover { background: #F8FAFC; }
 .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+
+/* --- NEW: DARK MODE & DESKTOP LAYOUT --- */
+
+/* Dark Mode Overrides */
+body.dark-mode {
+    --bg-color: #0f172a;
+    --surface: #1e293b;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+}
+
+body.dark-mode .admin-header, 
+body.dark-mode .bottom-nav {
+    border-color: #334155;
+}
+
+body.dark-mode input, 
+body.dark-mode select, 
+body.dark-mode .command-input {
+    background: #0f172a; 
+    color: white; 
+    border-color: #334155;
+}
+
+body.dark-mode .stat-card, 
+body.dark-mode .inventory-card, 
+body.dark-mode .order-card, 
+body.dark-mode .form-card,
+body.dark-mode .chart-container {
+    border-color: #334155; 
+    background: var(--surface);
+}
+
+body.dark-mode .variant-row, 
+body.dark-mode .delivery-info-card, 
+body.dark-mode .kanban-col, 
+body.dark-mode .restock-result-item:hover,
+body.dark-mode .sourcing-item {
+    background: #0f172a; 
+    border-color: #334155;
+}
+
+body.dark-mode .modal-content { background: var(--bg-color); }
+body.dark-mode .tab-btn.active, body.dark-mode .date-btn.active { background: #334155; color: #38bdf8; }
+body.dark-mode .inv-filter, body.dark-mode .pos-qty-btn { background: #1e293b; color: white; border-color: #334155; }
+body.dark-mode .pos-quick-card { background: #1e293b; border-color: #334155; }
+body.dark-mode .pos-quick-card:active { background: #334155; }
+body.dark-mode .pos-cart-item { border-bottom-color: #334155; }
+body.dark-mode .cmd-result-item:hover { background: #1e293b; }
+body.dark-mode .history-item { background: #0f172a; }
+
+/* Desktop Sidebar Layout */
+@media (min-width: 768px) {
+    body { padding-bottom: 0; padding-left: 220px; }
+    
+    .bottom-nav { 
+        left: 0; top: 0; width: 220px; height: 100vh; flex-direction: column; 
+        justify-content: flex-start; padding-top: 20px; border-right: 1px solid rgba(0,0,0,0.08); 
+        border-top: none; align-items: flex-start;
+    }
+    
+    body.dark-mode .bottom-nav { border-right: 1px solid #334155; }
+    
+    .nav-item { flex-direction: row; padding: 16px 24px; width: 100%; gap: 16px; justify-content: flex-start; border-radius: 0 24px 24px 0; margin-bottom: 4px; }
+    .nav-item:hover { background: rgba(0,0,0,0.02); }
+    body.dark-mode .nav-item:hover { background: rgba(255,255,255,0.05); }
+    
+    .nav-item.active { background: #ECFDF5; }
+    body.dark-mode .nav-item.active { background: #064e3b; color: #34d399; }
+    
+    .nav-label { font-size: 14px; font-weight: 600; }
+    .admin-header { padding-left: 24px; }
+    
+    .modal-overlay { padding-left: 220px; align-items: center; }
+    .modal-content { border-radius: 24px; max-width: 600px; margin: auto; transform: translateY(20px) scale(0.95); }
+    .modal-overlay.active .modal-content { transform: translateY(0) scale(1); }
+    #toast-container { left: calc(50% + 110px); bottom: 40px; }
+}
