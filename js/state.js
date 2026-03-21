@@ -1,6 +1,6 @@
 /* js/state.js */
 
-const BACKEND_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://your-production-backend.railway.app';
+const BACKEND_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://dailypick-backend-production-05d6.up.railway.app';
 
 let currentInventory = [];
 let currentOrders = [];
