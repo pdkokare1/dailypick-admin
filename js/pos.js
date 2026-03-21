@@ -330,7 +330,6 @@ function resumeHeldCart(index) {
     showToast('Cart resumed! ▶️');
 }
 
-// MODIFIED: Added splitDetails payload
 async function processPosCheckout(paymentMethod, splitDetails = null) {
     if (posCart.length === 0) return showToast('Cart is empty.');
     
@@ -343,7 +342,7 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         taxAmount: currentCalculatedTax,           
         discountAmount: currentCalculatedDiscount, 
         paymentMethod: paymentMethod,
-        splitDetails: splitDetails, // NEW: Include split breakdown
+        splitDetails: splitDetails, 
         timestamp: new Date().toISOString() 
     };
 
@@ -361,17 +360,16 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         if (result.success) {
             showToast('Transaction Complete! ✅');
             activeOrder = result.orderData;
-            // DELETED: printReceipt();
             clearPosCart();
             fetchInventory(); 
         } else {
             showToast(result.message || 'Checkout failed.');
         }
     } catch (e) {
-        showToast('Network offline. Saving transaction locally...');
-        let offlineQueue = JSON.parse(localStorage.getItem('dailypick_offline_pos') || '[]');
-        offlineQueue.push(payload);
-        localStorage.setItem('dailypick_offline_pos', JSON.stringify(offlineQueue));
+        showToast('Network offline. Saving transaction to IndexedDB...');
+        
+        // MODIFIED: Replacing localStorage with IndexedDB save function
+        await saveToIDB(payload);
         
         activeOrder = {
             _id: 'OFFL' + Date.now().toString().slice(-4),
@@ -385,32 +383,36 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
             taxAmount: currentCalculatedTax,           
             discountAmount: currentCalculatedDiscount,
             paymentMethod: paymentMethod,
-            splitDetails: splitDetails // NEW
+            splitDetails: splitDetails
         };
-        // DELETED: printReceipt();
+        
         clearPosCart();
         renderOverview(); 
     }
 }
 
+// MODIFIED: Now fetches from IndexedDB asynchronously and deletes by ID after success
 async function syncOfflinePOS() {
-    let offlineQueue = JSON.parse(localStorage.getItem('dailypick_offline_pos') || '[]');
-    if (offlineQueue.length === 0) return;
-
     if (!navigator.onLine) return;
 
     try {
+        const offlineQueue = await getAllFromIDB();
+        if (offlineQueue.length === 0) return;
+
         const itemToSync = offlineQueue[0]; 
+        
+        // Don't send the local auto-incremented ID to the backend
+        const { id, ...payloadToSync } = itemToSync;
+
         const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(itemToSync)
+            body: JSON.stringify(payloadToSync)
         });
         
         const result = await res.json();
         if (result.success) {
-            offlineQueue.shift(); 
-            localStorage.setItem('dailypick_offline_pos', JSON.stringify(offlineQueue));
+            await deleteFromIDB(id); 
             showToast('Offline POS transaction synced! ✅');
             renderOverview(); 
         }
@@ -419,8 +421,6 @@ async function syncOfflinePOS() {
     }
 }
 setInterval(syncOfflinePOS, 30000);
-
-// --- NEW: SPLIT PAYMENT LOGIC ---
 
 function openSplitPaymentModal() {
     if (posCart.length === 0) return showToast('Cart is empty.');
