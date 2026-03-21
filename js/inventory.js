@@ -160,7 +160,6 @@ function renderInventory(isLastPage = true) {
                 marginHtml = `<span class="margin-badge">${marginPercentage}% Margin</span>`;
             }
 
-            // MODIFIED: Added logic to calculate days till expiry and show badges
             let expiryHtml = '';
             if (v.expiryDate) {
                 const exp = new Date(v.expiryDate);
@@ -652,6 +651,7 @@ function updateInventoryDashboard() {
     if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); 
 }
 
+// MODIFIED: Injected the new PDF generation button and data passing
 function openSourcingModal() {
     let reorderData = {};
     let totalItemsCount = 0;
@@ -691,13 +691,19 @@ function openSourcingModal() {
             const message = `Hi ${distributor},\n\nPlease process the following restock for DailyPick:\n\n${items.join('\n')}\n\nThanks.`;
             const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
             
+            // Encode the array safely for the HTML onclick handler
+            const safeItemsArray = encodeURIComponent(JSON.stringify(items));
+            
             container.innerHTML += `
                 <div class="sourcing-item">
                     <div>
                         <h4>${distributor}</h4>
                         <p style="font-size: 12px; color: var(--text-muted);">${items.length} items low</p>
                     </div>
-                    <a href="${waUrl}" target="_blank" class="primary-btn-small" style="background: #25D366; text-decoration: none;">💬 WhatsApp PO</a>
+                    <div style="display: flex; gap: 8px;">
+                        <a href="${waUrl}" target="_blank" class="primary-btn-small" style="background: #25D366; text-decoration: none;">💬 WhatsApp PO</a>
+                        <button class="primary-btn-small" style="background: #ef4444;" onclick="generatePurchaseOrderPDF('${distributor}', '${safeItemsArray}')">📄 PDF</button>
+                    </div>
                 </div>
             `;
         }
@@ -705,6 +711,54 @@ function openSourcingModal() {
     document.getElementById('sourcing-modal').classList.add('active');
 }
 function closeSourcingModal() { document.getElementById('sourcing-modal').classList.remove('active'); }
+
+// NEW: Generates and downloads a branded PDF Purchase Order
+function generatePurchaseOrderPDF(distributor, encodedItems) {
+    try {
+        const items = JSON.parse(decodeURIComponent(encodedItems));
+        
+        // Ensure jsPDF is loaded via the CDN in index.html
+        const doc = new window.jspdf.jsPDF();
+        
+        doc.setFontSize(22);
+        doc.setTextColor(10, 54, 34); 
+        doc.text("DAILYPICK.", 14, 20);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(100);
+        doc.text("PURCHASE ORDER", 14, 28);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(0);
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 40);
+        doc.text(`Supplier: ${distributor}`, 14, 46);
+        doc.text(`PO Number: PO-${Date.now().toString().slice(-6)}`, 14, 52);
+        
+        const tableData = items.map((item, index) => {
+            const parts = item.split('|');
+            const namePart = parts[0].replace('- ', '').trim();
+            const qtyPart = parts[2].replace('Suggested Order:', '').trim();
+            return [index + 1, namePart, qtyPart];
+        });
+        
+        doc.autoTable({
+            startY: 60,
+            head: [['#', 'Item Description', 'Order Qty']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: { fillColor: [10, 54, 34] }
+        });
+        
+        const finalY = doc.lastAutoTable.finalY || 60;
+        doc.text("Authorized Signature: ____________________", 14, finalY + 30);
+        
+        doc.save(`PO_${distributor.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+        showToast("PDF Generated! 📄");
+    } catch(e) {
+        console.error("PDF Error:", e);
+        showToast("Failed to generate PDF. Make sure jsPDF is loaded.");
+    }
+}
 
 function generateReorderList() { openSourcingModal(); }
 
@@ -1010,7 +1064,6 @@ async function submitAuditCorrection() {
     document.getElementById('audit-scan-input').focus();
 }
 
-// MODIFIED: Added 'expiry' parameter and input element
 function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '') {
     const container = document.getElementById('variants-container');
     const row = document.createElement('div');
@@ -1043,7 +1096,6 @@ function openAddProductModal() {
     document.getElementById('add-product-modal').classList.add('active'); 
 }
 
-// MODIFIED: Pass expiryDate into addVariantRow
 function openEditProductModal(id, e) {
     e.stopPropagation();
     const p = currentInventory.find(item => item._id === id);
@@ -1111,28 +1163,6 @@ function compressImage(file, maxWidth = 800, maxHeight = 800) {
     });
 }
 
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('new-image');
-
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('dragover');
-});
-
-dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('dragover');
-});
-
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length) {
-        fileInput.files = e.dataTransfer.files;
-        showToast('Image attached!');
-    }
-});
-
-// MODIFIED: Fetch expiry date from UI to append to payload
 async function submitNewProduct(e) {
     e.preventDefault();
     const btn = document.getElementById('submit-product-btn');
