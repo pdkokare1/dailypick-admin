@@ -217,9 +217,10 @@
                         <input type="tel" id="pos-customer-phone" placeholder="Customer Phone (Optional for Loyalty)">
                     </div>
                     
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="primary-btn" style="background: #10b981; flex: 1; padding: 12px; font-size: 11px;" onclick="processPosCheckout('Cash')" title="Shortcut: F1">💵 Cash (F1)</button>
                         <button class="primary-btn" style="background: #0ea5e9; flex: 1; padding: 12px; font-size: 11px;" onclick="processPosCheckout('UPI')" title="Shortcut: F2">📱 UPI (F2)</button>
+                        <button class="primary-btn" style="background: #6366f1; flex: 1; padding: 12px; font-size: 11px;" onclick="openSplitPaymentModal()">✂️ Split</button>
                         <button class="primary-btn" style="background: #f59e0b; flex: 1; padding: 12px; font-size: 11px;" onclick="processPosCheckout('Pay Later')">⏳ Pay Later</button>
                     </div>
                 </div>
@@ -775,6 +776,32 @@
         </div>
     </div>
 
+    <div id="split-payment-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 250;">
+        <div class="form-card" style="max-width: 400px; text-align: center;">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Split Payment</h2>
+                <button class="close-btn" onclick="closeSplitPaymentModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <p style="font-size: 14px; margin-bottom: 16px;">Grand Total: <strong id="split-total-display" style="color: var(--primary); font-size: 18px;">₹0.00</strong></p>
+            
+            <div class="input-group" style="text-align: left;">
+                <label>Cash Amount (₹)</label>
+                <input type="number" id="split-cash-input" placeholder="0" step="0.01" oninput="calculateSplit()">
+            </div>
+            
+            <div class="input-group" style="text-align: left;">
+                <label>UPI Amount (₹)</label>
+                <input type="number" id="split-upi-input" placeholder="0" step="0.01" oninput="calculateSplit()">
+            </div>
+            
+            <div style="margin-top: 16px; margin-bottom: 16px; padding: 12px; background: #F8FAFC; border-radius: 8px; border: 1px solid #E2E8F0;">
+                <strong id="split-balance-display" style="font-size: 16px; color: #f59e0b;">₹0.00 Remaining</strong>
+            </div>
+            
+            <button class="primary-btn" style="background: #6366f1;" onclick="processSplitPayment()">Confirm & Checkout</button>
+        </div>
+    </div>
+
     <div id="khata-reminders-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 250;">
         <div class="form-card" style="max-width: 500px; max-height: 90vh; overflow-y: auto;">
             <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -786,6 +813,7 @@
                 </div>
         </div>
     </div>
+    
     <div id="command-search-modal" class="modal-overlay hidden-modal" style="align-items: flex-start; padding-top: 10vh; z-index: 300;" onclick="closeCommandSearch()">
         <div class="form-card" style="padding: 0; overflow: hidden;" onclick="event.stopPropagation()">
             <input type="text" id="command-input" class="command-input" placeholder="Search orders, products, customers..." oninput="handleCommandSearch(this.value)">
