@@ -71,6 +71,8 @@
             <p id="header-subtitle" class="subtitle">Store Overview</p>
         </div>
         <div style="display: flex; gap: 12px; align-items: center;">
+            <span id="current-user-display" style="font-size: 12px; font-weight: 600; display: none;"></span>
+            <button id="logout-btn" onclick="logoutUser()" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; display: none;">Logout</button>
             <button id="dark-mode-toggle" onclick="toggleDarkMode()" style="background: none; border: none; font-size: 18px; cursor: pointer;" title="Toggle Dark Mode">🌙</button>
             <div class="pulse-indicator">
                 <span class="dot"></span> Live
@@ -83,8 +85,9 @@
             <div class="section-header" style="flex-wrap: wrap; gap: 8px;">
                 <div>
                     <h2 style="display:inline-block; margin-right: 12px;">Today's Pulse</h2>
+                    <button class="primary-btn-small" style="background:#f59e0b; margin-right: 8px;" onclick="openShiftModal()">🏪 Register</button>
                     <button class="primary-btn-small" style="background:#ef4444; margin-right: 8px;" onclick="openExpenseModal()">💸 Log Expense</button>
-                    <button class="primary-btn-small" style="background:#475569;" onclick="openEodReport()">📊 End of Day</button>
+                    <button id="eod-report-btn" class="primary-btn-small" style="background:#475569;" onclick="openEodReport()">📊 End of Day</button>
                 </div>
                 <div style="font-size: 12px; color: var(--text-muted);">Press <kbd style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight:bold;">Ctrl+K</kbd> to search</div>
             </div>
@@ -424,6 +427,37 @@
                 </div>
             </form>
             <div id="expense-list-container" style="margin-top: 16px; text-align: left; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+            </div>
+        </div>
+    </div>
+
+    <div id="shift-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 350;">
+        <div class="form-card" style="max-width: 400px; text-align: center;">
+            <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="shift-modal-title">Register Management</h2>
+                <button class="close-btn" onclick="closeShiftModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            
+            <div id="shift-open-view" class="hidden">
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Start a new shift to process sales.</p>
+                <div class="input-group" style="text-align: left;">
+                    <label>Starting Float / Change (₹)</label>
+                    <input type="number" id="shift-starting-float" placeholder="e.g. 500" required min="0">
+                </div>
+                <button class="primary-btn" style="background: #10b981;" onclick="submitOpenShift()">Open Register</button>
+            </div>
+
+            <div id="shift-close-view" class="hidden">
+                <div style="background: #FEF3C7; color: #D97706; padding: 12px; border-radius: 8px; border: 1px solid #FDE68A; margin-bottom: 16px; font-size: 12px; text-align: left;">
+                    <strong style="font-size: 14px;">Active Shift</strong><br>
+                    Opened at: <span id="shift-open-time">-</span><br>
+                    Started with: ₹<span id="shift-display-float">0</span>
+                </div>
+                <div class="input-group" style="text-align: left;">
+                    <label>Counted Cash in Drawer (₹)</label>
+                    <input type="number" id="shift-actual-cash" placeholder="Enter total physical cash..." required min="0">
+                </div>
+                <button class="primary-btn" style="background: #ef4444;" onclick="submitCloseShift()">Close Register</button>
             </div>
         </div>
     </div>
@@ -902,6 +936,33 @@
     </div>
 
     <div id="toast-container"></div>
+
+    <div id="pin-login-overlay" style="position: fixed; top:0; left:0; width:100%; height:100%; background: var(--bg-color); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <h1 style="color: var(--primary); font-size: 32px; font-weight: 800; margin-bottom: 8px; letter-spacing: 2px;">DAILYPICK.</h1>
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 32px;">Enter your Staff PIN to unlock terminal</p>
+        
+        <div style="display: flex; gap: 16px; margin-bottom: 40px;">
+            <div class="pin-dot" id="pin-dot-1" style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--primary);"></div>
+            <div class="pin-dot" id="pin-dot-2" style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--primary);"></div>
+            <div class="pin-dot" id="pin-dot-3" style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--primary);"></div>
+            <div class="pin-dot" id="pin-dot-4" style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--primary);"></div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+            <button class="pin-btn" onclick="handlePinInput('1')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">1</button>
+            <button class="pin-btn" onclick="handlePinInput('2')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">2</button>
+            <button class="pin-btn" onclick="handlePinInput('3')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">3</button>
+            <button class="pin-btn" onclick="handlePinInput('4')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">4</button>
+            <button class="pin-btn" onclick="handlePinInput('5')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">5</button>
+            <button class="pin-btn" onclick="handlePinInput('6')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">6</button>
+            <button class="pin-btn" onclick="handlePinInput('7')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">7</button>
+            <button class="pin-btn" onclick="handlePinInput('8')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">8</button>
+            <button class="pin-btn" onclick="handlePinInput('9')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">9</button>
+            <div></div>
+            <button class="pin-btn" onclick="handlePinInput('0')" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: var(--text-main); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">0</button>
+            <button class="pin-btn" onclick="clearPinInput()" style="width: 72px; height: 72px; border-radius: 50%; font-size: 28px; font-weight: 600; border: 1px solid rgba(0,0,0,0.1); background: var(--surface); color: #ef4444; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">⌫</button>
+        </div>
+    </div>
 
     <nav class="bottom-nav">
         <button id="nav-overview" class="nav-item active" onclick="switchView('overview')">
