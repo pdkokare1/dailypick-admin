@@ -330,7 +330,8 @@ function resumeHeldCart(index) {
     showToast('Cart resumed! ▶️');
 }
 
-async function processPosCheckout(paymentMethod) {
+// MODIFIED: Added splitDetails payload
+async function processPosCheckout(paymentMethod, splitDetails = null) {
     if (posCart.length === 0) return showToast('Cart is empty.');
     
     const phone = document.getElementById('pos-customer-phone').value.trim();
@@ -342,6 +343,7 @@ async function processPosCheckout(paymentMethod) {
         taxAmount: currentCalculatedTax,           
         discountAmount: currentCalculatedDiscount, 
         paymentMethod: paymentMethod,
+        splitDetails: splitDetails, // NEW: Include split breakdown
         timestamp: new Date().toISOString() 
     };
 
@@ -382,7 +384,8 @@ async function processPosCheckout(paymentMethod) {
             totalAmount: currentGrandTotal,
             taxAmount: currentCalculatedTax,           
             discountAmount: currentCalculatedDiscount,
-            paymentMethod: paymentMethod
+            paymentMethod: paymentMethod,
+            splitDetails: splitDetails // NEW
         };
         // DELETED: printReceipt();
         clearPosCart();
@@ -416,3 +419,53 @@ async function syncOfflinePOS() {
     }
 }
 setInterval(syncOfflinePOS, 30000);
+
+// --- NEW: SPLIT PAYMENT LOGIC ---
+
+function openSplitPaymentModal() {
+    if (posCart.length === 0) return showToast('Cart is empty.');
+    document.getElementById('split-total-display').innerText = `₹${currentGrandTotal.toFixed(2)}`;
+    document.getElementById('split-cash-input').value = '';
+    document.getElementById('split-upi-input').value = '';
+    document.getElementById('split-balance-display').innerText = `₹${currentGrandTotal.toFixed(2)} Remaining`;
+    document.getElementById('split-balance-display').style.color = '#f59e0b';
+    document.getElementById('split-payment-modal').classList.add('active');
+}
+
+function closeSplitPaymentModal() {
+    document.getElementById('split-payment-modal').classList.remove('active');
+}
+
+function calculateSplit() {
+    const cashStr = document.getElementById('split-cash-input').value;
+    const upiStr = document.getElementById('split-upi-input').value;
+    let cash = parseFloat(cashStr) || 0;
+    let upi = parseFloat(upiStr) || 0;
+
+    let totalEntered = cash + upi;
+    let balance = currentGrandTotal - totalEntered;
+    
+    const balanceEl = document.getElementById('split-balance-display');
+    if (Math.abs(balance) < 0.01) {
+        balanceEl.innerText = '₹0.00 (Perfect)';
+        balanceEl.style.color = '#10b981';
+    } else if (balance > 0) {
+        balanceEl.innerText = `₹${balance.toFixed(2)} Remaining`;
+        balanceEl.style.color = '#f59e0b';
+    } else {
+        balanceEl.innerText = `-₹${Math.abs(balance).toFixed(2)} (Overpaid)`;
+        balanceEl.style.color = '#ef4444';
+    }
+}
+
+function processSplitPayment() {
+    let cash = parseFloat(document.getElementById('split-cash-input').value) || 0;
+    let upi = parseFloat(document.getElementById('split-upi-input').value) || 0;
+    
+    if (Math.abs((cash + upi) - currentGrandTotal) > 0.01) {
+        return showToast("Split amounts must equal the exact grand total!");
+    }
+    
+    closeSplitPaymentModal();
+    processPosCheckout('Split', { cash: cash, upi: upi });
+}
