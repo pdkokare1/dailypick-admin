@@ -1,5 +1,15 @@
 /* js/ui.js */
 
+// NEW: Initialize Dark Mode on load
+document.addEventListener('DOMContentLoaded', () => {
+    const isDark = localStorage.getItem('dailypick_dark_mode') === 'true';
+    if (isDark) {
+        document.body.classList.add('dark-mode');
+        const btn = document.getElementById('dark-mode-toggle');
+        if (btn) btn.innerText = '☀️';
+    }
+});
+
 function showToast(m) { 
     const t = document.createElement('div'); 
     t.classList.add('toast'); 
@@ -38,6 +48,17 @@ function playNewOrderAudio() {
     };
     playNote(600, 0, 0.15);
     playNote(800, 0.2, 0.15);
+}
+
+// NEW: Dark Mode Toggle Logic
+function toggleDarkMode() {
+    const body = document.body;
+    body.classList.toggle('dark-mode');
+    const isDark = body.classList.contains('dark-mode');
+    localStorage.setItem('dailypick_dark_mode', isDark);
+    
+    const btn = document.getElementById('dark-mode-toggle');
+    if (btn) btn.innerText = isDark ? '☀️' : '🌙';
 }
 
 function switchView(viewName) {
@@ -253,7 +274,6 @@ function renderOverview() {
     }
 }
 
-// NEW: Expense Ledger Logic
 function openExpenseModal() {
     renderExpenseList();
     document.getElementById('expense-modal').classList.add('active');
@@ -305,7 +325,6 @@ function renderExpenseList() {
     });
 }
 
-// MODIFIED: Injected Expense & Net Profit Math
 function openEodReport() {
     const todayStr = new Date().toDateString();
     let cash = 0, upi = 0, payLater = 0;
@@ -318,7 +337,6 @@ function openEodReport() {
     
     const totalRev = cash + upi + payLater;
     
-    // Calculate total expenses for today
     const todaysExpenses = dailyExpenses.filter(ex => ex.date === todayStr);
     const totalExp = todaysExpenses.reduce((sum, ex) => sum + ex.amount, 0);
     const netProfit = totalRev - totalExp;
