@@ -1,75 +1,105 @@
 /* js/state.js */
 
-const BACKEND_URL = 'https://dailypick-backend-production-05d6.up.railway.app';
-const CLOUDINARY_CLOUD_NAME = 'YOUR_CLOUD_NAME'; 
-const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UPLOAD_PRESET'; 
+const BACKEND_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://your-production-backend.railway.app';
 
-// State Variables
-let currentOrders = []; 
-let allHistoricalOrders = []; 
-let currentInventory = []; 
-let currentCategories = []; 
-let currentBrands = []; 
-let currentDistributors = []; 
+let currentInventory = [];
+let currentOrders = [];
+let currentCategories = [];
+let currentBrands = [];
+let currentDistributors = [];
+let currentCustomers = [];
 
-let activeOrder = null; 
-let adminEventSource = null; 
-let currentOrderTab = 'All'; 
-let currentOrderLayout = 'list'; 
-let selectedOrders = new Set();
-let selectedInventory = new Set(); 
+let activeOrder = null;
+let posCart = [];
+let posContinuousScanner = null;
+let posScanCooldown = false;
+
+let html5QrcodeScanner = null;
+let currentSkuInputTarget = null;
+let restockSelectedVariant = null;
 
 let inventoryPage = 1;
 let inventorySearchTerm = '';
 let inventoryCategoryFilter = 'All';
-let inventoryBrandFilter = 'All';      
-let inventoryDistributorFilter = 'All'; 
+let inventoryBrandFilter = 'All';
+let inventoryDistributorFilter = 'All';
 
-let isLowStockFilterActive = false; 
-let isOutStockFilterActive = false; 
-let isDeadStockFilterActive = false; 
+let isLowStockFilterActive = false;
+let isOutStockFilterActive = false;
+let isDeadStockFilterActive = false;
+let selectedInventory = new Set();
 
-let revenueChartInstance = null; 
-
-// Scanner & Restock State
-let html5QrcodeScanner = null;
-let currentSkuInputTarget = null; 
-let restockSelectedVariant = null; 
-
-// POS State
-let posContinuousScanner = null;
-let posScanCooldown = false;
-let posCart = [];
-
-// Credit tracking
-let currentCustomerPhone = null;
-
-// Daily Expenses
 let dailyExpenses = JSON.parse(localStorage.getItem('dailypick_expenses') || '[]');
 
-// DOM Elements
-const dailyRevenueEl = document.getElementById('daily-revenue'); 
-const pendingCountEl = document.getElementById('pending-count'); 
-const ordersFeed = document.getElementById('orders-list-view'); 
-const ordersKanban = document.getElementById('orders-kanban-view');
-const orderModalOverlay = document.getElementById('order-modal-overlay');
-const inventoryFeed = document.getElementById('inventory-feed'); 
+const CLOUDINARY_CLOUD_NAME = 'dz2q2tq30'; // Replace with your actual Cloudinary name
+const CLOUDINARY_UPLOAD_PRESET = 'dailypick_preset'; // Replace with your actual preset
 
-// Expanded View Routing 
-const views = { 
-    overview: document.getElementById('overview-view'), 
-    pos: document.getElementById('pos-view'), 
-    orders: document.getElementById('orders-view'), 
-    inventory: document.getElementById('inventory-view'),
-    analytics: document.getElementById('analytics-view'),
-    customers: document.getElementById('customers-view') 
-}; 
+// --- NEW: IndexedDB Offline Queue Logic ---
+const dbName = "DailyPickDB";
+const storeName = "offlineOrders";
+let db;
 
-const navBtns = { 
-    overview: document.getElementById('nav-overview'), 
-    pos: document.getElementById('nav-pos'), 
-    orders: document.getElementById('nav-orders'), 
-    inventory: document.getElementById('nav-inventory'),
-    analytics: document.getElementById('nav-analytics'),
-    customers: document.getElementById('nav-customers') 
-};
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = (e) => {
+            let database = e.target.result;
+            if (!database.objectStoreNames.contains(storeName)) {
+                // Auto-increment ID so we can easily delete items one by one after syncing
+                database.createObjectStore(storeName, { keyPath: "id", autoIncrement: true });
+            }
+        };
+        request.onsuccess = (e) => {
+            db = e.target.result;
+            resolve(db);
+        };
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
+async function saveToIDB(order) {
+    if (!db) await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        const request = store.add(order);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function getAllFromIDB() {
+    if (!db) await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function deleteFromIDB(id) {
+    if (!db) await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function getOfflineCount() {
+    if (!db) await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const request = store.count();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Initialize the database on load
+initDB().catch(console.error);
