@@ -1,6 +1,5 @@
 /* js/ui.js */
 
-// RESTORED: The mapping dictionaries required for navigation to work!
 const views = {
     overview: document.getElementById('overview-view'),
     pos: document.getElementById('pos-view'),
@@ -91,7 +90,6 @@ function switchView(viewName) {
     const subtitleEl = document.getElementById('header-subtitle');
     if (subtitleEl) subtitleEl.innerText = titles[viewName] || '';
     
-    // Safety check to ensure mapping exists
     if (!views || !views.overview) return;
     
     Object.keys(views).forEach(key => {
@@ -114,7 +112,7 @@ function switchView(viewName) {
                 fetchInventory().then(() => { 
                     if (typeof renderPosQuickTap === 'function') renderPosQuickTap(); 
                     if (typeof startPosScanner === 'function') startPosScanner(); 
-                }).catch(err => console.log("Inventory fetch error on POS load", err));
+                }).catch(err => console.log(err));
             }
         } else {
             if (typeof renderPosQuickTap === 'function') renderPosQuickTap();
@@ -154,9 +152,7 @@ document.addEventListener('keydown', (e) => {
         return;
     }
 
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-        return;
-    }
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
     if (e.key === 'Enter' && globalBarcodeBuffer.length > 3) {
         if (posView && posView.classList.contains('active')) {
@@ -309,58 +305,99 @@ async function renderOverview() {
     }
 }
 
-function openExpenseModal() {
-    renderExpenseList();
+// --- CLOUD EXPENSE UPGRADE ---
+async function openExpenseModal() {
     document.getElementById('expense-modal').classList.add('active');
+    document.getElementById('expense-list-container').innerHTML = '<p class="empty-state">Loading cloud expenses...</p>';
+    await renderExpenseList();
 }
 
 function closeExpenseModal() {
     document.getElementById('expense-modal').classList.remove('active');
 }
 
-function submitExpense(e) {
+async function submitExpense(e) {
     e.preventDefault();
     const desc = document.getElementById('expense-desc').value.trim();
     const amt = parseFloat(document.getElementById('expense-amount').value);
     if(!desc || isNaN(amt)) return;
     
-    dailyExpenses.push({
-        id: Date.now(),
-        date: new Date().toDateString(),
-        desc: desc,
-        amount: amt,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    });
-    localStorage.setItem('dailypick_expenses', JSON.stringify(dailyExpenses));
-    
-    document.getElementById('expense-desc').value = '';
-    document.getElementById('expense-amount').value = '';
-    renderExpenseList();
-    showToast('Expense logged! 💸');
-}
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.innerText = '...'; 
+    btn.disabled = true;
 
-function renderExpenseList() {
-    const container = document.getElementById('expense-list-container');
-    container.innerHTML = '';
-    const todayStr = new Date().toDateString();
-    const todaysExpenses = dailyExpenses.filter(ex => ex.date === todayStr);
-    
-    if(todaysExpenses.length === 0) {
-        container.innerHTML = '<p class="empty-state">No expenses logged today.</p>';
-        return;
+    try {
+        const payload = {
+            desc: desc,
+            amount: amt,
+            dateStr: new Date().toDateString(),
+            timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        const res = await fetch(`${BACKEND_URL}/api/expenses`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const result = await res.json();
+        
+        if (result.success) {
+            document.getElementById('expense-desc').value = '';
+            document.getElementById('expense-amount').value = '';
+            await renderExpenseList();
+            showToast('Expense logged to cloud! ☁️💸');
+        } else {
+            showToast('Failed to log expense.');
+        }
+    } catch(err) {
+        showToast('Network error.');
+    } finally {
+        btn.innerText = 'Add'; 
+        btn.disabled = false;
     }
-    
-    todaysExpenses.forEach((ex) => {
-        container.innerHTML += `
-            <div style="background: #fef2f2; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; border: 1px solid #fecaca;">
-                <div><strong style="font-size: 13px; color: #991b1b;">${ex.desc}</strong><br><span style="font-size: 10px; color: #b91c1c;">${ex.time}</span></div>
-                <div style="font-weight: bold; color: #dc2626;">₹${ex.amount.toFixed(2)}</div>
-            </div>
-        `;
-    });
 }
 
-function openEodReport() {
+async function renderExpenseList() {
+    const container = document.getElementById('expense-list-container');
+    const todayStr = new Date().toDateString();
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/expenses?dateStr=${todayStr}`);
+        const result = await res.json();
+        
+        container.innerHTML = '';
+        if(result.success && result.data.length > 0) {
+            result.data.forEach((ex) => {
+                container.innerHTML += `
+                    <div style="background: #fef2f2; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; border: 1px solid #fecaca; margin-bottom: 8px;">
+                        <div><strong style="font-size: 13px; color: #991b1b;">${ex.desc}</strong><br><span style="font-size: 10px; color: #b91c1c;">${ex.timeStr}</span></div>
+                        <div style="font-weight: bold; color: #dc2626;">₹${ex.amount.toFixed(2)}</div>
+                    </div>
+                `;
+            });
+        } else {
+            container.innerHTML = '<p class="empty-state">No expenses logged today.</p>';
+        }
+    } catch(e) {
+        container.innerHTML = '<p class="empty-state" style="color:red;">Error loading expenses.</p>';
+    }
+}
+
+async function openEodReport() {
+    document.getElementById('eod-expected-cash').innerText = '...';
+    document.getElementById('eod-expected-upi').innerText = '...';
+    document.getElementById('eod-expected-paylater').innerText = '...';
+    document.getElementById('eod-total-revenue').innerText = '...';
+    const expEl = document.getElementById('eod-total-expenses');
+    const netEl = document.getElementById('eod-net-profit');
+    if(expEl) expEl.innerText = '...';
+    if(netEl) netEl.innerText = '...';
+    document.getElementById('eod-actual-cash').value = '';
+    document.getElementById('eod-discrepancy-result').innerHTML = '';
+    
+    document.getElementById('eod-modal').classList.add('active');
+
     const todayStr = new Date().toDateString();
     let cash = 0, upi = 0, payLater = 0;
     
@@ -376,8 +413,17 @@ function openEodReport() {
     
     const totalRev = cash + upi + payLater;
     
-    const todaysExpenses = dailyExpenses.filter(ex => ex.date === todayStr);
-    const totalExp = todaysExpenses.reduce((sum, ex) => sum + ex.amount, 0);
+    let totalExp = 0;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/expenses?dateStr=${todayStr}`);
+        const result = await res.json();
+        if(result.success) {
+            totalExp = result.data.reduce((sum, ex) => sum + ex.amount, 0);
+        }
+    } catch(e) {
+        console.error('Failed to fetch expenses for EOD');
+    }
+    
     const netProfit = totalRev - totalExp;
     
     document.getElementById('eod-expected-cash').innerText = cash.toFixed(2);
@@ -385,15 +431,8 @@ function openEodReport() {
     document.getElementById('eod-expected-paylater').innerText = payLater.toFixed(2);
     document.getElementById('eod-total-revenue').innerText = totalRev.toFixed(2);
     
-    const expEl = document.getElementById('eod-total-expenses');
-    const netEl = document.getElementById('eod-net-profit');
     if(expEl) expEl.innerText = totalExp.toFixed(2);
     if(netEl) netEl.innerText = netProfit.toFixed(2);
-    
-    document.getElementById('eod-actual-cash').value = '';
-    document.getElementById('eod-discrepancy-result').innerHTML = '';
-    
-    document.getElementById('eod-modal').classList.add('active');
 }
 
 function closeEodReport() { 
