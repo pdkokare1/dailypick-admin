@@ -1,6 +1,5 @@
 /* js/ui.js */
 
-// NEW: Initialize Dark Mode on load
 document.addEventListener('DOMContentLoaded', () => {
     const isDark = localStorage.getItem('dailypick_dark_mode') === 'true';
     if (isDark) {
@@ -50,7 +49,6 @@ function playNewOrderAudio() {
     playNote(800, 0.2, 0.15);
 }
 
-// NEW: Dark Mode Toggle Logic
 function toggleDarkMode() {
     const body = document.body;
     body.classList.toggle('dark-mode');
@@ -203,7 +201,8 @@ function openOrderModalById(id) {
     }
 }
 
-function renderOverview() {
+// MODIFIED: Changed to an async function to accommodate the IndexedDB query
+async function renderOverview() {
     const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
     document.getElementById('ov-pending-count').innerText = trulyPending.length;
 
@@ -217,11 +216,13 @@ function renderOverview() {
     });
     document.getElementById('ov-low-stock-count').innerText = lowStockCount;
 
-    const offlineQueue = JSON.parse(localStorage.getItem('dailypick_offline_pos') || '[]');
+    // Fetching from IndexedDB instead of localStorage
+    const offlineCount = await getOfflineCount();
     const offlineCard = document.getElementById('ov-offline-card');
-    if (offlineQueue.length > 0) {
+    
+    if (offlineCount > 0) {
         offlineCard.style.display = 'block';
-        document.getElementById('ov-offline-count').innerText = offlineQueue.length;
+        document.getElementById('ov-offline-count').innerText = offlineCount;
     } else {
         offlineCard.style.display = 'none';
     }
