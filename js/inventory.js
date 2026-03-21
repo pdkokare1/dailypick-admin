@@ -1,31 +1,25 @@
 /* js/inventory.js */
 
-// NEW: Unified special filter controller mapped to stat cards
 function toggleSpecialFilter(type) {
-    // Determine if we are clicking an already active filter to toggle it off
     let turningOff = false;
     if (type === 'out' && isOutStockFilterActive) turningOff = true;
     if (type === 'low' && isLowStockFilterActive) turningOff = true;
     if (type === 'dead' && isDeadStockFilterActive) turningOff = true;
 
-    // Reset all special filters in state
     isLowStockFilterActive = false;
     isOutStockFilterActive = false;
     isDeadStockFilterActive = false;
     
-    // Reset visual card borders
     document.getElementById('card-out-stock').style.border = '1px solid rgba(0,0,0,0.04)';
     document.getElementById('card-low-stock').style.border = '1px solid rgba(0,0,0,0.04)';
     document.getElementById('card-dead-stock').style.border = '1px solid rgba(0,0,0,0.04)';
     
-    // Reset low stock button specifically if it exists
     const lowStockBtn = document.getElementById('low-stock-btn');
     if(lowStockBtn) {
         lowStockBtn.style.background = '#FEF2F2';
         lowStockBtn.style.color = '#DC2626';
     }
 
-    // Apply new filter if we aren't just turning it off
     if (!turningOff) {
         if (type === 'out') {
             isOutStockFilterActive = true;
@@ -47,7 +41,6 @@ function toggleSpecialFilter(type) {
     applyInventoryFilters();
 }
 
-// Updated existing function to route through unified logic smoothly
 function toggleLowStockFilter() {
     if (isLowStockFilterActive) {
         toggleSpecialFilter('clear');
@@ -71,7 +64,6 @@ async function fetchInventory() {
         let queryUrl = `${BACKEND_URL}/api/products?all=true&page=${inventoryPage}&limit=30`;
         if (inventorySearchTerm) queryUrl += `&search=${encodeURIComponent(inventorySearchTerm)}`;
         if (inventoryCategoryFilter !== 'All') queryUrl += `&category=${encodeURIComponent(inventoryCategoryFilter)}`;
-        
         if (inventoryBrandFilter !== 'All') queryUrl += `&brand=${encodeURIComponent(inventoryBrandFilter)}`;
         if (inventoryDistributorFilter !== 'All') queryUrl += `&distributor=${encodeURIComponent(inventoryDistributorFilter)}`;
 
@@ -81,7 +73,6 @@ async function fetchInventory() {
         if (result.success) { 
             let dataToRender = result.data;
 
-            // NEW: Expanded Filter interception logic
             if (isLowStockFilterActive) {
                 dataToRender = dataToRender.filter(p => p.variants.some(v => v.stock > 0 && v.stock <= (v.lowStockThreshold || 5)));
             } else if (isOutStockFilterActive) {
@@ -169,9 +160,23 @@ function renderInventory(isLastPage = true) {
                 marginHtml = `<span class="margin-badge">${marginPercentage}% Margin</span>`;
             }
 
+            // MODIFIED: Added logic to calculate days till expiry and show badges
+            let expiryHtml = '';
+            if (v.expiryDate) {
+                const exp = new Date(v.expiryDate);
+                const daysLeft = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
+                if (daysLeft <= 30 && daysLeft >= 0) {
+                    expiryHtml = `<span style="background:#fef2f2; color:#dc2626; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:bold; margin-left:8px; border: 1px solid #fecaca;">⚠️ Exp: ${daysLeft} days</span>`;
+                } else if (daysLeft < 0) {
+                    expiryHtml = `<span style="background:#991b1b; color:white; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:bold; margin-left:8px;">❌ EXPIRED</span>`;
+                } else {
+                    expiryHtml = `<span style="color:var(--text-muted); font-size:9px; margin-left:8px;">Exp: ${exp.toLocaleDateString()}</span>`;
+                }
+            }
+
             return `
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #F8FAFC; border-radius: 8px; margin-bottom: 4px; font-size: 12px;" onclick="event.stopPropagation()">
-                <span>${v.weightOrVolume}</span>
+                <span>${v.weightOrVolume} ${expiryHtml}</span>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <span style="color: var(--text-muted);">₹</span>
                     <input class="inline-edit-input" type="number" value="${v.price}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'price', this, event)" title="Press Enter to save">
@@ -1005,7 +1010,8 @@ async function submitAuditCorrection() {
     document.getElementById('audit-scan-input').focus();
 }
 
-function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold = '5') {
+// MODIFIED: Added 'expiry' parameter and input element
+function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '') {
     const container = document.getElementById('variants-container');
     const row = document.createElement('div');
     row.classList.add('variant-row');
@@ -1014,6 +1020,7 @@ function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold
         <input type="number" placeholder="Price (₹)" class="var-price" value="${price}" required style="width: 70px; flex: none;">
         <input type="number" placeholder="Stock" class="var-stock" value="${stock}" required style="width: 65px; flex: none;">
         <input type="number" placeholder="Alert At" class="var-threshold" value="${threshold}" title="Low Stock Alert Threshold" required style="width: 65px; flex: none;">
+        <input type="date" class="var-expiry" value="${expiry ? new Date(expiry).toISOString().split('T')[0] : ''}" title="Expiry Date" style="width: 110px; flex: none;">
         <input type="text" placeholder="SKU/Barcode" class="var-sku" value="${sku}" style="min-width: 90px;">
         <button type="button" class="scan-sku-btn" onclick="startScannerForSku(this)" title="Scan Barcode">📷</button>
         <button type="button" class="scan-sku-btn" onclick="printBarcode(this)" title="Generate & Print Label">🖨️</button>
@@ -1036,6 +1043,7 @@ function openAddProductModal() {
     document.getElementById('add-product-modal').classList.add('active'); 
 }
 
+// MODIFIED: Pass expiryDate into addVariantRow
 function openEditProductModal(id, e) {
     e.stopPropagation();
     const p = currentInventory.find(item => item._id === id);
@@ -1056,9 +1064,9 @@ function openEditProductModal(id, e) {
     container.innerHTML = '';
     
     if (p.variants && p.variants.length > 0) {
-        p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, v.stock, v.sku, v.lowStockThreshold || 5));
+        p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, v.stock, v.sku, v.lowStockThreshold || 5, v.expiryDate || ''));
     } else { 
-        addVariantRow(p.weightOrVolume || '', p.price || '', 0, '', 5); 
+        addVariantRow(p.weightOrVolume || '', p.price || '', 0, '', 5, ''); 
     }
 
     document.getElementById('add-product-modal').classList.add('active');
@@ -1124,6 +1132,7 @@ dropZone.addEventListener('drop', (e) => {
     }
 });
 
+// MODIFIED: Fetch expiry date from UI to append to payload
 async function submitNewProduct(e) {
     e.preventDefault();
     const btn = document.getElementById('submit-product-btn');
@@ -1151,13 +1160,18 @@ async function submitNewProduct(e) {
         const variants = [];
         
         variantRows.forEach(row => {
-            variants.push({ 
+            let expiryInput = row.querySelector('.var-expiry').value;
+            let variantObj = { 
                 weightOrVolume: row.querySelector('.var-weight').value, 
                 price: Number(row.querySelector('.var-price').value), 
                 stock: Number(row.querySelector('.var-stock').value),
                 lowStockThreshold: Number(row.querySelector('.var-threshold').value),
                 sku: row.querySelector('.var-sku').value.trim()
-            });
+            };
+            if (expiryInput) {
+                variantObj.expiryDate = expiryInput;
+            }
+            variants.push(variantObj);
         });
 
         const p = { 
