@@ -24,6 +24,25 @@ function connectAdminLiveStream() {
     };
 }
 
+// DRY Optimization: Helper function to populate select dropdowns
+function populateDropdowns(data, selectConfigs) {
+    selectConfigs.forEach(config => {
+        const select = document.getElementById(config.id);
+        if (!select) return;
+
+        select.innerHTML = (data.length === 0 && config.emptyHTML) 
+            ? config.emptyHTML 
+            : (config.defaultHTML || '');
+
+        data.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.name;
+            option.innerText = item.name;
+            select.appendChild(option);
+        });
+    });
+}
+
 async function fetchCategories() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/categories`);
@@ -31,27 +50,10 @@ async function fetchCategories() {
         
         if (result.success) { 
             currentCategories = result.data;
-            const select = document.getElementById('new-category');
-            select.innerHTML = currentCategories.length === 0 ? '<option value="" disabled selected>No Categories Created</option>' : '';
-            
-            const filterSelect = document.getElementById('inventory-cat-filter');
-            if (filterSelect) {
-                filterSelect.innerHTML = '<option value="All">All Categories</option>';
-            }
-
-            currentCategories.forEach(cat => {
-                const option = document.createElement('option');
-                option.value = cat.name; 
-                option.innerText = cat.name;
-                select.appendChild(option);
-                
-                if (filterSelect) {
-                    const filterOption = document.createElement('option');
-                    filterOption.value = cat.name; 
-                    filterOption.innerText = cat.name;
-                    filterSelect.appendChild(filterOption);
-                }
-            });
+            populateDropdowns(currentCategories, [
+                { id: 'new-category', emptyHTML: '<option value="" disabled selected>No Categories Created</option>' },
+                { id: 'inventory-cat-filter', defaultHTML: '<option value="All">All Categories</option>' }
+            ]);
         }
     } catch (e) { 
         console.error("Error loading categories", e); 
@@ -65,25 +67,10 @@ async function fetchBrands() {
         
         if (result.success) {
             currentBrands = result.data;
-            const select = document.getElementById('new-brand');
-            const filterSelect = document.getElementById('inventory-brand-filter'); 
-            
-            select.innerHTML = '<option value="">Select Brand (Optional)</option>';
-            if (filterSelect) filterSelect.innerHTML = '<option value="All">All Brands</option>';
-            
-            currentBrands.forEach(b => {
-                const opt = document.createElement('option');
-                opt.value = b.name; 
-                opt.innerText = b.name;
-                select.appendChild(opt);
-
-                if (filterSelect) {
-                    const filterOpt = document.createElement('option');
-                    filterOpt.value = b.name; 
-                    filterOpt.innerText = b.name;
-                    filterSelect.appendChild(filterOpt);
-                }
-            });
+            populateDropdowns(currentBrands, [
+                { id: 'new-brand', defaultHTML: '<option value="">Select Brand (Optional)</option>' },
+                { id: 'inventory-brand-filter', defaultHTML: '<option value="All">All Brands</option>' }
+            ]);
         }
     } catch (e) { 
         console.error("Error loading brands", e); 
@@ -97,32 +84,11 @@ async function fetchDistributors() {
         
         if (result.success) {
             currentDistributors = result.data;
-            const select = document.getElementById('new-distributor');
-            const restockSelect = document.getElementById('restock-distributor');
-            const filterSelect = document.getElementById('inventory-dist-filter'); 
-            
-            select.innerHTML = '<option value="">Select Distributor (Optional)</option>';
-            restockSelect.innerHTML = '<option value="">Select a Distributor</option>';
-            if (filterSelect) filterSelect.innerHTML = '<option value="All">All Distributors</option>';
-
-            currentDistributors.forEach(d => {
-                const opt = document.createElement('option');
-                opt.value = d.name; 
-                opt.innerText = d.name;
-                select.appendChild(opt);
-                
-                const opt2 = document.createElement('option');
-                opt2.value = d.name; 
-                opt2.innerText = d.name;
-                restockSelect.appendChild(opt2);
-
-                if (filterSelect) {
-                    const filterOpt = document.createElement('option');
-                    filterOpt.value = d.name; 
-                    filterOpt.innerText = d.name;
-                    filterSelect.appendChild(filterOpt);
-                }
-            });
+            populateDropdowns(currentDistributors, [
+                { id: 'new-distributor', defaultHTML: '<option value="">Select Distributor (Optional)</option>' },
+                { id: 'restock-distributor', defaultHTML: '<option value="">Select a Distributor</option>' },
+                { id: 'inventory-dist-filter', defaultHTML: '<option value="All">All Distributors</option>' }
+            ]);
         }
     } catch (e) { 
         console.error("Error loading distributors", e); 
