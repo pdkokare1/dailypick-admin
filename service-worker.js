@@ -31,7 +31,7 @@ self.addEventListener('install', event => {
     );
 });
 
-// Fetch Event: Serve from cache if offline
+// Fetch Event: Stale-While-Revalidate Strategy
 self.addEventListener('fetch', event => {
     // We only want to cache frontend files, NOT API calls to the backend.
     // API calls should always try to hit the network first.
@@ -40,15 +40,22 @@ self.addEventListener('fetch', event => {
     }
 
     event.respondWith(
-        caches.match(event.request)
-            .then(response => {
-                // Return cached version if found
-                if (response) {
-                    return response;
-                }
-                // Otherwise fetch from network
-                return fetch(event.request);
-            })
+        caches.open(CACHE_NAME).then(cache => {
+            return cache.match(event.request).then(cachedResponse => {
+                // Fetch the latest version from the network in the background
+                const fetchedResponse = fetch(event.request).then(networkResponse => {
+                    // Update the cache with the new version for next time
+                    cache.put(event.request, networkResponse.clone());
+                    return networkResponse;
+                }).catch(() => {
+                    // Ignore network errors here to silently fallback on cache
+                });
+
+                // Return the cached response immediately if we have it, 
+                // otherwise wait for the network response
+                return cachedResponse || fetchedResponse;
+            });
+        })
     );
 });
 
