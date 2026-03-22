@@ -1,5 +1,26 @@
 /* js/inventory.js */
 
+// --- NEW: Analytics helper for Proactive Overview ---
+function calculateStockRunway(variant) {
+    if (!variant.purchaseHistory || variant.purchaseHistory.length < 2) return null;
+    
+    // Sort by date to get the first and last recorded restock
+    const sorted = [...variant.purchaseHistory].sort((a,b) => new Date(a.date) - new Date(b.date));
+    const firstDate = new Date(sorted[0].date);
+    const lastDate = new Date(sorted[sorted.length - 1].date);
+    
+    const daysElapsed = Math.max(1, (lastDate - firstDate) / (1000 * 60 * 60 * 24));
+    const totalQtyBought = sorted.reduce((sum, h) => sum + h.addedQuantity, 0);
+    
+    // Simple Velocity: Items per day
+    const velocity = totalQtyBought / daysElapsed;
+    if (velocity <= 0) return null;
+    
+    // Runway: Current Stock / Items per day
+    return Math.ceil(variant.stock / velocity);
+}
+// -----------------------------------------------------
+
 function toggleSpecialFilter(type) {
     let turningOff = false;
     if (type === 'out' && isOutStockFilterActive) turningOff = true;
@@ -606,7 +627,7 @@ async function submitRTV(e) {
         
         if (result.success) {
             showToast('Return Processed Successfully! 🔙');
-            generateReturnChallanPDF(
+            generateReturnChalanPDF(
                 payload.distributorName, 
                 document.getElementById('rtv-item-name').innerText, 
                 payload.returnedQuantity, 
@@ -626,7 +647,7 @@ async function submitRTV(e) {
     }
 }
 
-function generateReturnChallanPDF(distributor, itemName, qty, refund, reason) {
+function generateReturnChalanPDF(distributor, itemName, qty, refund, reason) {
     try {
         const doc = new window.jspdf.jsPDF();
         
