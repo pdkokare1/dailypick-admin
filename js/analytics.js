@@ -3,7 +3,7 @@
 let categoryChartInstance = null; 
 let hourlyChartInstance = null;
 let revenueChartInstance = null;
-let allHistoricalExpenses = []; // Store expenses for cross-referencing
+let allHistoricalExpenses = []; // Track expenses for P&L mapping
 
 async function exportOrdersCSV() {
     showToast('Fetching orders for export...');
@@ -121,18 +121,19 @@ function triggerCSVDownload(csvContent, filename) {
 
 async function fetchAnalytics() {
     try {
-        // Fetch Orders
-        const orderRes = await fetch(`${BACKEND_URL}/api/orders`);
-        const orderResult = await orderRes.json();
+        // Fetch Orders and Expenses simultaneously
+        const [orderRes, expenseRes] = await Promise.all([
+            fetch(`${BACKEND_URL}/api/orders`),
+            fetch(`${BACKEND_URL}/api/expenses`)
+        ]);
         
-        // Fetch All Expenses for historical mapping
-        const expenseRes = await fetch(`${BACKEND_URL}/api/expenses`);
+        const orderResult = await orderRes.json();
         const expenseResult = await expenseRes.json();
-
+        
         if (orderResult.success) {
             allHistoricalOrders = orderResult.data.filter(o => o.status !== 'Cancelled');
         }
-        
+
         if (expenseResult.success) {
             allHistoricalExpenses = expenseResult.data;
         }
@@ -200,7 +201,7 @@ function updateAnalyticsRange(daysLimit) {
         hourlyDistribution[hour]++;
     });
 
-    // Map Expenses to labels
+    // Map Expenses to graph labels
     filteredExpenses.forEach(ex => {
         const exDate = new Date(ex.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         if (expenseMap[exDate] !== undefined) {
@@ -283,7 +284,7 @@ function renderChart(labels, revenueData, profitData) {
                 legend: { 
                     display: true, 
                     position: 'top',
-                    labels: { boxWidth: 10, font: { size: 10 } }
+                    labels: { boxWidth: 12, font: { size: 10 } }
                 } 
             },
             scales: { 
