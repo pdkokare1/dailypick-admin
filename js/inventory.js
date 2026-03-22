@@ -194,9 +194,25 @@ function renderInventory(isLastPage = true) {
                 }
             }
 
+            // NEW: Smart Inventory Badges (Velocity & Runway)
+            let runwayDays = v.daysOfStock !== undefined ? v.daysOfStock : calculateStockRunway(v);
+            let runwayHtml = '';
+            
+            if (runwayDays !== null && runwayDays !== undefined) {
+                if (v.stock > 15 && runwayDays > 30) {
+                    runwayHtml = `<span style="background:#f3f4f6; color:#4b5563; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:bold; margin-left:8px; border: 1px solid #e5e7eb;">🕸️ Dead Stock</span>`;
+                } else if (v.stock > 0 && runwayDays <= 3) {
+                    runwayHtml = `<span style="background:#fef2f2; color:#dc2626; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:bold; margin-left:8px; border: 1px solid #fecaca;">🔥 ${runwayDays} Days Left</span>`;
+                } else if (v.stock > 0 && v.averageDailySales && v.averageDailySales > 2) {
+                    runwayHtml = `<span style="background:#ecfdf5; color:#059669; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:bold; margin-left:8px; border: 1px solid #a7f3d0;">📈 High Velocity</span>`;
+                } else if (v.stock > 0 && runwayDays < 999) {
+                    runwayHtml = `<span style="color:var(--text-muted); font-size:9px; margin-left:8px;">${runwayDays} Days Left</span>`;
+                }
+            }
+
             return `
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #F8FAFC; border-radius: 8px; margin-bottom: 4px; font-size: 12px;" onclick="event.stopPropagation()">
-                <span>${v.weightOrVolume} ${expiryHtml}</span>
+                <span>${v.weightOrVolume} ${expiryHtml} ${runwayHtml}</span>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <span style="color: var(--text-muted);">₹</span>
                     <input class="inline-edit-input" type="number" value="${v.price}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'price', this, event)" title="Press Enter to save">
