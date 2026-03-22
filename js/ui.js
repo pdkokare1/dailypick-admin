@@ -229,6 +229,7 @@ function openOrderModalById(id) {
     }
 }
 
+// --- ENHANCED: Proactive Inventory Health Overview ---
 async function renderOverview() {
     const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
     document.getElementById('ov-pending-count').innerText = trulyPending.length;
@@ -281,31 +282,55 @@ async function renderOverview() {
     const actionFeed = document.getElementById('action-center-feed');
     if (actionFeed) {
         actionFeed.innerHTML = '';
-        let negativeStock = [];
-        let deadStockItems = [];
+        let criticalTasks = [];
         
         currentInventory.forEach(p => {
             if(p.variants) {
                 p.variants.forEach(v => {
-                    if (v.stock < 0) negativeStock.push(`${p.name} (${v.weightOrVolume})`);
-                    if (v.stock > 15) deadStockItems.push(`${p.name} (${v.weightOrVolume})`);
+                    // Critical: Out of Stock
+                    if (v.stock <= 0) {
+                        criticalTasks.push({
+                            type: 'error',
+                            title: `Out of Stock: ${p.name}`,
+                            msg: `Variant (${v.weightOrVolume}) is empty. Customer orders for this item will fail.`,
+                            action: () => jumpToInventoryWithFilter('out')
+                        });
+                    }
+                    // Warning: Low Stock with predicted runway
+                    else if (v.stock <= (v.lowStockThreshold || 5)) {
+                        let runway = typeof calculateStockRunway === 'function' ? calculateStockRunway(v) : null;
+                        criticalTasks.push({
+                            type: 'warning',
+                            title: `Restock Needed: ${p.name}`,
+                            msg: `Only ${v.stock} left. ${runway ? `Estimated to last ${runway} days.` : 'Order soon.'}`,
+                            action: () => openRestockModal()
+                        });
+                    }
                 });
             }
         });
         
-        if (negativeStock.length > 0) {
-            actionFeed.innerHTML += `<div class="stat-card" style="border-left: 4px solid #ef4444; padding: 12px;"><h4 style="color:#ef4444; margin-bottom:4px;">⚠️ Critical: Negative Stock</h4><p style="font-size:12px;">${negativeStock.length} items have negative stock quantities.</p></div>`;
-        }
-        if (deadStockItems.length > 0) {
-            actionFeed.innerHTML += `<div class="stat-card" style="border-left: 4px solid #f59e0b; padding: 12px;"><h4 style="color:#f59e0b; margin-bottom:4px;">📦 Overstocked / Dead Stock</h4><p style="font-size:12px;">${deadStockItems.length} items are currently heavily overstocked (>15 units).</p></div>`;
-        }
-        if (actionFeed.innerHTML === '') {
-            actionFeed.innerHTML = '<p class="empty-state">No critical actions required today.</p>';
+        if (criticalTasks.length > 0) {
+            criticalTasks.sort((a,b) => a.type === 'error' ? -1 : 1).forEach(task => {
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.style.borderLeft = `4px solid ${task.type === 'error' ? '#ef4444' : '#f59e0b'}`;
+                card.style.padding = '12px';
+                card.style.cursor = 'pointer';
+                card.onclick = task.action;
+                card.innerHTML = `
+                    <h4 style="color:${task.type === 'error' ? '#ef4444' : '#f59e0b'}; margin-bottom:4px;">${task.title}</h4>
+                    <p style="font-size:12px;">${task.msg}</p>
+                `;
+                actionFeed.appendChild(card);
+            });
+        } else {
+            actionFeed.innerHTML = '<p class="empty-state">✅ Your store is healthy. No critical actions required today.</p>';
         }
     }
 }
+// -----------------------------------------------------
 
-// --- CLOUD EXPENSE UPGRADE ---
 async function openExpenseModal() {
     document.getElementById('expense-modal').classList.add('active');
     document.getElementById('expense-list-container').innerHTML = '<p class="empty-state">Loading cloud expenses...</p>';
