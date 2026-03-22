@@ -8,6 +8,8 @@ let currentCategories = [];
 let currentBrands = [];
 let currentDistributors = [];
 let currentCustomers = [];
+let allHistoricalOrders = []; 
+let allHistoricalExpenses = []; // Added for deep P&L analytics
 
 let activeOrder = null;
 let posCart = [];
