@@ -1,7 +1,9 @@
 /* js/analytics.js */
 
 let categoryChartInstance = null; 
-let hourlyChartInstance = null; // NEW PHASE 6
+let hourlyChartInstance = null;
+let revenueChartInstance = null;
+let allHistoricalExpenses = []; // Store expenses for cross-referencing
 
 async function exportOrdersCSV() {
     showToast('Fetching orders for export...');
@@ -119,13 +121,23 @@ function triggerCSVDownload(csvContent, filename) {
 
 async function fetchAnalytics() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/orders`);
-        const result = await res.json();
+        // Fetch Orders
+        const orderRes = await fetch(`${BACKEND_URL}/api/orders`);
+        const orderResult = await orderRes.json();
         
-        if (result.success) {
-            allHistoricalOrders = result.data.filter(o => o.status !== 'Cancelled');
-            updateAnalyticsRange(7); 
+        // Fetch All Expenses for historical mapping
+        const expenseRes = await fetch(`${BACKEND_URL}/api/expenses`);
+        const expenseResult = await expenseRes.json();
+
+        if (orderResult.success) {
+            allHistoricalOrders = orderResult.data.filter(o => o.status !== 'Cancelled');
         }
+        
+        if (expenseResult.success) {
+            allHistoricalExpenses = expenseResult.data;
+        }
+
+        updateAnalyticsRange(7); 
     } catch (e) {
         console.error("Analytics Error", e);
     }
@@ -133,7 +145,9 @@ async function fetchAnalytics() {
 
 function updateAnalyticsRange(daysLimit) {
     document.querySelectorAll('.date-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`date-btn-${daysLimit === 999 ? 'all' : daysLimit}`).classList.add('active');
+    const btnId = daysLimit === 999 ? 'date-btn-all' : `date-btn-${daysLimit}`;
+    const targetBtn = document.getElementById(btnId);
+    if(targetBtn) targetBtn.classList.add('active');
 
     const today = new Date();
     today.setHours(23, 59, 59, 999);
@@ -142,8 +156,10 @@ function updateAnalyticsRange(daysLimit) {
     cutoffDate.setHours(0, 0, 0, 0);
 
     const filteredOrders = allHistoricalOrders.filter(o => new Date(o.createdAt) >= cutoffDate && new Date(o.createdAt) <= today);
+    const filteredExpenses = allHistoricalExpenses.filter(ex => new Date(ex.createdAt) >= cutoffDate && new Date(ex.createdAt) <= today);
 
     let revenueMap = {};
+    let expenseMap = {};
     let labels = [];
     
     const pointsToGraph = Math.min(daysLimit, 30);
@@ -153,11 +169,12 @@ function updateAnalyticsRange(daysLimit) {
         const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         labels.push(label);
         revenueMap[label] = 0;
+        expenseMap[label] = 0;
     }
 
     let itemFrequency = {};
     let categoryRevenue = {}; 
-    let hourlyDistribution = new Array(24).fill(0); // NEW PHASE 6: Heatmap Tracking
+    let hourlyDistribution = new Array(24).fill(0); 
 
     filteredOrders.forEach(o => {
         const orderDate = new Date(o.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -179,19 +196,27 @@ function updateAnalyticsRange(daysLimit) {
             categoryRevenue[catName] += (i.price * i.qty);
         });
 
-        // NEW PHASE 6: Track by hour
         const hour = new Date(o.createdAt).getHours();
         hourlyDistribution[hour]++;
     });
 
-    const data = labels.map(label => revenueMap[label]);
-    renderChart(labels, data);
+    // Map Expenses to labels
+    filteredExpenses.forEach(ex => {
+        const exDate = new Date(ex.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        if (expenseMap[exDate] !== undefined) {
+            expenseMap[exDate] += ex.amount;
+        }
+    });
+
+    const revenueData = labels.map(label => revenueMap[label]);
+    const profitData = labels.map(label => revenueMap[label] - expenseMap[label]);
+
+    renderChart(labels, revenueData, profitData);
 
     const catLabels = Object.keys(categoryRevenue);
     const catData = Object.values(categoryRevenue);
     renderCategoryChart(catLabels, catData);
 
-    // NEW PHASE 6: Format and render hourly chart
     const hourLabels = Array.from({length: 24}, (_, i) => {
         const ampm = i >= 12 ? 'PM' : 'AM';
         const h = i % 12 || 12;
@@ -221,7 +246,7 @@ function updateAnalyticsRange(daysLimit) {
     }
 }
 
-function renderChart(labels, data) {
+function renderChart(labels, revenueData, profitData) {
     const ctx = document.getElementById('revenueChart').getContext('2d');
     if (revenueChartInstance) revenueChartInstance.destroy(); 
     
@@ -229,21 +254,42 @@ function renderChart(labels, data) {
         type: 'line',
         data: {
             labels: labels,
-            datasets: [{
-                label: 'Revenue (₹)',
-                data: data,
-                borderColor: '#10b981',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.3
-            }]
+            datasets: [
+                {
+                    label: 'Gross Revenue (₹)',
+                    data: revenueData,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Net Profit (₹)',
+                    data: profitData,
+                    borderColor: '#10b981',
+                    borderDash: [5, 5],
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true } }
+            plugins: { 
+                legend: { 
+                    display: true, 
+                    position: 'top',
+                    labels: { boxWidth: 10, font: { size: 10 } }
+                } 
+            },
+            scales: { 
+                y: { beginAtZero: true },
+                x: { grid: { display: false } }
+            }
         }
     });
 }
@@ -277,7 +323,6 @@ function renderCategoryChart(labels, data) {
     });
 }
 
-// NEW PHASE 6: Busiest Hours Renderer
 function renderHourlyChart(labels, data) {
     const ctx = document.getElementById('hourlyChart').getContext('2d');
     if (hourlyChartInstance) hourlyChartInstance.destroy();
