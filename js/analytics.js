@@ -161,6 +161,7 @@ function updateAnalyticsRange(daysLimit) {
 
     let revenueMap = {};
     let expenseMap = {};
+    let cogsMap = {}; // Added to track Cost of Goods Sold
     let labels = [];
     
     const pointsToGraph = Math.min(daysLimit, 30);
@@ -171,6 +172,7 @@ function updateAnalyticsRange(daysLimit) {
         labels.push(label);
         revenueMap[label] = 0;
         expenseMap[label] = 0;
+        cogsMap[label] = 0;
     }
 
     let itemFrequency = {};
@@ -188,6 +190,19 @@ function updateAnalyticsRange(daysLimit) {
             if (!itemFrequency[key]) itemFrequency[key] = { qty: 0, revenue: 0 };
             itemFrequency[key].qty += i.qty;
             itemFrequency[key].revenue += (i.price * i.qty);
+
+            // --- Real Profitability Calculation (COGS) ---
+            if (cogsMap[orderDate] !== undefined) {
+                const invItem = currentInventory.find(p => p._id === i.productId);
+                if (invItem && invItem.variants) {
+                    const variant = invItem.variants.find(v => v._id === i.variantId);
+                    if (variant && variant.purchaseHistory && variant.purchaseHistory.length > 0) {
+                        const cost = variant.purchaseHistory[variant.purchaseHistory.length - 1].purchasingPrice;
+                        cogsMap[orderDate] += (cost * i.qty);
+                    }
+                }
+            }
+            // ---------------------------------------------
 
             let catName = 'Uncategorized';
             const invItem = currentInventory.find(inv => inv.name === i.name);
@@ -210,7 +225,7 @@ function updateAnalyticsRange(daysLimit) {
     });
 
     const revenueData = labels.map(label => revenueMap[label]);
-    const profitData = labels.map(label => revenueMap[label] - expenseMap[label]);
+    const profitData = labels.map(label => revenueMap[label] - cogsMap[label] - expenseMap[label]);
 
     renderChart(labels, revenueData, profitData);
 
