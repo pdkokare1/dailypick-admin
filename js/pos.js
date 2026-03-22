@@ -9,6 +9,90 @@ let currentGrandTotal = 0;
 // NEW: Phase 1 Accountability Shift tracking
 let currentActiveShift = null;
 
+// NEW: Loyalty Engine Tracking
+let currentCustomerProfile = null;
+let appliedLoyaltyPoints = 0;
+
+// Listen for phone input to fetch loyalty points automatically
+document.addEventListener('DOMContentLoaded', () => {
+    const phoneInput = document.getElementById('pos-customer-phone');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', async (e) => {
+            const phone = e.target.value.trim();
+            if (phone.length === 10) {
+                await fetchCustomerLoyalty(phone);
+            } else {
+                clearLoyaltyUI();
+            }
+        });
+    }
+});
+
+async function fetchCustomerLoyalty(phone) {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${phone}`);
+        const result = await res.json();
+        if (result.success && result.data) {
+            currentCustomerProfile = result.data;
+            renderLoyaltyBadge();
+        } else {
+            currentCustomerProfile = null;
+            clearLoyaltyUI();
+        }
+    } catch (e) {
+        console.error("Loyalty fetch error", e);
+    }
+}
+
+function renderLoyaltyBadge() {
+    clearLoyaltyUI(false); 
+    const phoneInput = document.getElementById('pos-customer-phone');
+    if (!phoneInput || !currentCustomerProfile || !currentCustomerProfile.loyaltyPoints) return;
+    
+    const points = currentCustomerProfile.loyaltyPoints;
+    if (points > 0) {
+        const badge = document.createElement('div');
+        badge.id = 'loyalty-badge-container';
+        badge.style.marginTop = '8px';
+        badge.style.display = 'flex';
+        badge.style.justifyContent = 'space-between';
+        badge.style.alignItems = 'center';
+        badge.style.background = '#f0fdf4';
+        badge.style.padding = '8px 12px';
+        badge.style.borderRadius = '8px';
+        badge.style.border = '1px solid #bbf7d0';
+        
+        badge.innerHTML = `
+            <span style="font-size: 12px; color: #16a34a; font-weight: 600;">⭐ ${points} Points Available</span>
+            <button type="button" class="primary-btn-small" style="background: ${appliedLoyaltyPoints > 0 ? '#ef4444' : '#22c55e'}; font-size: 10px; padding: 4px 8px;" onclick="toggleLoyaltyRedemption()">
+                ${appliedLoyaltyPoints > 0 ? 'Cancel' : 'Redeem'}
+            </button>
+        `;
+        phoneInput.parentNode.appendChild(badge);
+    }
+}
+
+function clearLoyaltyUI(resetPoints = true) {
+    const existing = document.getElementById('loyalty-badge-container');
+    if (existing) existing.remove();
+    if (resetPoints && appliedLoyaltyPoints > 0) {
+        appliedLoyaltyPoints = 0;
+        renderPosCart();
+    }
+}
+
+function toggleLoyaltyRedemption() {
+    if (appliedLoyaltyPoints > 0) {
+        appliedLoyaltyPoints = 0;
+    } else {
+        if (currentCustomerProfile && currentCustomerProfile.loyaltyPoints > 0) {
+            appliedLoyaltyPoints = currentCustomerProfile.loyaltyPoints;
+        }
+    }
+    renderLoyaltyBadge();
+    renderPosCart();
+}
+
 function startPosScanner() {
     if (posContinuousScanner) return;
     setTimeout(() => {
@@ -137,6 +221,9 @@ function updatePosCartItemQty(index, delta) {
 function clearPosCart() {
     posCart = [];
     document.getElementById('pos-customer-phone').value = '';
+    currentCustomerProfile = null;
+    appliedLoyaltyPoints = 0;
+    clearLoyaltyUI();
     renderPosCart();
 }
 
@@ -156,6 +243,10 @@ function renderPosCart() {
         if(subtotalEl) subtotalEl.innerText = '₹0.00';
         if(discountEl) discountEl.innerText = '-₹0.00';
         if(taxEl) taxEl.innerText = '₹0.00';
+        
+        let loyaltyLine = document.getElementById('pos-loyalty-line');
+        if(loyaltyLine) loyaltyLine.style.display = 'none';
+
         currentCalculatedTax = 0; currentCalculatedDiscount = 0; currentGrandTotal = 0;
         return;
     }
@@ -210,7 +301,14 @@ function renderPosCart() {
     }
 
     let hasExclusive = posCart.some(i => i.taxType === 'Exclusive');
-    let grandTotal = subtotal - totalDiscount + (hasExclusive ? totalTax : 0);
+    let preLoyaltyTotal = subtotal - totalDiscount + (hasExclusive ? totalTax : 0);
+    
+    // Ensure points redeemed don't exceed the cart total
+    if (appliedLoyaltyPoints > preLoyaltyTotal) {
+        appliedLoyaltyPoints = preLoyaltyTotal;
+    }
+
+    let grandTotal = preLoyaltyTotal - appliedLoyaltyPoints;
     
     currentCalculatedTax = totalTax;
     currentCalculatedDiscount = totalDiscount;
@@ -219,6 +317,31 @@ function renderPosCart() {
     if(subtotalEl) subtotalEl.innerText = `₹${subtotal.toFixed(2)}`;
     if(discountEl) discountEl.innerText = `-₹${totalDiscount.toFixed(2)}`;
     if(taxEl) taxEl.innerText = `₹${totalTax.toFixed(2)}`;
+
+    // Inject Loyalty Line dynamically if it doesn't exist yet
+    let loyaltyLine = document.getElementById('pos-loyalty-line');
+    if (!loyaltyLine && taxEl) {
+        const taxElContainer = taxEl.parentNode;
+        loyaltyLine = document.createElement('div');
+        loyaltyLine.id = 'pos-loyalty-line';
+        loyaltyLine.style.display = 'none';
+        loyaltyLine.style.justifyContent = 'space-between';
+        loyaltyLine.style.fontSize = '13px';
+        loyaltyLine.style.color = '#8b5cf6';
+        loyaltyLine.style.marginBottom = '4px';
+        loyaltyLine.innerHTML = `<span>Loyalty Redeemed:</span> <span id="pos-cart-loyalty">-₹0.00</span>`;
+        taxElContainer.parentNode.insertBefore(loyaltyLine, taxElContainer.nextSibling); 
+    }
+
+    if (loyaltyLine) {
+        if (appliedLoyaltyPoints > 0) {
+            loyaltyLine.style.display = 'flex';
+            document.getElementById('pos-cart-loyalty').innerText = `-₹${appliedLoyaltyPoints.toFixed(2)}`;
+        } else {
+            loyaltyLine.style.display = 'none';
+        }
+    }
+
     totalEl.innerText = `₹${grandTotal.toFixed(2)}`;
 }
 
@@ -325,6 +448,11 @@ function resumeHeldCart(index) {
     posCart = [...cart.items];
     document.getElementById('pos-customer-phone').value = cart.phone === 'Guest' ? '' : cart.phone;
     
+    // Automatically fetch loyalty if a phone number exists in the resumed cart
+    if (cart.phone !== 'Guest' && cart.phone.length === 10) {
+        fetchCustomerLoyalty(cart.phone);
+    }
+    
     heldCarts.splice(index, 1);
     localStorage.setItem('dailypick_held_carts', JSON.stringify(heldCarts));
     
@@ -343,7 +471,7 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
     
     const phone = document.getElementById('pos-customer-phone').value.trim();
 
-    // --- NEW: Khata Limit Enforcement ---
+    // --- Khata Limit Enforcement ---
     if (paymentMethod === 'Pay Later' && phone) {
         try {
             const res = await fetch(`${BACKEND_URL}/api/customers/profile/${phone}`);
@@ -362,16 +490,16 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
             console.warn("Could not verify Khata limit, proceeding anyway.");
         }
     }
-    // ------------------------------------
     
     const payload = {
         customerPhone: phone,
         items: posCart,
         totalAmount: currentGrandTotal,
-        taxAmount: currentCalculatedTax,           
+        taxAmount: currentCalculatedTax,            
         discountAmount: currentCalculatedDiscount, 
         paymentMethod: paymentMethod,
         splitDetails: splitDetails, 
+        pointsRedeemed: appliedLoyaltyPoints, // NEW: Include redeemed points
         timestamp: new Date().toISOString() 
     };
 
@@ -408,10 +536,11 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
             deliveryType: 'Instant',
             items: posCart,
             totalAmount: currentGrandTotal,
-            taxAmount: currentCalculatedTax,           
+            taxAmount: currentCalculatedTax,            
             discountAmount: currentCalculatedDiscount,
             paymentMethod: paymentMethod,
-            splitDetails: splitDetails
+            splitDetails: splitDetails,
+            pointsRedeemed: appliedLoyaltyPoints // NEW: Included in offline order
         };
         
         clearPosCart();
@@ -496,7 +625,7 @@ function processSplitPayment() {
     processPosCheckout('Split', { cash: cash, upi: upi });
 }
 
-// --- NEW: Phase 1 Shift Management & Accountability Functions ---
+// --- Phase 1 Shift Management & Accountability Functions ---
 async function checkCurrentShift() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/shifts/current`);
