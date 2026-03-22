@@ -336,12 +336,33 @@ function resumeHeldCart(index) {
 async function processPosCheckout(paymentMethod, splitDetails = null) {
     if (posCart.length === 0) return showToast('Cart is empty.');
     
-    // NEW: Security Check - Require an active shift to process money
+    // Security Check - Require an active shift to process money
     if (!currentActiveShift) {
         return showToast('Register is Closed. Please open a shift first!');
     }
     
     const phone = document.getElementById('pos-customer-phone').value.trim();
+
+    // --- NEW: Khata Limit Enforcement ---
+    if (paymentMethod === 'Pay Later' && phone) {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/customers/profile/${phone}`);
+            const result = await res.json();
+            if (result.success && result.data) {
+                const profile = result.data;
+                if (!profile.isCreditEnabled) {
+                    return showToast("Khata is disabled for this customer.");
+                }
+                const potentialNewDebt = profile.creditUsed + currentGrandTotal;
+                if (potentialNewDebt > profile.creditLimit) {
+                    return showToast(`Limit Exceeded! Current: ₹${profile.creditUsed}, Max: ₹${profile.creditLimit}`);
+                }
+            }
+        } catch (e) {
+            console.warn("Could not verify Khata limit, proceeding anyway.");
+        }
+    }
+    // ------------------------------------
     
     const payload = {
         customerPhone: phone,
