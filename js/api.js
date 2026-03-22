@@ -1,7 +1,8 @@
 // NEW: Added to store active promotions from Phase 1
 let currentPromotions = []; 
 
-function connectAdminLiveStream() {
+// MODIFIED: Added parameter for exponential backoff logic
+function connectAdminLiveStream(reconnectAttempts = 0) {
     if (adminEventSource) return; 
     
     adminEventSource = new EventSource(`${BACKEND_URL}/api/orders/stream/admin`);
@@ -17,10 +18,13 @@ function connectAdminLiveStream() {
     };
     
     adminEventSource.onerror = () => {
-        console.warn("SSE Connection lost. Reconnecting in 3s...");
+        console.warn("SSE Connection lost. Reconnecting...");
         adminEventSource.close();
         adminEventSource = null;
-        setTimeout(connectAdminLiveStream, 3000);
+        
+        // NEW: Exponential backoff calculation (max 30 seconds)
+        const delay = Math.min(3000 * Math.pow(2, reconnectAttempts), 30000);
+        setTimeout(() => connectAdminLiveStream(reconnectAttempts + 1), delay);
     };
 }
 
