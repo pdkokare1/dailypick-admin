@@ -13,7 +13,8 @@ async function exportOrdersCSV() {
         if (result.success) {
             if (result.data.length === 0) return showToast('No orders to export.');
             
-            let csvContent = "Order ID,Date,Customer Name,Phone,Address,Delivery Type,Total Amount,Payment Method,Status,Items\n";
+            // MODIFIED: Added Tax, Discount, and Points Redeemed columns
+            let csvContent = "Order ID,Date,Customer Name,Phone,Address,Delivery Type,Total Amount,Tax (INR),Discount (INR),Points Redeemed,Payment Method,Status,Items\n";
             result.data.forEach(o => {
                 const cleanName = (o.customerName || 'Guest').replace(/,/g, '');
                 const cleanPhone = o.customerPhone || '';
@@ -21,7 +22,8 @@ async function exportOrdersCSV() {
                 const date = new Date(o.createdAt).toLocaleString().replace(/,/g, '');
                 const itemsStr = o.items.map(i => `${i.qty}x ${i.name}`).join(' | ');
                 
-                csvContent += `${o._id},${date},${cleanName},${cleanPhone},${cleanAddress},${o.deliveryType},${o.totalAmount},${o.paymentMethod},${o.status},"${itemsStr}"\n`;
+                // MODIFIED: Appended the new data points safely defaulting to 0
+                csvContent += `${o._id},${date},${cleanName},${cleanPhone},${cleanAddress},${o.deliveryType},${o.totalAmount},${o.taxAmount || 0},${o.discountAmount || 0},${o.pointsRedeemed || 0},${o.paymentMethod},${o.status},"${itemsStr}"\n`;
             });
             
             triggerCSVDownload(csvContent, "dailypick_orders_export.csv");
@@ -85,17 +87,22 @@ async function exportFinancialsCSV(timeframe) {
                 }
                 
                 if (!groupedData[key]) {
-                    groupedData[key] = { orders: 0, revenue: 0 };
+                    // MODIFIED: Added tax, discount, points tracking
+                    groupedData[key] = { orders: 0, revenue: 0, tax: 0, discount: 0, points: 0 };
                 }
                 groupedData[key].orders += 1;
                 groupedData[key].revenue += o.totalAmount;
+                groupedData[key].tax += (o.taxAmount || 0);
+                groupedData[key].discount += (o.discountAmount || 0);
+                groupedData[key].points += (o.pointsRedeemed || 0);
             });
             
-            let csvContent = `Time Period (${timeframe}),Total Orders,Total Revenue (INR),Average Order Value (INR)\n`;
+            // MODIFIED: Added new columns to Financials export
+            let csvContent = `Time Period (${timeframe}),Total Orders,Total Revenue (INR),Total Tax (INR),Total Discount (INR),Points Redeemed,Average Order Value (INR)\n`;
             Object.keys(groupedData).forEach(key => {
                 const d = groupedData[key];
                 const aov = (d.revenue / d.orders).toFixed(2);
-                csvContent += `${key},${d.orders},${d.revenue},${aov}\n`;
+                csvContent += `${key},${d.orders},${d.revenue},${d.tax},${d.discount},${d.points},${aov}\n`;
             });
             
             triggerCSVDownload(csvContent, `dailypick_financials_${timeframe.toLowerCase()}.csv`);
@@ -164,6 +171,11 @@ function updateAnalyticsRange(daysLimit) {
     let cogsMap = {}; // Added to track Cost of Goods Sold
     let labels = [];
     
+    // NEW: Variables to track ROI metrics
+    let totalPeriodTax = 0;
+    let totalPeriodDiscount = 0;
+    let totalPeriodPoints = 0;
+    
     const pointsToGraph = Math.min(daysLimit, 30);
     for (let i = pointsToGraph - 1; i >= 0; i--) {
         const d = new Date(today);
@@ -180,6 +192,11 @@ function updateAnalyticsRange(daysLimit) {
     let hourlyDistribution = new Array(24).fill(0); 
 
     filteredOrders.forEach(o => {
+        // NEW: Aggregate ROI and Tax metrics
+        totalPeriodTax += (o.taxAmount || 0);
+        totalPeriodDiscount += (o.discountAmount || 0);
+        totalPeriodPoints += (o.pointsRedeemed || 0);
+
         const orderDate = new Date(o.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         if (revenueMap[orderDate] !== undefined) {
             revenueMap[orderDate] += o.totalAmount;
@@ -223,6 +240,42 @@ function updateAnalyticsRange(daysLimit) {
             expenseMap[exDate] += ex.amount;
         }
     });
+
+    // NEW: Inject KPI Row dynamically into the DOM above the charts
+    let kpiRow = document.getElementById('analytics-kpi-row');
+    if (!kpiRow) {
+        const dateRow = document.querySelector('.date-picker-row');
+        if (dateRow) {
+            kpiRow = document.createElement('div');
+            kpiRow.id = 'analytics-kpi-row';
+            kpiRow.style.marginBottom = '24px';
+            kpiRow.style.marginTop = '16px';
+            kpiRow.style.display = 'grid';
+            kpiRow.style.gridTemplateColumns = 'repeat(auto-fit, minmax(250px, 1fr))';
+            kpiRow.style.gap = '16px';
+            dateRow.parentNode.insertBefore(kpiRow, dateRow.nextSibling);
+        }
+    }
+    
+    if (kpiRow) {
+        kpiRow.innerHTML = `
+            <div class="stat-card" style="padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <h3 style="font-size: 12px; color: #991b1b; margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Promotions (Discounts)</h3>
+                <p style="font-size: 24px; font-weight: 800; color: #dc2626;">-₹${totalPeriodDiscount.toFixed(2)}</p>
+                <p style="font-size: 11px; color: #b91c1c; margin-top: 4px;">Revenue invested in offers</p>
+            </div>
+            <div class="stat-card" style="padding: 16px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <h3 style="font-size: 12px; color: #6b21a8; margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Loyalty Points Redeemed</h3>
+                <p style="font-size: 24px; font-weight: 800; color: #8b5cf6;">${totalPeriodPoints}</p>
+                <p style="font-size: 11px; color: #7e22ce; margin-top: 4px;">Points cashed in by customers</p>
+            </div>
+            <div class="stat-card" style="padding: 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <h3 style="font-size: 12px; color: #b45309; margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Tax Collected (GST)</h3>
+                <p style="font-size: 24px; font-weight: 800; color: #f59e0b;">₹${totalPeriodTax.toFixed(2)}</p>
+                <p style="font-size: 11px; color: #d97706; margin-top: 4px;">Total tax liability for period</p>
+            </div>
+        `;
+    }
 
     const revenueData = labels.map(label => revenueMap[label]);
     const profitData = labels.map(label => revenueMap[label] - cogsMap[label] - expenseMap[label]);
