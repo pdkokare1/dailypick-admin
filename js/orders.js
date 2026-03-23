@@ -24,19 +24,28 @@ function printReceipt() {
         </div>
     `).join('');
 
-    // --- NEW PHASE 4: Inject Tax and Discount fields if they exist in the order ---
+    // --- NEW PHASE 4 & 5: Inject Tax, Discount, and Loyalty fields ---
     let extraTotalsHtml = '';
-    if (activeOrder.taxAmount !== undefined || activeOrder.discountAmount !== undefined) {
+    if (activeOrder.taxAmount !== undefined || activeOrder.discountAmount !== undefined || activeOrder.pointsRedeemed !== undefined) {
         const tax = activeOrder.taxAmount || 0;
         const discount = activeOrder.discountAmount || 0;
-        const subtotal = activeOrder.totalAmount - tax + discount; 
+        const pts = activeOrder.pointsRedeemed || 0;
+        
+        // Note: The grand total in DB already has points/discounts subtracted, 
+        // so we calculate the gross subtotal for receipt display purposes.
+        const subtotal = activeOrder.totalAmount - tax + discount + pts; 
         
         extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Subtotal: ₹${subtotal.toFixed(2)}</div>`;
         if (discount > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal; color:#10b981;">Discount: -₹${discount.toFixed(2)}</div>`;
+        if (pts > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal; color:#8b5cf6;">Loyalty Redeemed: -₹${pts.toFixed(2)}</div>`;
         if (tax > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Tax (GST): ₹${tax.toFixed(2)}</div>`;
         extraTotalsHtml += `<hr style="border: 0; border-top: 1px dashed black; margin: 4px 0;">`;
     }
     // -----------------------------------------------------------------------------
+
+    // Calculate earned points (1 point per ₹100 spent)
+    const earnedPoints = Math.floor(activeOrder.totalAmount / 100);
+    const pointsHtml = `<div style="text-align: center; font-size: 13px; font-weight: bold; color: #16a34a; margin-top: 12px; padding-top: 8px; border-top: 1px dashed black;">⭐ You earned ${earnedPoints} Points on this order!</div>`;
 
     pContainer.innerHTML = `
         <div style="text-align: center; border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
@@ -59,6 +68,7 @@ function printReceipt() {
             TOTAL: ₹${activeOrder.totalAmount.toFixed(2)}<br>
             PAYMENT: ${activeOrder.paymentMethod}
         </div>
+        ${pointsHtml}
     `;
     
     window.print();
@@ -72,8 +82,11 @@ function sendWhatsAppReceipt() {
         return showToast("No valid phone number for this order.");
     }
 
+    const earnedPoints = Math.floor(activeOrder.totalAmount / 100);
+    const ptsText = (activeOrder.pointsRedeemed && activeOrder.pointsRedeemed > 0) ? `%0A*Pts Redeemed: -₹${activeOrder.pointsRedeemed.toFixed(2)}*` : '';
+    
     const itemsText = activeOrder.items.map(i => `${i.qty}x ${i.name} - ₹${(i.price * i.qty).toFixed(2)}`).join('%0A');
-    const text = `*DailyPick Receipt*%0AOrder ID: #${activeOrder._id.slice(-4).toUpperCase()}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: ₹${activeOrder.totalAmount.toFixed(2)}*%0APayment: ${activeOrder.paymentMethod}%0A%0AThank you for shopping with us!`;
+    const text = `*DailyPick Receipt*%0AOrder ID: #${activeOrder._id.slice(-4).toUpperCase()}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: ₹${activeOrder.totalAmount.toFixed(2)}*${ptsText}%0APayment: ${activeOrder.paymentMethod}%0A%0A⭐ You earned ${earnedPoints} Points!%0A%0AThank you for shopping with us!`;
 
     window.open(`https://wa.me/91${phone}?text=${text}`, '_blank');
 }
@@ -412,29 +425,25 @@ async function markOrderDispatched() {
     }
 }
 
-// --- NEW PHASE 4: Web Serial API for Raw Thermal Printing ---
+// --- Web Serial API for Raw Thermal Printing ---
 async function printHardwareReceipt() {
     if (!activeOrder) return showToast("No active order to print.");
     
-    // Check if browser supports Web Serial (Chrome/Edge desktop)
     if (!('serial' in navigator)) {
         return showToast("Hardware printing requires Chrome or Edge on Desktop.");
     }
     
     try {
-        // Prompts the user to select their plugged-in USB printer
         const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 9600 }); // Standard baud rate for POS printers
+        await port.open({ baudRate: 9600 }); 
         
         const writer = port.writable.getWriter();
         const encoder = new TextEncoder();
         
-        // Standard ESC/POS commands
         const init = encoder.encode('\x1B\x40'); 
         const alignLeft = encoder.encode('\x1B\x61\x00');
         const cutPaper = encoder.encode('\x1D\x56\x00');
         
-        // Build the receipt text specifically for 58mm/80mm thermal paper
         let text = "          DAILYPICK          \n";
         text += `Order #${activeOrder._id.toString().slice(-4).toUpperCase()}\n`;
         text += `Date: ${new Date(activeOrder.createdAt).toLocaleString()}\n`;
@@ -447,21 +456,26 @@ async function printHardwareReceipt() {
         
         text += "--------------------------------\n";
         
-        if (activeOrder.taxAmount !== undefined || activeOrder.discountAmount !== undefined) {
+        if (activeOrder.taxAmount !== undefined || activeOrder.discountAmount !== undefined || activeOrder.pointsRedeemed !== undefined) {
             const tax = activeOrder.taxAmount || 0;
             const discount = activeOrder.discountAmount || 0;
-            const subtotal = activeOrder.totalAmount - tax + discount;
+            const pts = activeOrder.pointsRedeemed || 0;
+            const subtotal = activeOrder.totalAmount - tax + discount + pts;
+            
             text += `Subtotal: Rs. ${subtotal.toFixed(2)}\n`;
             if (discount > 0) text += `Discount: -Rs. ${discount.toFixed(2)}\n`;
+            if (pts > 0) text += `Pts Redeemed: -Rs. ${pts.toFixed(2)}\n`;
             if (tax > 0) text += `Tax (GST): Rs. ${tax.toFixed(2)}\n`;
         }
         
         text += `GRAND TOTAL: Rs. ${activeOrder.totalAmount.toFixed(2)}\n`;
         text += `Payment: ${activeOrder.paymentMethod}\n`;
         text += "--------------------------------\n";
+        
+        const earnedPoints = Math.floor(activeOrder.totalAmount / 100);
+        text += `*** You earned ${earnedPoints} Points! ***\n`;
         text += "     Thank you for shopping!    \n\n\n\n";
         
-        // Send commands to printer
         await writer.write(init);
         await writer.write(alignLeft);
         await writer.write(encoder.encode(text));
