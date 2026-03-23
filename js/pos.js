@@ -13,6 +13,9 @@ let currentActiveShift = null;
 let currentCustomerProfile = null;
 let appliedLoyaltyPoints = 0;
 
+// NEW: Safety Lock to prevent double-charging on slow networks
+let isProcessingCheckout = false;
+
 // Listen for phone input to fetch loyalty points automatically
 document.addEventListener('DOMContentLoaded', () => {
     const phoneInput = document.getElementById('pos-customer-phone');
@@ -462,6 +465,7 @@ function resumeHeldCart(index) {
 }
 
 async function processPosCheckout(paymentMethod, splitDetails = null) {
+    if (isProcessingCheckout) return showToast('Transaction in progress, please wait...');
     if (posCart.length === 0) return showToast('Cart is empty.');
     
     // Security Check - Require an active shift to process money
@@ -469,6 +473,7 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         return showToast('Register is Closed. Please open a shift first!');
     }
     
+    isProcessingCheckout = true; // Lock UI
     const phone = document.getElementById('pos-customer-phone').value.trim();
 
     // --- Khata Limit Enforcement ---
@@ -479,10 +484,12 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
             if (result.success && result.data) {
                 const profile = result.data;
                 if (!profile.isCreditEnabled) {
+                    isProcessingCheckout = false;
                     return showToast("Khata is disabled for this customer.");
                 }
                 const potentialNewDebt = profile.creditUsed + currentGrandTotal;
                 if (potentialNewDebt > profile.creditLimit) {
+                    isProcessingCheckout = false;
                     return showToast(`Limit Exceeded! Current: ₹${profile.creditUsed}, Max: ₹${profile.creditLimit}`);
                 }
             }
@@ -545,6 +552,8 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         
         clearPosCart();
         renderOverview(); 
+    } finally {
+        isProcessingCheckout = false; // Unlock UI securely
     }
 }
 
@@ -664,9 +673,11 @@ function closeShiftModal() {
 }
 
 async function submitOpenShift() {
+    if (isProcessingCheckout) return;
     const floatAmt = document.getElementById('shift-starting-float').value;
     if (!floatAmt || floatAmt < 0) return showToast("Enter a valid starting float amount.");
     
+    isProcessingCheckout = true;
     try {
         const res = await fetch(`${BACKEND_URL}/api/shifts/open`, {
             method: 'POST',
@@ -686,13 +697,17 @@ async function submitOpenShift() {
         }
     } catch(e) {
         showToast('Network error opening shift.');
+    } finally {
+        isProcessingCheckout = false;
     }
 }
 
 async function submitCloseShift() {
+    if (isProcessingCheckout) return;
     const actualCash = document.getElementById('shift-actual-cash').value;
     if (!actualCash) return showToast("Enter the actual physical cash counted.");
     
+    isProcessingCheckout = true;
     try {
         const res = await fetch(`${BACKEND_URL}/api/shifts/close`, {
             method: 'PUT',
@@ -714,5 +729,7 @@ async function submitCloseShift() {
         }
     } catch(e) {
         showToast('Network error closing shift.');
+    } finally {
+        isProcessingCheckout = false;
     }
 }
