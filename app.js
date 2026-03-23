@@ -56,8 +56,9 @@ function updatePinDisplay() {
         const dot = document.getElementById(`pin-dot-${i}`);
         if (dot) {
             if (i <= currentPin.length) {
-                // Hardcoding the blue hex color to bypass any CSS variable mapping issues
-                dot.style.background = '#3b82f6'; 
+                // MODIFIED: dynamically reads CSS variable with a safe hardcoded fallback
+                const dynamicColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
+                dot.style.background = dynamicColor || '#3b82f6'; 
             } else {
                 dot.style.background = 'transparent';
             }
