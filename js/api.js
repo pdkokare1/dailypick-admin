@@ -61,6 +61,8 @@ async function fetchCategories() {
         }
     } catch (e) { 
         console.error("Error loading categories", e); 
+        // ADDED: Visible UI notification for fetch errors
+        if (typeof showToast === 'function') showToast("Error loading categories from server");
     }
 }
 
@@ -78,6 +80,8 @@ async function fetchBrands() {
         }
     } catch (e) { 
         console.error("Error loading brands", e); 
+        // ADDED: Visible UI notification for fetch errors
+        if (typeof showToast === 'function') showToast("Error loading brands from server");
     }
 }
 
@@ -96,6 +100,8 @@ async function fetchDistributors() {
         }
     } catch (e) { 
         console.error("Error loading distributors", e); 
+        // ADDED: Visible UI notification for fetch errors
+        if (typeof showToast === 'function') showToast("Error loading distributors from server");
     }
 }
 
@@ -109,6 +115,8 @@ async function fetchPromotions() {
         }
     } catch (e) {
         console.error("Error loading promotions", e);
+        // ADDED: Visible UI notification for fetch errors
+        if (typeof showToast === 'function') showToast("Error loading promotions from server");
     }
 }
 // -----------------------------
