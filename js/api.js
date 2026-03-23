@@ -98,7 +98,6 @@ async function fetchDistributors() {
     }
 }
 
-// --- NEW: PHASE 2 FUNCTION ---
 async function fetchPromotions() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/promotions?all=false`);
@@ -111,4 +110,39 @@ async function fetchPromotions() {
         if (typeof showToast === 'function') showToast("Error loading promotions from server");
     }
 }
-// -----------------------------
+
+// --- NEW: CSV Data Export Connectors ---
+function exportOrdersCSV() {
+    window.open(`${BACKEND_URL}/api/orders/export`, '_blank');
+}
+
+function exportCustomersCSV() {
+    window.open(`${BACKEND_URL}/api/customers/export`, '_blank');
+}
+
+function exportInventoryCSV() {
+    window.open(`${BACKEND_URL}/api/products/export`, '_blank');
+}
+
+// --- NEW: Soft Deletes (Archive) API Call ---
+async function archiveProduct(id, event) {
+    if(event) event.stopPropagation();
+    if(!confirm("Are you sure you want to archive this product? It will be hidden from the store without breaking historical sales data.")) return;
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/products/${id}/archive`, { method: 'PUT' });
+        const result = await res.json();
+        if(result.success) {
+            if(typeof showToast === 'function') showToast("Product archived securely.");
+            if(typeof fetchInventory === 'function') {
+                inventoryPage = 1;
+                fetchInventory();
+            }
+        } else {
+            if(typeof showToast === 'function') showToast(result.message || 'Error archiving.');
+        }
+    } catch (e) {
+        console.error("Archive error", e);
+        if(typeof showToast === 'function') showToast("Error archiving product.");
+    }
+}
