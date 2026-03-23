@@ -1,8 +1,8 @@
 // NEW: Added to store active promotions from Phase 1
 let currentPromotions = []; 
 
-// MODIFIED: Added parameter for exponential backoff logic
-function connectAdminLiveStream(reconnectAttempts = 0) {
+// MODIFIED: Removed custom exponential backoff logic to rely on native browser auto-reconnect
+function connectAdminLiveStream() {
     if (adminEventSource) return; 
     
     adminEventSource = new EventSource(`${BACKEND_URL}/api/orders/stream/admin`);
@@ -17,14 +17,10 @@ function connectAdminLiveStream(reconnectAttempts = 0) {
         }
     };
     
-    adminEventSource.onerror = () => {
-        console.warn("SSE Connection lost. Reconnecting...");
-        adminEventSource.close();
-        adminEventSource = null;
-        
-        // NEW: Exponential backoff calculation (max 30 seconds)
-        const delay = Math.min(3000 * Math.pow(2, reconnectAttempts), 30000);
-        setTimeout(() => connectAdminLiveStream(reconnectAttempts + 1), delay);
+    adminEventSource.onerror = (error) => {
+        // DELETED: adminEventSource.close() and setTimeout exponential backoff logic.
+        // EFFECT: Prevents duplicate "ghost" streams. The browser's native EventSource automatically reconnects.
+        console.warn("SSE Connection interrupted. Browser is handling auto-reconnection...", error);
     };
 }
 
@@ -61,7 +57,6 @@ async function fetchCategories() {
         }
     } catch (e) { 
         console.error("Error loading categories", e); 
-        // ADDED: Visible UI notification for fetch errors
         if (typeof showToast === 'function') showToast("Error loading categories from server");
     }
 }
@@ -80,7 +75,6 @@ async function fetchBrands() {
         }
     } catch (e) { 
         console.error("Error loading brands", e); 
-        // ADDED: Visible UI notification for fetch errors
         if (typeof showToast === 'function') showToast("Error loading brands from server");
     }
 }
@@ -100,7 +94,6 @@ async function fetchDistributors() {
         }
     } catch (e) { 
         console.error("Error loading distributors", e); 
-        // ADDED: Visible UI notification for fetch errors
         if (typeof showToast === 'function') showToast("Error loading distributors from server");
     }
 }
@@ -115,7 +108,6 @@ async function fetchPromotions() {
         }
     } catch (e) {
         console.error("Error loading promotions", e);
-        // ADDED: Visible UI notification for fetch errors
         if (typeof showToast === 'function') showToast("Error loading promotions from server");
     }
 }
