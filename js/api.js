@@ -1,11 +1,37 @@
 // NEW: Added to store active promotions from Phase 1
 let currentPromotions = []; 
 
-// MODIFIED: Removed custom exponential backoff logic to rely on native browser auto-reconnect
+// --- NEW: Authentication Wrapper for Admin Requests ---
+async function adminFetchWithAuth(url, options = {}) {
+    const token = localStorage.getItem('adminToken'); // Assumes token is saved here on login
+    
+    // Initialize headers if they don't exist
+    options.headers = options.headers || {};
+    
+    // Attach JWT Token
+    if (token) {
+        options.headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const response = await fetch(url, options);
+    
+    // Global Error Intercepting for Security
+    if (response.status === 401 || response.status === 403) {
+        console.warn('Authentication failed for:', url);
+        if (typeof showToast === 'function') {
+            showToast('Session Expired or Access Denied. Please log in again.');
+        }
+    }
+    
+    return response;
+}
+
+// MODIFIED: Appended token to URL because EventSource cannot send Headers
 function connectAdminLiveStream() {
     if (adminEventSource) return; 
     
-    adminEventSource = new EventSource(`${BACKEND_URL}/api/orders/stream/admin`);
+    const token = localStorage.getItem('adminToken') || '';
+    adminEventSource = new EventSource(`${BACKEND_URL}/api/orders/stream/admin?token=${token}`);
     
     adminEventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -18,13 +44,10 @@ function connectAdminLiveStream() {
     };
     
     adminEventSource.onerror = (error) => {
-        // DELETED: adminEventSource.close() and setTimeout exponential backoff logic.
-        // EFFECT: Prevents duplicate "ghost" streams. The browser's native EventSource automatically reconnects.
         console.warn("SSE Connection interrupted. Browser is handling auto-reconnection...", error);
     };
 }
 
-// DRY Optimization: Helper function to populate select dropdowns
 function populateDropdowns(data, selectConfigs) {
     selectConfigs.forEach(config => {
         const select = document.getElementById(config.id);
@@ -43,9 +66,10 @@ function populateDropdowns(data, selectConfigs) {
     });
 }
 
+// MODIFIED: Now uses adminFetchWithAuth
 async function fetchCategories() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/categories`);
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/categories`);
         const result = await res.json();
         
         if (result.success) { 
@@ -61,9 +85,10 @@ async function fetchCategories() {
     }
 }
 
+// MODIFIED: Now uses adminFetchWithAuth
 async function fetchBrands() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/brands`);
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/brands`);
         const result = await res.json();
         
         if (result.success) {
@@ -79,9 +104,10 @@ async function fetchBrands() {
     }
 }
 
+// MODIFIED: Now uses adminFetchWithAuth
 async function fetchDistributors() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/distributors`);
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/distributors`);
         const result = await res.json();
         
         if (result.success) {
@@ -98,9 +124,10 @@ async function fetchDistributors() {
     }
 }
 
+// MODIFIED: Now uses adminFetchWithAuth
 async function fetchPromotions() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/promotions?all=false`);
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/promotions?all=false`);
         const result = await res.json();
         if (result.success) {
             currentPromotions = result.data;
@@ -111,7 +138,6 @@ async function fetchPromotions() {
     }
 }
 
-// --- NEW: CSV Data Export Connectors ---
 function exportOrdersCSV() {
     window.open(`${BACKEND_URL}/api/orders/export`, '_blank');
 }
@@ -124,13 +150,13 @@ function exportInventoryCSV() {
     window.open(`${BACKEND_URL}/api/products/export`, '_blank');
 }
 
-// --- NEW: Soft Deletes (Archive) API Call ---
+// MODIFIED: Now uses adminFetchWithAuth
 async function archiveProduct(id, event) {
     if(event) event.stopPropagation();
     if(!confirm("Are you sure you want to archive this product? It will be hidden from the store without breaking historical sales data.")) return;
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/products/${id}/archive`, { method: 'PUT' });
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/products/${id}/archive`, { method: 'PUT' });
         const result = await res.json();
         if(result.success) {
             if(typeof showToast === 'function') showToast("Product archived securely.");
