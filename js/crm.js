@@ -1,3 +1,5 @@
+/* js/crm.js */
+
 async function fetchCustomers() {
     const feed = document.getElementById('crm-feed');
     feed.innerHTML = '<p class="empty-state">Loading customers...</p>';
@@ -234,20 +236,13 @@ async function submitPayment() {
     }
 }
 
-// --- NEW PHASE 5: Khata Reminders Logic ---
+// --- Phase 5: Khata Reminders Logic ---
 async function openKhataReminders() {
     document.getElementById('khata-reminders-modal').classList.add('active');
     const container = document.getElementById('khata-reminders-list');
     container.innerHTML = '<p class="empty-state">Scanning customer ledgers...</p>';
 
     try {
-        // Fetch the raw CRM data (since your backend handles profiling on interaction, we'll scan the DB locally for now, 
-        // or call an endpoint if you create one. Since we are strictly not deleting/altering backend logic without permission, 
-        // we will fetch all profiles or simulate it if a dedicated endpoint isn't built yet).
-        
-        // For Option A, we will assume you have a 'customers' endpoint or we'll filter local data.
-        // If your GET /api/orders/customers doesn't include creditUsed, you might need a dedicated route later.
-        // Assuming your backend has a /api/customers endpoint based on the Customer model uploaded:
         const res = await fetch(`${BACKEND_URL}/api/customers`); 
         
         if (res.ok) {
@@ -275,12 +270,13 @@ async function openKhataReminders() {
                 `;
             });
         } else {
-            container.innerHTML = '<p class="empty-state">Please create the GET /api/customers route in backend to load debtors.</p>';
+            container.innerHTML = '<p class="empty-state">Failed to load Khata debtors.</p>';
         }
     } catch (e) {
         container.innerHTML = '<p class="empty-state">Network Error fetching ledgers.</p>';
     }
 }
+
 function closeKhataReminders() {
     document.getElementById('khata-reminders-modal').classList.remove('active');
 }
