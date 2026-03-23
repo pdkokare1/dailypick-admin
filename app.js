@@ -44,7 +44,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Keyboard support for PIN entry
 document.addEventListener('keydown', (e) => {
     const overlay = document.getElementById('pin-login-overlay');
-    if (overlay && overlay.style.display !== 'none') {
+    // Ensure we don't capture keydown if the user is typing in the username input
+    if (overlay && overlay.style.display !== 'none' && document.activeElement.id !== 'login-username') {
         if (e.key >= '0' && e.key <= '9') {
             window.handlePinInput(e.key);
         } else if (e.key === 'Backspace' || e.key === 'Delete') {
@@ -87,6 +88,17 @@ function updatePinDisplay() {
 
 window.submitPinLogin = async function() {
     console.log("Submitting PIN to backend...");
+    
+    const usernameInput = document.getElementById('login-username');
+    const username = usernameInput ? usernameInput.value.trim() : '';
+
+    if (!username) {
+        if (typeof showToast === 'function') showToast("Please enter your Username");
+        window.clearPinInput();
+        if (usernameInput) usernameInput.focus();
+        return;
+    }
+
     try {
         if (typeof BACKEND_URL === 'undefined') {
             console.error("BACKEND_URL is not defined! Check state.js");
@@ -98,7 +110,7 @@ window.submitPinLogin = async function() {
         const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pin: currentPin })
+            body: JSON.stringify({ username: username, pin: currentPin })
         });
         
         const result = await res.json();
@@ -109,11 +121,16 @@ window.submitPinLogin = async function() {
             localStorage.setItem('dailypick_user', JSON.stringify(currentUser));
             const overlay = document.getElementById('pin-login-overlay');
             if (overlay) overlay.style.display = 'none';
+            
+            // Clear inputs for security
+            if (usernameInput) usernameInput.value = '';
+            window.clearPinInput();
+
             applyRoleRestrictions();
             initializeApp();
             if (typeof showToast === 'function') showToast(`Welcome, ${currentUser.name}!`);
         } else {
-            if (typeof showToast === 'function') showToast(result.message || 'Invalid PIN');
+            if (typeof showToast === 'function') showToast(result.message || 'Invalid Username or PIN');
             window.clearPinInput();
         }
     } catch (e) {
