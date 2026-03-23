@@ -1,7 +1,11 @@
 /* js/orders.js */
 
-let currentOrderDateFilter = 'All'; // NEW PHASE 3
-let isProcessingOrderAction = false; // NEW: Prevent duplicate order actions
+let currentOrderDateFilter = 'All'; 
+let currentOrderTab = 'All'; 
+let isProcessingOrderAction = false; 
+let ordersPage = 1;
+let globalPendingCount = 0;
+let globalPendingRevenue = 0;
 
 function setOrderDateFilter(range) {
     currentOrderDateFilter = range;
@@ -11,7 +15,20 @@ function setOrderDateFilter(range) {
     });
     const activeEl = document.getElementById(`date-${range}`);
     if(activeEl) activeEl.classList.add('active');
-    updateDashboard();
+    
+    ordersPage = 1;
+    fetchOrders();
+}
+
+function setOrderTab(tab) {
+    currentOrderTab = tab;
+    document.getElementById('tab-All').classList.remove('active');
+    document.getElementById('tab-Instant').classList.remove('active');
+    document.getElementById('tab-Routine').classList.remove('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    
+    ordersPage = 1;
+    fetchOrders();
 }
 
 function printReceipt() {
@@ -25,15 +42,12 @@ function printReceipt() {
         </div>
     `).join('');
 
-    // --- NEW PHASE 4 & 5: Inject Tax, Discount, and Loyalty fields ---
     let extraTotalsHtml = '';
     if (activeOrder.taxAmount !== undefined || activeOrder.discountAmount !== undefined || activeOrder.pointsRedeemed !== undefined) {
         const tax = activeOrder.taxAmount || 0;
         const discount = activeOrder.discountAmount || 0;
         const pts = activeOrder.pointsRedeemed || 0;
         
-        // Note: The grand total in DB already has points/discounts subtracted, 
-        // so we calculate the gross subtotal for receipt display purposes.
         const subtotal = activeOrder.totalAmount - tax + discount + pts; 
         
         extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Subtotal: ₹${subtotal.toFixed(2)}</div>`;
@@ -42,9 +56,7 @@ function printReceipt() {
         if (tax > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Tax (GST): ₹${tax.toFixed(2)}</div>`;
         extraTotalsHtml += `<hr style="border: 0; border-top: 1px dashed black; margin: 4px 0;">`;
     }
-    // -----------------------------------------------------------------------------
 
-    // Calculate earned points (1 point per ₹100 spent)
     const earnedPoints = Math.floor(activeOrder.totalAmount / 100);
     const pointsHtml = `<div style="text-align: center; font-size: 13px; font-weight: bold; color: #16a34a; margin-top: 12px; padding-top: 8px; border-top: 1px dashed black;">⭐ You earned ${earnedPoints} Points on this order!</div>`;
 
@@ -100,6 +112,12 @@ async function cancelOrder() {
 
     isProcessingOrderAction = true;
     const targetOrderId = activeOrder._id;
+
+    if (activeOrder.status === 'Order Placed' || activeOrder.status === 'Packing') {
+        globalPendingCount = Math.max(0, globalPendingCount - 1);
+        globalPendingRevenue = Math.max(0, globalPendingRevenue - activeOrder.totalAmount);
+    }
+
     currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
     selectedOrders.delete(targetOrderId);
     
@@ -130,27 +148,53 @@ async function cancelOrder() {
     }
 }
 
+// --- OPTIMIZED: Paginated Fetch Request ---
 async function fetchOrders() {
+    const feed = document.getElementById('orders-list-view');
+    if (ordersPage === 1 && feed) {
+        feed.innerHTML = '<p class="empty-state">Loading orders...</p>';
+    }
+
+    const loadBtn = document.getElementById('load-more-orders-btn');
+    if (loadBtn) { loadBtn.innerText = 'Loading...'; loadBtn.disabled = true; }
+
     try {
-        const res = await fetch(`${BACKEND_URL}/api/orders`);
+        let url = `${BACKEND_URL}/api/orders?page=${ordersPage}&limit=30`;
+        if (currentOrderTab !== 'All') url += `&tab=${currentOrderTab}`;
+        if (currentOrderDateFilter !== 'All') url += `&dateFilter=${currentOrderDateFilter}`;
+
+        const res = await fetch(url);
         const result = await res.json();
+        
         if (result.success) {
-            currentOrders = result.data;
-            updateDashboard();
-            connectAdminLiveStream(); 
+            if (ordersPage === 1) {
+                currentOrders = result.data;
+            } else {
+                currentOrders = [...currentOrders, ...result.data];
+            }
+
+            if (result.stats) {
+                globalPendingCount = result.stats.pendingCount;
+                globalPendingRevenue = result.stats.pendingRevenue;
+            }
+
+            updateDashboard(result.data.length < 30);
+            
+            if (typeof connectAdminLiveStream === 'function' && !window.adminStreamConnected) {
+                connectAdminLiveStream();
+                window.adminStreamConnected = true;
+            }
         }
     } catch (e) { 
         console.error("Order Fetch Error:", e); 
+    } finally {
+        if (loadBtn) { loadBtn.innerText = 'Load More Orders'; loadBtn.disabled = false; }
     }
 }
 
-function setOrderTab(tab) {
-    currentOrderTab = tab;
-    document.getElementById('tab-All').classList.remove('active');
-    document.getElementById('tab-Instant').classList.remove('active');
-    document.getElementById('tab-Routine').classList.remove('active');
-    document.getElementById(`tab-${tab}`).classList.add('active');
-    updateDashboard();
+function loadMoreOrders() {
+    ordersPage++;
+    fetchOrders();
 }
 
 function toggleOrderLayout(layout) {
@@ -159,14 +203,17 @@ function toggleOrderLayout(layout) {
     document.getElementById('layout-kanban').classList.remove('active');
     document.getElementById(`layout-${layout}`).classList.add('active');
     
+    const ordersFeed = document.getElementById('orders-list-view');
+    const ordersKanban = document.getElementById('orders-kanban-view');
+
     if (layout === 'kanban') {
-        ordersFeed.classList.add('hidden');
-        ordersKanban.classList.remove('hidden');
+        if(ordersFeed) ordersFeed.classList.add('hidden');
+        if(ordersKanban) ordersKanban.classList.remove('hidden');
     } else {
-        ordersFeed.classList.remove('hidden');
-        ordersKanban.classList.add('hidden');
+        if(ordersFeed) ordersFeed.classList.remove('hidden');
+        if(ordersKanban) ordersKanban.classList.add('hidden');
     }
-    updateDashboard();
+    updateDashboard(document.getElementById('load-more-orders-btn')?.classList.contains('hidden'));
 }
 
 function toggleOrderSelection(orderId, event) {
@@ -204,7 +251,11 @@ async function bulkDispatchOrders() {
         
         idsToDispatch.forEach(id => {
             const o = currentOrders.find(ord => ord._id === id);
-            if(o) o.status = 'Dispatched';
+            if(o && (o.status === 'Order Placed' || o.status === 'Packing')) {
+                globalPendingCount = Math.max(0, globalPendingCount - 1);
+                globalPendingRevenue = Math.max(0, globalPendingRevenue - o.totalAmount);
+                o.status = 'Dispatched';
+            }
         });
         
         selectedOrders.clear();
@@ -223,7 +274,13 @@ async function updateOrderStatus(orderId, newStatus, event) {
     
     isProcessingOrderAction = true;
     const order = currentOrders.find(o => o._id === orderId);
-    if(order) order.status = newStatus;
+    if(order) {
+        if ((order.status === 'Order Placed' || order.status === 'Packing') && (newStatus === 'Dispatched' || newStatus === 'Completed' || newStatus === 'Cancelled')) {
+            globalPendingCount = Math.max(0, globalPendingCount - 1);
+            globalPendingRevenue = Math.max(0, globalPendingRevenue - order.totalAmount);
+        }
+        order.status = newStatus;
+    }
     updateDashboard();
     showToast(`Order marked as ${newStatus}`);
 
@@ -243,41 +300,52 @@ async function updateOrderStatus(orderId, newStatus, event) {
     }
 }
 
-function updateDashboard() {
-    const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
-    dailyRevenueEl.innerText = `₹${trulyPending.reduce((s, o) => s + o.totalAmount, 0)}`;
-    pendingCountEl.innerText = trulyPending.length;
+// --- NEW: Safe pagination rendering using Global Stats ---
+function updateDashboard(isLastPage = true) {
+    const dailyRevenueEl = document.getElementById('daily-revenue');
+    const pendingCountEl = document.getElementById('pending-count');
+    
+    if (dailyRevenueEl) dailyRevenueEl.innerText = `₹${globalPendingRevenue}`;
+    if (pendingCountEl) pendingCountEl.innerText = globalPendingCount;
     
     let displayOrders = currentOrders.filter(o => o.status !== 'Cancelled' && o.status !== 'Completed');
-    if (currentOrderTab === 'Instant') displayOrders = displayOrders.filter(o => o.deliveryType !== 'Routine');
-    if (currentOrderTab === 'Routine') displayOrders = displayOrders.filter(o => o.deliveryType === 'Routine');
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    if (currentOrderDateFilter === 'Today') {
-        displayOrders = displayOrders.filter(o => new Date(o.createdAt) >= today);
-    } else if (currentOrderDateFilter === 'Yesterday') {
-        displayOrders = displayOrders.filter(o => new Date(o.createdAt) >= yesterday && new Date(o.createdAt) < today);
-    } else if (currentOrderDateFilter === '7Days') {
-        displayOrders = displayOrders.filter(o => new Date(o.createdAt) >= sevenDaysAgo);
-    }
 
     if (currentOrderLayout === 'list') {
         renderListView(displayOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing'));
+        
+        let loadBtn = document.getElementById('load-more-orders-btn');
+        const feed = document.getElementById('orders-list-view');
+        
+        if (!loadBtn && feed) {
+            loadBtn = document.createElement('button');
+            loadBtn.id = 'load-more-orders-btn';
+            loadBtn.className = 'load-more-btn';
+            loadBtn.onclick = loadMoreOrders;
+            loadBtn.innerText = 'Load More Orders';
+            feed.parentNode.insertBefore(loadBtn, feed.nextSibling);
+        }
+        if (loadBtn) {
+            if (isLastPage) loadBtn.classList.add('hidden');
+            else loadBtn.classList.remove('hidden');
+        }
     } else {
         renderKanbanView(displayOrders);
+        const loadBtn = document.getElementById('load-more-orders-btn');
+        if(loadBtn) loadBtn.classList.add('hidden');
     }
     
     updateBulkDispatchUI();
-    if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); 
+    
+    const overviewView = document.getElementById('overview-view');
+    if (overviewView && overviewView.classList.contains('active') && typeof renderOverview === 'function') {
+        renderOverview(); 
+    }
 }
 
 function renderListView(orders) {
+    const ordersFeed = document.getElementById('orders-list-view');
+    if(!ordersFeed) return;
+    
     ordersFeed.innerHTML = '';
     if (orders.length === 0) { 
         ordersFeed.innerHTML = `<p class="empty-state">No active orders in ${currentOrderTab} / ${currentOrderDateFilter}.</p>`; 
@@ -322,6 +390,8 @@ function renderKanbanView(orders) {
     const colNew = document.getElementById('kb-col-new');
     const colPack = document.getElementById('kb-col-pack');
     const colDisp = document.getElementById('kb-col-disp');
+
+    if(!colNew || !colPack || !colDisp) return;
 
     colNew.innerHTML = ''; colPack.innerHTML = ''; colDisp.innerHTML = '';
     let countNew = 0, countPack = 0, countDisp = 0;
@@ -406,11 +476,13 @@ function openOrderModal(order) {
         listEl.appendChild(li);
     });
     
-    orderModalOverlay.classList.add('active');
+    const orderModalOverlay = document.getElementById('order-modal-overlay');
+    if(orderModalOverlay) orderModalOverlay.classList.add('active');
 }
 
 function closeOrderModal() { 
-    orderModalOverlay.classList.remove('active'); 
+    const orderModalOverlay = document.getElementById('order-modal-overlay');
+    if(orderModalOverlay) orderModalOverlay.classList.remove('active'); 
 }
 
 async function markOrderDispatched() {
@@ -421,7 +493,13 @@ async function markOrderDispatched() {
     const targetOrderId = activeOrder._id;
     
     const localOrder = currentOrders.find(o => o._id === targetOrderId);
-    if(localOrder) localOrder.status = 'Dispatched';
+    if(localOrder) {
+        if (localOrder.status === 'Order Placed' || localOrder.status === 'Packing') {
+            globalPendingCount = Math.max(0, globalPendingCount - 1);
+            globalPendingRevenue = Math.max(0, globalPendingRevenue - localOrder.totalAmount);
+        }
+        localOrder.status = 'Dispatched';
+    }
     
     selectedOrders.delete(targetOrderId);
     closeOrderModal(); 
@@ -438,7 +516,6 @@ async function markOrderDispatched() {
     }
 }
 
-// --- Web Serial API for Raw Thermal Printing ---
 async function printHardwareReceipt() {
     if (!activeOrder) return showToast("No active order to print.");
     
