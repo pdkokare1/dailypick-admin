@@ -4,7 +4,7 @@ let currentUser = null;
 let currentPin = '';
 
 // Intercept app initialization to enforce Security PIN
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     console.log("App initializing, checking for saved session...");
     const savedUser = localStorage.getItem('dailypick_user');
     const overlay = document.getElementById('pin-login-overlay');
@@ -12,9 +12,29 @@ document.addEventListener("DOMContentLoaded", () => {
     if (savedUser) {
         console.log("Found saved session:", savedUser);
         currentUser = JSON.parse(savedUser);
+        
+        // Optimistically load the app so the UI doesn't freeze
         if (overlay) overlay.style.display = 'none';
         applyRoleRestrictions();
         initializeApp();
+
+        // MODIFIED: Added a silent background check to verify the session hasn't been tampered with.
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/auth/verify?id=${currentUser._id || currentUser.id}`);
+            const result = await res.json();
+            
+            // If the backend says this user is invalid or their role doesn't match, kick them out
+            if (!res.ok || !result.success || result.data.role !== currentUser.role) {
+                console.warn("Session verification failed. Role mismatch or invalid user. Forcing logout.");
+                window.logoutUser();
+                if (typeof showToast === 'function') showToast("Session invalid. Please log in again.");
+            }
+        } catch (e) {
+            // If the fetch fails (e.g., backend offline or endpoint not built yet), we fail gracefully.
+            // EFFECT: This ensures the site remains 100% functional even if the backend verify route isn't ready.
+            console.warn("Could not reach background verification endpoint. Trusting local session temporarily.", e);
+        }
+        
     } else {
         console.log("No session found. Showing PIN login.");
         if (overlay) overlay.style.display = 'flex';
@@ -56,7 +76,6 @@ function updatePinDisplay() {
         const dot = document.getElementById(`pin-dot-${i}`);
         if (dot) {
             if (i <= currentPin.length) {
-                // MODIFIED: dynamically reads CSS variable with a safe hardcoded fallback
                 const dynamicColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
                 dot.style.background = dynamicColor || '#3b82f6'; 
             } else {
