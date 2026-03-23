@@ -194,7 +194,6 @@ function renderInventory(isLastPage = true) {
                 }
             }
 
-            // NEW: Smart Inventory Badges (Velocity & Runway)
             let runwayDays = v.daysOfStock !== undefined ? v.daysOfStock : calculateStockRunway(v);
             let runwayHtml = '';
             
@@ -244,6 +243,7 @@ function renderInventory(isLastPage = true) {
                 <div style="display:flex; align-items:center;">
                     <button class="edit-btn" onclick="openEditProductModal('${p._id}', event)">Full Edit</button>
                     <button class="toggle-switch ${p.isActive ? 'active' : ''}" onclick="toggleProductStatus('${p._id}', this, event)"></button>
+                    <button class="danger-btn-small" style="margin-left: 8px; padding: 4px 8px; font-size: 10px; border-radius: 4px;" onclick="archiveProduct('${p._id}', event)" title="Soft Delete Product">🗑️ Archive</button>
                 </div>
             </div>
             <div style="width: 100%; margin-top: 10px; display: none;" id="variants-${p._id}">
@@ -960,7 +960,6 @@ function toggleInventorySelection(id, event) {
     updateInventoryBulkUI();
 }
 
-// MODIFIED: Injected the Label Printing button logic into the Bulk UI
 function updateInventoryBulkUI() {
     const btn = document.getElementById('inv-bulk-btn');
     const priceBtn = document.getElementById('inv-bulk-price-btn');
@@ -988,7 +987,6 @@ function updateInventoryBulkUI() {
     }
 }
 
-// NEW: Dynamically generates a CSS-Grid of labels and triggers the browser print dialog
 function generateBulkShelfLabels() {
     if (selectedInventory.size === 0) return;
     
@@ -1015,7 +1013,6 @@ function generateBulkShelfLabels() {
                     `;
                     container.appendChild(labelDiv);
                     
-                    // Allow the DOM to render the SVG before JsBarcode draws on it
                     setTimeout(() => {
                         try {
                             JsBarcode(`#${svgId}`, v.sku, { format: "CODE128", width: 1.5, height: 35, displayValue: false, margin: 0 });
@@ -1033,7 +1030,6 @@ function generateBulkShelfLabels() {
 
     showToast(`Generating ${labelCount} labels...`);
 
-    // Give JsBarcode time to finish drawing all elements before firing the print dialog
     setTimeout(() => {
         container.classList.add('active-print');
         window.print();
