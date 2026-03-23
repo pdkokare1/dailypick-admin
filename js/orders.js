@@ -1,6 +1,7 @@
 /* js/orders.js */
 
 let currentOrderDateFilter = 'All'; // NEW PHASE 3
+let isProcessingOrderAction = false; // NEW: Prevent duplicate order actions
 
 function setOrderDateFilter(range) {
     currentOrderDateFilter = range;
@@ -92,10 +93,12 @@ function sendWhatsAppReceipt() {
 }
 
 async function cancelOrder() {
+    if (isProcessingOrderAction) return;
     if (!activeOrder) return;
     const confirmCancel = confirm("Are you sure you want to cancel this order? Stock will be refunded automatically.");
     if (!confirmCancel) return;
 
+    isProcessingOrderAction = true;
     const targetOrderId = activeOrder._id;
     currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
     selectedOrders.delete(targetOrderId);
@@ -122,6 +125,8 @@ async function cancelOrder() {
     } catch (e) {
         showToast('Network error.');
         fetchOrders();
+    } finally {
+        isProcessingOrderAction = false;
     }
 }
 
@@ -214,7 +219,9 @@ async function bulkDispatchOrders() {
 
 async function updateOrderStatus(orderId, newStatus, event) {
     if (event) event.stopPropagation();
+    if (isProcessingOrderAction) return;
     
+    isProcessingOrderAction = true;
     const order = currentOrders.find(o => o._id === orderId);
     if(order) order.status = newStatus;
     updateDashboard();
@@ -231,6 +238,8 @@ async function updateOrderStatus(orderId, newStatus, event) {
         });
     } catch(e) {
         showToast('Network error, order may not have synced.');
+    } finally {
+        isProcessingOrderAction = false;
     }
 }
 
@@ -405,8 +414,10 @@ function closeOrderModal() {
 }
 
 async function markOrderDispatched() {
+    if (isProcessingOrderAction) return;
     if (!activeOrder) return; 
     
+    isProcessingOrderAction = true;
     const targetOrderId = activeOrder._id;
     
     const localOrder = currentOrders.find(o => o._id === targetOrderId);
@@ -422,6 +433,8 @@ async function markOrderDispatched() {
     } catch (e) { 
         showToast('Network error updating database.'); 
         fetchOrders(); 
+    } finally {
+        isProcessingOrderAction = false;
     }
 }
 
