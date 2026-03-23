@@ -1,5 +1,22 @@
 /* app.js */
 
+// --- NEW: Global Fetch Interceptor ---
+// This silently attaches the JWT token to every backend request without needing to rewrite every file
+const originalFetch = window.fetch;
+window.fetch = async function(resource, config = {}) {
+    // Only intercept calls going to our backend
+    if (typeof resource === 'string' && typeof BACKEND_URL !== 'undefined' && resource.startsWith(BACKEND_URL)) {
+        const token = localStorage.getItem('dailypick_token');
+        if (token) {
+            config.headers = {
+                ...config.headers,
+                'Authorization': `Bearer ${token}`
+            };
+        }
+    }
+    return originalFetch(resource, config);
+};
+
 let currentUser = null;
 let currentPin = '';
 
@@ -18,7 +35,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         applyRoleRestrictions();
         initializeApp();
 
-        // MODIFIED: Added a silent background check to verify the session hasn't been tampered with.
+        // Background check to verify the session hasn't been tampered with
         try {
             const res = await fetch(`${BACKEND_URL}/api/auth/verify?id=${currentUser._id || currentUser.id}`);
             const result = await res.json();
@@ -30,8 +47,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (typeof showToast === 'function') showToast("Session invalid. Please log in again.");
             }
         } catch (e) {
-            // If the fetch fails (e.g., backend offline or endpoint not built yet), we fail gracefully.
-            // EFFECT: This ensures the site remains 100% functional even if the backend verify route isn't ready.
             console.warn("Could not reach background verification endpoint. Trusting local session temporarily.", e);
         }
         
@@ -119,6 +134,12 @@ window.submitPinLogin = async function() {
         if (result.success) {
             currentUser = result.data;
             localStorage.setItem('dailypick_user', JSON.stringify(currentUser));
+            
+            // --- NEW: Save the secure token to local storage ---
+            if (result.token) {
+                localStorage.setItem('dailypick_token', result.token);
+            }
+            
             const overlay = document.getElementById('pin-login-overlay');
             if (overlay) overlay.style.display = 'none';
             
@@ -143,6 +164,10 @@ window.submitPinLogin = async function() {
 window.logoutUser = function() {
     console.log("Logging out user...");
     localStorage.removeItem('dailypick_user');
+    
+    // --- NEW: Clear the secure token on logout ---
+    localStorage.removeItem('dailypick_token');
+    
     currentUser = null;
     const overlay = document.getElementById('pin-login-overlay');
     if (overlay) overlay.style.display = 'flex';
@@ -213,7 +238,7 @@ function initializeApp() {
     if (typeof checkCurrentShift === 'function') checkCurrentShift();
 }
 
-// --- NEW: Phase 6 PWA Service Worker Registration ---
+// --- Phase 6 PWA Service Worker Registration ---
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js')
