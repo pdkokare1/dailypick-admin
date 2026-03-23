@@ -1,6 +1,6 @@
 /* js/inventory.js */
 
-// --- NEW: Analytics helper for Proactive Overview ---
+// --- Analytics helper for Proactive Overview ---
 function calculateStockRunway(variant) {
     if (!variant.purchaseHistory || variant.purchaseHistory.length < 2) return null;
     
@@ -19,7 +19,6 @@ function calculateStockRunway(variant) {
     // Runway: Current Stock / Items per day
     return Math.ceil(variant.stock / velocity);
 }
-// -----------------------------------------------------
 
 function toggleSpecialFilter(type) {
     let turningOff = false;
@@ -88,19 +87,18 @@ async function fetchInventory() {
         if (inventoryBrandFilter !== 'All') queryUrl += `&brand=${encodeURIComponent(inventoryBrandFilter)}`;
         if (inventoryDistributorFilter !== 'All') queryUrl += `&distributor=${encodeURIComponent(inventoryDistributorFilter)}`;
 
+        // --- NEW: Send stock filters to backend so pagination works correctly ---
+        if (isOutStockFilterActive) queryUrl += `&stockStatus=out`;
+        else if (isLowStockFilterActive) queryUrl += `&stockStatus=low`;
+        else if (isDeadStockFilterActive) queryUrl += `&stockStatus=dead`;
+
         const res = await fetch(queryUrl);
         const result = await res.json();
         
         if (result.success) { 
             let dataToRender = result.data;
 
-            if (isLowStockFilterActive) {
-                dataToRender = dataToRender.filter(p => p.variants.some(v => v.stock > 0 && v.stock <= (v.lowStockThreshold || 5)));
-            } else if (isOutStockFilterActive) {
-                dataToRender = dataToRender.filter(p => p.variants.some(v => v.stock <= 0));
-            } else if (isDeadStockFilterActive) {
-                dataToRender = dataToRender.filter(p => p.variants.some(v => v.stock > 15));
-            }
+            // Client-side filtering logic safely removed from here to prevent pagination breakage
 
             if (inventoryPage === 1) {
                 currentInventory = dataToRender;
