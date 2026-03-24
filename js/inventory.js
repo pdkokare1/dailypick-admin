@@ -1,10 +1,8 @@
 /* js/inventory.js */
 
-// --- Analytics helper for Proactive Overview ---
 function calculateStockRunway(variant) {
     if (!variant.purchaseHistory || variant.purchaseHistory.length < 2) return null;
     
-    // Sort by date to get the first and last recorded restock
     const sorted = [...variant.purchaseHistory].sort((a,b) => new Date(a.date) - new Date(b.date));
     const firstDate = new Date(sorted[0].date);
     const lastDate = new Date(sorted[sorted.length - 1].date);
@@ -12,11 +10,9 @@ function calculateStockRunway(variant) {
     const daysElapsed = Math.max(1, (lastDate - firstDate) / (1000 * 60 * 60 * 24));
     const totalQtyBought = sorted.reduce((sum, h) => sum + h.addedQuantity, 0);
     
-    // Simple Velocity: Items per day
     const velocity = totalQtyBought / daysElapsed;
     if (velocity <= 0) return null;
     
-    // Runway: Current Stock / Items per day
     return Math.ceil(variant.stock / velocity);
 }
 
@@ -87,18 +83,17 @@ async function fetchInventory() {
         if (inventoryBrandFilter !== 'All') queryUrl += `&brand=${encodeURIComponent(inventoryBrandFilter)}`;
         if (inventoryDistributorFilter !== 'All') queryUrl += `&distributor=${encodeURIComponent(inventoryDistributorFilter)}`;
 
-        // --- NEW: Send stock filters to backend so pagination works correctly ---
         if (isOutStockFilterActive) queryUrl += `&stockStatus=out`;
         else if (isLowStockFilterActive) queryUrl += `&stockStatus=low`;
         else if (isDeadStockFilterActive) queryUrl += `&stockStatus=dead`;
 
-        const res = await fetch(queryUrl);
+        // Using secure fetch if available
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(queryUrl);
         const result = await res.json();
         
         if (result.success) { 
             let dataToRender = result.data;
-
-            // Client-side filtering logic safely removed from here to prevent pagination breakage
 
             if (inventoryPage === 1) {
                 currentInventory = dataToRender;
@@ -276,7 +271,8 @@ async function submitNewCategory(e) {
     btn.disabled = true; 
     
     try { 
-        const res = await fetch(`${BACKEND_URL}/api/categories`, { 
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/categories`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ name: document.getElementById('new-cat-name').value.trim() }) 
@@ -315,7 +311,8 @@ async function submitNewBrand(e) {
     btn.disabled = true; 
     
     try { 
-        const res = await fetch(`${BACKEND_URL}/api/brands`, { 
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/brands`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ name: document.getElementById('new-brand-name').value.trim() }) 
@@ -354,7 +351,8 @@ async function submitNewDistributor(e) {
     btn.disabled = true; 
     
     try { 
-        const res = await fetch(`${BACKEND_URL}/api/distributors`, { 
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/distributors`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ name: document.getElementById('new-dist-name').value.trim() }) 
@@ -462,7 +460,8 @@ async function searchRestockItem(overrideSearchTerm = null) {
     }
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/products?all=true&search=${encodeURIComponent(term)}&limit=10`);
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/products?all=true&search=${encodeURIComponent(term)}&limit=10`);
         const result = await res.json();
         
         resultsContainer.innerHTML = '';
@@ -553,8 +552,9 @@ async function submitRestock(e) {
     };
     
     try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
         const productId = document.getElementById('restock-product-id').value;
-        const res = await fetch(`${BACKEND_URL}/api/products/${productId}/restock`, { 
+        const res = await fetchFn(`${BACKEND_URL}/api/products/${productId}/restock`, { 
             method: 'PUT', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify(payload) 
@@ -631,7 +631,8 @@ async function submitRTV(e) {
     };
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/products/${rtvSelectedVariant.productId}/rtv`, {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/products/${rtvSelectedVariant.productId}/rtv`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -749,7 +750,8 @@ async function saveInlineEdit(productId, variantId, field, element, event) {
     showToast('Saving update...');
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/products/${productId}`, {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/products/${productId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(product)
@@ -1083,7 +1085,8 @@ async function applyBulkAssign() {
                 if (newCat) product.category = newCat;
                 if (newBrand) product.brand = newBrand;
                 
-                await fetch(`${BACKEND_URL}/api/products/${id}`, {
+                const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+                await fetchFn(`${BACKEND_URL}/api/products/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(product)
@@ -1133,7 +1136,8 @@ async function applyBulkPriceEdit() {
                     v.price = Math.round(v.price * 100) / 100; 
                 });
                 
-                await fetch(`${BACKEND_URL}/api/products/${id}`, {
+                const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+                await fetchFn(`${BACKEND_URL}/api/products/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(product)
@@ -1159,7 +1163,8 @@ async function bulkDeactivateInventory() {
     const ids = Array.from(selectedInventory);
     
     try {
-        await Promise.all(ids.map(id => fetch(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' })));
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        await Promise.all(ids.map(id => fetchFn(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' })));
         showToast(`Toggled ${ids.length} products!`);
         selectedInventory.clear();
         fetchInventory(); 
@@ -1250,7 +1255,8 @@ async function submitAuditCorrection() {
     } else {
         variant.stock = actual;
         try {
-            await fetch(`${BACKEND_URL}/api/products/${pid}`, {
+            const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+            await fetchFn(`${BACKEND_URL}/api/products/${pid}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product)
             });
             showToast('Stock corrected successfully! ✅');
@@ -1364,6 +1370,7 @@ function compressImage(file, maxWidth = 800, maxHeight = 800) {
     });
 }
 
+// --- SECURED: Uploads to Fastify Backend instead of Cloudinary Directly ---
 async function submitNewProduct(e) {
     e.preventDefault();
     const btn = document.getElementById('submit-product-btn');
@@ -1374,15 +1381,22 @@ async function submitNewProduct(e) {
         const editId = document.getElementById('edit-product-id').value;
         const fileInput = document.getElementById('new-image');
         let finalImageUrl = undefined; 
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
 
+        // NEW: Route file to backend /upload endpoint securely
         if (fileInput.files.length > 0) {
             const compressedFile = await compressImage(fileInput.files[0]);
             const formData = new FormData();
             formData.append('file', compressedFile);
-            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-            const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, { method: 'POST', body: formData });
+            
+            const uploadRes = await fetchFn(`${BACKEND_URL}/api/products/upload`, { 
+                method: 'POST', 
+                body: formData // Browser handles multipart headers automatically
+            });
             const uploadData = await uploadRes.json();
-            finalImageUrl = uploadData.secure_url; 
+            
+            if(!uploadData.success) throw new Error("Image upload failed");
+            finalImageUrl = uploadData.imageUrl; 
         } else if (!editId) { 
             finalImageUrl = ''; 
         }
@@ -1419,7 +1433,7 @@ async function submitNewProduct(e) {
         const method = editId ? 'PUT' : 'POST';
         const url = editId ? `${BACKEND_URL}/api/products/${editId}` : `${BACKEND_URL}/api/products`;
 
-        await fetch(url, { 
+        await fetchFn(url, { 
             method: method, 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify(p) 
