@@ -6,7 +6,6 @@ let isProcessingOrderAction = false;
 let ordersPage = 1;
 let globalPendingCount = 0;
 let globalPendingRevenue = 0;
-// FIXED: Defined missing variables that were causing ReferenceError crashes
 let currentOrderLayout = 'list'; 
 let selectedOrders = new Set();  
 
@@ -583,6 +582,4 @@ async function printHardwareReceipt() {
         console.error("Hardware Print Error:", err);
         showToast("Hardware Print Cancelled or Failed.");
     }
-}
-
 }
