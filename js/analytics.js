@@ -3,7 +3,7 @@
 let categoryChartInstance = null; 
 let hourlyChartInstance = null;
 let revenueChartInstance = null;
-let allHistoricalExpenses = []; // Track expenses for P&L mapping
+// FIXED: Removed duplicate 'allHistoricalExpenses' declaration
 
 async function exportOrdersCSV() {
     showToast('Fetching orders for export...');
