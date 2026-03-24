@@ -246,7 +246,6 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
     .export-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
 }
 
-.date-picker-row { display: flex; gap: 8px; margin-bottom: 24px; background: #F3F4F6; padding: 6px; border-radius: 14px; width: fit-content; border: 1px solid #E5E7EB; overflow-x: auto; max-width: 100%; }
 .date-btn { padding: 8px 16px; border: none; background: transparent; border-radius: 10px; font-size: 12px; font-weight: 800; color: var(--text-muted); cursor: pointer; transition: 0.2s; white-space: nowrap; }
 
 @media (min-width: 768px) {
@@ -450,4 +449,16 @@ body.dark-mode .history-item { background: #06090F; border-color: #1F2937; }
     .modal-content { border-radius: 32px; max-width: 650px; margin: auto; transform: translateY(20px) scale(0.95); }
     .modal-overlay.active .modal-content { transform: translateY(0) scale(1); }
     #toast-container { left: calc(50% + 130px); bottom: 40px; width: auto; max-width: none; transform: translateX(-50%); }
+}
+
+/* Staff Login Specific Resiliency */
+#pin-login-overlay {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+#pin-login-overlay .pin-btn:active {
+    background: var(--primary) !important;
+    color: white !important;
+    transform: scale(0.92);
 }
