@@ -13,6 +13,60 @@ let appliedLoyaltyPoints = 0;
 
 let isProcessingCheckout = false;
 
+// --- NEW FUNCTIONALITY: Web Serial API Thermal Printing ---
+let thermalPort = null;
+
+// Expose to window so you can attach it to a "Connect Printer" button in your UI
+window.connectThermalPrinter = async function() {
+    try {
+        thermalPort = await navigator.serial.requestPort();
+        await thermalPort.open({ baudRate: 9600 }); // Standard ESC/POS baud rate
+        if (typeof showToast === 'function') showToast("Thermal Printer Connected! 🖨️");
+    } catch (e) {
+        console.error("Printer connection failed", e);
+        if (typeof showToast === 'function') showToast("Could not connect to printer.");
+    }
+};
+
+async function printThermalReceipt(order) {
+    if (!thermalPort) return; // Silent abort if no printer connected
+    try {
+        const writer = thermalPort.writable.getWriter();
+        const encoder = new TextEncoder();
+        
+        // ESC/POS raw byte commands
+        const ESC = '\x1B';
+        const GS = '\x1D';
+        const INIT = ESC + '@';
+        const ALIGN_CENTER = ESC + 'a' + '\x01';
+        const ALIGN_LEFT = ESC + 'a' + '\x00';
+        const BOLD_ON = ESC + 'E' + '\x01';
+        const BOLD_OFF = ESC + 'E' + '\x00';
+        const CUT = GS + 'V' + '\x41' + '\x03';
+
+        let receipt = INIT + ALIGN_CENTER + BOLD_ON + "DAILYPICK\n" + BOLD_OFF;
+        receipt += "123 Main Street\n";
+        receipt += "--------------------------------\n";
+        receipt += ALIGN_LEFT;
+        receipt += `Order: ${order._id.substring(0,8)}\n`;
+        receipt += `Date: ${new Date().toLocaleString()}\n`;
+        receipt += "--------------------------------\n";
+        order.items.forEach(item => {
+            receipt += `${item.name.substring(0, 20)}\n`;
+            receipt += `  ${item.qty} x ${item.price} = Rs. ${item.qty * item.price}\n`;
+        });
+        receipt += "--------------------------------\n";
+        receipt += BOLD_ON + `TOTAL: Rs. ${order.totalAmount}\n` + BOLD_OFF;
+        receipt += "--------------------------------\n";
+        receipt += ALIGN_CENTER + "Thank you for shopping!\n\n\n\n\n" + CUT;
+
+        await writer.write(encoder.encode(receipt));
+        writer.releaseLock();
+    } catch (e) {
+        console.error("Printing failed", e);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const phoneInput = document.getElementById('pos-customer-phone');
     if (phoneInput) {
@@ -130,10 +184,18 @@ function stopPosScanner() {
     }
 }
 
-function handlePosScan(skuOrName) {
+// --- OPTIMIZATION: Updated POS Scan to hit backend if local cache doesn't have it (due to server pagination) ---
+async function handlePosScan(skuOrName) {
     let foundProduct = null;
     let foundVariant = null;
 
+    // --- OLD CODE (KEPT FOR CONSULTATION) ---
+    // for (const p of currentInventory) {
+    //     if (!p.isActive || !p.variants) continue;
+    //     for (const v of p.variants) {
+    //         if (v.sku === skuOrName) { ...
+    
+    // First, check local active inventory
     for (const p of currentInventory) {
         if (!p.isActive || !p.variants) continue;
         for (const v of p.variants) {
@@ -144,6 +206,19 @@ function handlePosScan(skuOrName) {
             }
         }
         if (foundProduct) break;
+    }
+
+    // NEW LOGIC: Fallback to Server Search if Server-Side pagination hid the item locally
+    if (!foundProduct && navigator.onLine) {
+        try {
+            const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+            const res = await fetchFn(`${BACKEND_URL}/api/products?search=${encodeURIComponent(skuOrName)}`);
+            const result = await res.json();
+            if (result.success && result.data.length > 0) {
+                foundProduct = result.data[0];
+                foundVariant = foundProduct.variants.find(v => v.sku === skuOrName) || foundProduct.variants[0];
+            }
+        } catch(e) { console.error("API Search Fallback Failed", e); }
     }
 
     if (foundProduct && foundVariant) {
@@ -465,7 +540,7 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         return showToast('Register is Closed. Please open a shift first!');
     }
     
-    isProcessingCheckout = true;
+    isProcessingCheckout = true; 
     const phone = document.getElementById('pos-customer-phone').value.trim();
 
     if (paymentMethod === 'Pay Later' && phone) {
@@ -497,7 +572,7 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         discountAmount: currentCalculatedDiscount, 
         paymentMethod: paymentMethod,
         splitDetails: splitDetails, 
-        pointsRedeemed: appliedLoyaltyPoints, 
+        pointsRedeemed: appliedLoyaltyPoints,
         timestamp: new Date().toISOString() 
     };
 
@@ -515,6 +590,10 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         if (result.success) {
             showToast('Transaction Complete! ✅');
             activeOrder = result.orderData;
+            
+            // --- NEW: Trigger Thermal Printing if available ---
+            if (thermalPort) printThermalReceipt(activeOrder);
+            
             clearPosCart();
             fetchInventory(); 
         } else {
@@ -541,68 +620,42 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
             pointsRedeemed: appliedLoyaltyPoints 
         };
         
+        if (thermalPort) printThermalReceipt(activeOrder);
+        
         clearPosCart();
         renderOverview(); 
     } finally {
-        isProcessingCheckout = false;
+        isProcessingCheckout = false; 
     }
 }
-
-// --- NEW OPTIMIZED LOGIC: Aggressive Auto-Sync Loop ---
-// --- OLD CODE (KEPT FOR CONSULTATION) ---
-// async function syncOfflinePOS() {
-//     if (!navigator.onLine) return;
-//     try {
-//         const offlineQueue = await getAllFromIDB();
-//         if (offlineQueue.length === 0) return;
-//         const itemToSync = offlineQueue[0]; 
-//         const { id, ...payloadToSync } = itemToSync; ...
 
 async function syncOfflinePOS() {
     if (!navigator.onLine) return;
 
     try {
-        let offlineQueue = await getAllFromIDB();
+        const offlineQueue = await getAllFromIDB();
         if (offlineQueue.length === 0) return;
 
-        let syncedCount = 0;
+        const itemToSync = offlineQueue[0]; 
         
-        // Loop through the entire queue until empty
-        while (offlineQueue.length > 0) {
-            const itemToSync = offlineQueue[0]; 
-            const { id, ...payloadToSync } = itemToSync;
+        const { id, ...payloadToSync } = itemToSync;
 
-            const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payloadToSync)
-            });
-            
-            const result = await res.json();
-            if (result.success) {
-                await deleteFromIDB(id); 
-                syncedCount++;
-            } else {
-                break; // Stop if the server rejects to avoid infinite crashing loop
-            }
-            offlineQueue = await getAllFromIDB(); // Refresh queue size
-        }
+        const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadToSync)
+        });
         
-        if (syncedCount > 0) {
-            if (typeof showToast === 'function') showToast(`Successfully synced ${syncedCount} offline order(s)! ✅`);
-            if (typeof renderOverview === 'function') renderOverview(); 
+        const result = await res.json();
+        if (result.success) {
+            await deleteFromIDB(id); 
+            showToast('Offline POS transaction synced! ✅');
+            renderOverview(); 
         }
     } catch (e) {
         console.log('Sync attempted, still offline or server unreachable.');
     }
 }
-
-// Add an event listener to trigger sync the exact moment Wi-Fi reconnects
-window.addEventListener('online', () => {
-    console.log("Connection restored. Initiating auto-sync...");
-    syncOfflinePOS();
-});
-
 setInterval(syncOfflinePOS, 30000);
 
 function openSplitPaymentModal() {
