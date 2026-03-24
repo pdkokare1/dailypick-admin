@@ -31,13 +31,10 @@ let isOutStockFilterActive = false;
 let isDeadStockFilterActive = false;
 let selectedInventory = new Set();
 
-// --- FIXED: Added the missing global variable for the Live Stream ---
-let adminEventSource = null;
-
 const CLOUDINARY_CLOUD_NAME = 'dz2q2tq30'; 
 const CLOUDINARY_UPLOAD_PRESET = 'dailypick_preset'; 
 
-// --- IndexedDB Offline Queue Logic ---
+// --- OPTIMIZATION: IndexedDB Offline Queue Logic (Singleton Connection) ---
 const dbName = "DailyPickDB";
 const storeName = "offlineOrders";
 let db;
@@ -59,8 +56,10 @@ function initDB() {
     });
 }
 
+const dbPromise = initDB().catch(console.error);
+
 async function saveToIDB(order) {
-    if (!db) await initDB();
+    if (!db) db = await dbPromise;
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, "readwrite");
         const store = tx.objectStore(storeName);
@@ -71,7 +70,7 @@ async function saveToIDB(order) {
 }
 
 async function getAllFromIDB() {
-    if (!db) await initDB();
+    if (!db) db = await dbPromise;
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, "readonly");
         const store = tx.objectStore(storeName);
@@ -82,7 +81,7 @@ async function getAllFromIDB() {
 }
 
 async function deleteFromIDB(id) {
-    if (!db) await initDB();
+    if (!db) db = await dbPromise;
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, "readwrite");
         const store = tx.objectStore(storeName);
@@ -93,7 +92,7 @@ async function deleteFromIDB(id) {
 }
 
 async function getOfflineCount() {
-    if (!db) await initDB();
+    if (!db) db = await dbPromise;
     return new Promise((resolve, reject) => {
         const tx = db.transaction(storeName, "readonly");
         const store = tx.objectStore(storeName);
@@ -102,5 +101,3 @@ async function getOfflineCount() {
         request.onerror = () => reject(request.error);
     });
 }
-
-initDB().catch(console.error);
