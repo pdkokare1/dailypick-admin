@@ -66,8 +66,9 @@ function toggleLowStockFilter() {
 }
 
 async function fetchInventory() {
-    if (inventoryPage === 1) {
-        inventoryFeed.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
+    const invFeedEl = document.getElementById('inventory-feed');
+    if (inventoryPage === 1 && invFeedEl) {
+        invFeedEl.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
     }
     
     const loadBtn = document.getElementById('load-more-btn');
@@ -114,8 +115,8 @@ async function fetchInventory() {
             renderInventory(dataToRender.length < 30); 
         }
     } catch (e) { 
-        if (inventoryPage === 1) {
-            inventoryFeed.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
+        if (inventoryPage === 1 && invFeedEl) {
+            invFeedEl.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
         }
     } finally { 
         if (loadBtn) { 
@@ -126,12 +127,15 @@ async function fetchInventory() {
 }
 
 function renderInventory(isLastPage = true) {
+    const invFeedEl = document.getElementById('inventory-feed');
+    if (!invFeedEl) return;
+
     if (inventoryPage === 1) {
-        inventoryFeed.innerHTML = '';
+        invFeedEl.innerHTML = '';
     }
     
     if (currentInventory.length === 0) { 
-        inventoryFeed.innerHTML = '<p class="empty-state">No products found.</p>'; 
+        invFeedEl.innerHTML = '<p class="empty-state">No products found.</p>'; 
         document.getElementById('load-more-btn').classList.add('hidden'); 
         return; 
     }
@@ -252,7 +256,7 @@ function renderInventory(isLastPage = true) {
             </div>
         `;
         
-        inventoryFeed.appendChild(card);
+        invFeedEl.appendChild(card);
     });
 
     const loadBtn = document.getElementById('load-more-btn');
