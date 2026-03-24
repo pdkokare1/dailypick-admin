@@ -51,8 +51,11 @@ self.addEventListener('activate', (event) => {
 
 // 3. Fetch Event: Intercept network requests
 self.addEventListener('fetch', (event) => {
-    // Ignore non-GET requests (like POSTing a new order) and live SSE streams
-    if (event.request.method !== 'GET' || event.request.url.includes('/stream/')) {
+    // Ignore non-GET requests, live SSE streams, and dynamic data endpoints to prevent bloat
+    if (event.request.method !== 'GET' || 
+        event.request.url.includes('/stream/') ||
+        event.request.url.includes('/export') ||
+        event.request.url.includes('/analytics')) {
         return;
     }
 
