@@ -2,11 +2,13 @@
 
 // --- NEW: Global Fetch Interceptor ---
 // This silently attaches the JWT token to every backend request without needing to rewrite every file
-const originalFetch = window.fetch;
+// FIXED: Bound to window to prevent "Illegal Invocation" crashes
+const originalFetch = window.fetch.bind(window);
 window.fetch = async function(resource, config = {}) {
     // Only intercept calls going to our backend
     if (typeof resource === 'string' && typeof BACKEND_URL !== 'undefined' && resource.startsWith(BACKEND_URL)) {
-        const token = localStorage.getItem('dailypick_token');
+        // FIXED: Switched to 'adminToken' to match the rest of your app
+        const token = localStorage.getItem('adminToken');
         if (token) {
             config.headers = {
                 ...config.headers,
@@ -136,8 +138,9 @@ window.submitPinLogin = async function() {
             localStorage.setItem('dailypick_user', JSON.stringify(currentUser));
             
             // --- NEW: Save the secure token to local storage ---
+            // FIXED: Synchronized token naming with api.js
             if (result.token) {
-                localStorage.setItem('dailypick_token', result.token);
+                localStorage.setItem('adminToken', result.token);
             }
             
             const overlay = document.getElementById('pin-login-overlay');
@@ -166,7 +169,8 @@ window.logoutUser = function() {
     localStorage.removeItem('dailypick_user');
     
     // --- NEW: Clear the secure token on logout ---
-    localStorage.removeItem('dailypick_token');
+    // FIXED: Synchronized token naming with api.js
+    localStorage.removeItem('adminToken');
     
     currentUser = null;
     const overlay = document.getElementById('pin-login-overlay');
