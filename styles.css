@@ -246,6 +246,7 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
     .export-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
 }
 
+.date-picker-row { display: flex; gap: 8px; margin-bottom: 24px; background: #F3F4F6; padding: 6px; border-radius: 14px; width: fit-content; border: 1px solid #E5E7EB; overflow-x: auto; max-width: 100%; }
 .date-btn { padding: 8px 16px; border: none; background: transparent; border-radius: 10px; font-size: 12px; font-weight: 800; color: var(--text-muted); cursor: pointer; transition: 0.2s; white-space: nowrap; }
 
 @media (min-width: 768px) {
@@ -451,14 +452,38 @@ body.dark-mode .history-item { background: #06090F; border-color: #1F2937; }
     #toast-container { left: calc(50% + 130px); bottom: 40px; width: auto; max-width: none; transform: translateX(-50%); }
 }
 
-/* Staff Login Specific Resiliency */
+/* Staff Login Mobile Keyboard & Visual Fixes */
 #pin-login-overlay {
+    /* Prevent the browser from trying to scroll when keyboard opens */
+    overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
+    /* Ensure no dashboard elements can peak through gaps */
+    background-color: var(--bg-color) !important;
 }
 
-#pin-login-overlay .pin-btn:active {
-    background: var(--primary) !important;
-    color: white !important;
-    transform: scale(0.92);
+#login-username {
+    /* Prevent iOS zoom on focus which causes layout shifts */
+    font-size: 16px !important; 
+}
+
+/* Ensure buttons don't flicker white on tap */
+.pin-btn {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.pin-btn:active {
+    background: #f3f4f6 !important;
+    transform: scale(0.95);
+}
+
+body.dark-mode .pin-btn:active {
+    background: #1f2937 !important;
+}
+
+/* Hide background content effectively when overlay is active */
+body:has(#pin-login-overlay[style*="display: flex"]) .admin-header,
+body:has(#pin-login-overlay[style*="display: flex"]) .bottom-nav,
+body:has(#pin-login-overlay[style*="display: flex"]) .view-section {
+    visibility: hidden !important;
 }
