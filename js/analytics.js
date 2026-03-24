@@ -3,7 +3,6 @@
 let categoryChartInstance = null; 
 let hourlyChartInstance = null;
 let revenueChartInstance = null;
-// FIXED: Removed duplicate 'allHistoricalExpenses' declaration
 
 async function exportOrdersCSV() {
     showToast('Fetching orders for export...');
