@@ -31,6 +31,9 @@ let isOutStockFilterActive = false;
 let isDeadStockFilterActive = false;
 let selectedInventory = new Set();
 
+// --- FIXED: Added the missing global variable for the Live Stream ---
+let adminEventSource = null;
+
 const CLOUDINARY_CLOUD_NAME = 'dz2q2tq30'; 
 const CLOUDINARY_UPLOAD_PRESET = 'dailypick_preset'; 
 
