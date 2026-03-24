@@ -28,52 +28,63 @@ async function adminFetchWithAuth(url, options = {}) {
     return response;
 }
 
-// --- SECURED & STABILIZED: Graceful SSE Reconnection ---
-function connectAdminLiveStream() {
-    // Prevent duplicate connections. readyState 2 means CLOSED.
-    if (adminEventSource && adminEventSource.readyState !== 2) {
-        return; 
-    }
-    
+// --- SECURED & STABILIZED: Graceful SSE Reconnection via Fetch Streams ---
+async function connectAdminLiveStream() {
+    // Prevent duplicate connection threads
+    if (window.adminStreamController) return; 
+
     const token = localStorage.getItem('adminToken');
-    // Do not connect if there is no token (e.g. user is logged out)
     if (!token) return;
 
-    adminEventSource = new EventSource(`${BACKEND_URL}/api/orders/stream/admin?token=${token}`);
-    
-    adminEventSource.onopen = () => {
-        console.log("🟢 Live Order Stream Connected");
-    };
+    window.adminStreamController = new AbortController();
 
-    adminEventSource.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data);
-            
-            // Ignore the initial connection ping
-            if (data.message) return;
+    try {
+        const response = await fetch(`${BACKEND_URL}/api/orders/stream/admin`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            signal: window.adminStreamController.signal
+        });
 
-            if (data.type === 'NEW_ORDER') {
-                currentOrders.unshift(data.order);
-                if (typeof updateDashboard === 'function') updateDashboard();
-                if (typeof playNewOrderAudio === 'function') playNewOrderAudio(); 
-                if (typeof showToast === 'function') showToast('🚨 New Order Arrived!');
+        if (!response.ok) throw new Error('Stream connection failed due to authorization or server error');
+
+        console.log("🟢 Live Order Stream Connected (Secured)");
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop(); // Keep incomplete chunks in the buffer
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const dataStr = line.substring(6).trim();
+                    if (dataStr === ':' || !dataStr) continue; // Ignore heartbeat pings
+
+                    try {
+                        const data = JSON.parse(dataStr);
+                        if (data.message) continue;
+
+                        if (data.type === 'NEW_ORDER') {
+                            currentOrders.unshift(data.order);
+                            if (typeof updateDashboard === 'function') updateDashboard();
+                            if (typeof playNewOrderAudio === 'function') playNewOrderAudio(); 
+                            if (typeof showToast === 'function') showToast('🚨 New Order Arrived!');
+                        }
+                    } catch (e) {
+                        console.error("Error parsing stream data:", e);
+                    }
+                }
             }
-        } catch (e) {
-            console.error("Error parsing stream data:", e);
         }
-    };
-    
-    adminEventSource.onerror = (error) => {
+    } catch (error) {
         console.warn("⚠️ Live Stream disconnected (Server restart or network drop). Silently reconnecting...");
-        
-        // Close the broken native connection to stop browser console spam
-        if (adminEventSource) {
-            adminEventSource.close();
-        }
-        
-        // Wait 5 seconds and attempt to reconnect silently in the background
+        window.adminStreamController = null;
         setTimeout(connectAdminLiveStream, 5000);
-    };
+    }
 }
 
 function populateDropdowns(data, selectConfigs) {
