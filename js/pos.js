@@ -6,17 +6,13 @@ let currentCalculatedTax = 0;
 let currentCalculatedDiscount = 0;
 let currentGrandTotal = 0;
 
-// NEW: Phase 1 Accountability Shift tracking
 let currentActiveShift = null;
 
-// NEW: Loyalty Engine Tracking
 let currentCustomerProfile = null;
 let appliedLoyaltyPoints = 0;
 
-// NEW: Safety Lock to prevent double-charging on slow networks
 let isProcessingCheckout = false;
 
-// Listen for phone input to fetch loyalty points automatically
 document.addEventListener('DOMContentLoaded', () => {
     const phoneInput = document.getElementById('pos-customer-phone');
     if (phoneInput) {
@@ -306,7 +302,6 @@ function renderPosCart() {
     let hasExclusive = posCart.some(i => i.taxType === 'Exclusive');
     let preLoyaltyTotal = subtotal - totalDiscount + (hasExclusive ? totalTax : 0);
     
-    // Ensure points redeemed don't exceed the cart total
     if (appliedLoyaltyPoints > preLoyaltyTotal) {
         appliedLoyaltyPoints = preLoyaltyTotal;
     }
@@ -321,7 +316,6 @@ function renderPosCart() {
     if(discountEl) discountEl.innerText = `-₹${totalDiscount.toFixed(2)}`;
     if(taxEl) taxEl.innerText = `₹${totalTax.toFixed(2)}`;
 
-    // Inject Loyalty Line dynamically if it doesn't exist yet
     let loyaltyLine = document.getElementById('pos-loyalty-line');
     if (!loyaltyLine && taxEl) {
         const taxElContainer = taxEl.parentNode;
@@ -451,7 +445,6 @@ function resumeHeldCart(index) {
     posCart = [...cart.items];
     document.getElementById('pos-customer-phone').value = cart.phone === 'Guest' ? '' : cart.phone;
     
-    // Automatically fetch loyalty if a phone number exists in the resumed cart
     if (cart.phone !== 'Guest' && cart.phone.length === 10) {
         fetchCustomerLoyalty(cart.phone);
     }
@@ -468,15 +461,13 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
     if (isProcessingCheckout) return showToast('Transaction in progress, please wait...');
     if (posCart.length === 0) return showToast('Cart is empty.');
     
-    // Security Check - Require an active shift to process money
     if (!currentActiveShift) {
         return showToast('Register is Closed. Please open a shift first!');
     }
     
-    isProcessingCheckout = true; // Lock UI
+    isProcessingCheckout = true;
     const phone = document.getElementById('pos-customer-phone').value.trim();
 
-    // --- Khata Limit Enforcement ---
     if (paymentMethod === 'Pay Later' && phone) {
         try {
             const res = await fetch(`${BACKEND_URL}/api/customers/profile/${phone}`);
@@ -506,7 +497,7 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         discountAmount: currentCalculatedDiscount, 
         paymentMethod: paymentMethod,
         splitDetails: splitDetails, 
-        pointsRedeemed: appliedLoyaltyPoints, // NEW: Include redeemed points
+        pointsRedeemed: appliedLoyaltyPoints, 
         timestamp: new Date().toISOString() 
     };
 
@@ -547,43 +538,71 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
             discountAmount: currentCalculatedDiscount,
             paymentMethod: paymentMethod,
             splitDetails: splitDetails,
-            pointsRedeemed: appliedLoyaltyPoints // NEW: Included in offline order
+            pointsRedeemed: appliedLoyaltyPoints 
         };
         
         clearPosCart();
         renderOverview(); 
     } finally {
-        isProcessingCheckout = false; // Unlock UI securely
+        isProcessingCheckout = false;
     }
 }
+
+// --- NEW OPTIMIZED LOGIC: Aggressive Auto-Sync Loop ---
+// --- OLD CODE (KEPT FOR CONSULTATION) ---
+// async function syncOfflinePOS() {
+//     if (!navigator.onLine) return;
+//     try {
+//         const offlineQueue = await getAllFromIDB();
+//         if (offlineQueue.length === 0) return;
+//         const itemToSync = offlineQueue[0]; 
+//         const { id, ...payloadToSync } = itemToSync; ...
 
 async function syncOfflinePOS() {
     if (!navigator.onLine) return;
 
     try {
-        const offlineQueue = await getAllFromIDB();
+        let offlineQueue = await getAllFromIDB();
         if (offlineQueue.length === 0) return;
 
-        const itemToSync = offlineQueue[0]; 
+        let syncedCount = 0;
         
-        const { id, ...payloadToSync } = itemToSync;
+        // Loop through the entire queue until empty
+        while (offlineQueue.length > 0) {
+            const itemToSync = offlineQueue[0]; 
+            const { id, ...payloadToSync } = itemToSync;
 
-        const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payloadToSync)
-        });
+            const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payloadToSync)
+            });
+            
+            const result = await res.json();
+            if (result.success) {
+                await deleteFromIDB(id); 
+                syncedCount++;
+            } else {
+                break; // Stop if the server rejects to avoid infinite crashing loop
+            }
+            offlineQueue = await getAllFromIDB(); // Refresh queue size
+        }
         
-        const result = await res.json();
-        if (result.success) {
-            await deleteFromIDB(id); 
-            showToast('Offline POS transaction synced! ✅');
-            renderOverview(); 
+        if (syncedCount > 0) {
+            if (typeof showToast === 'function') showToast(`Successfully synced ${syncedCount} offline order(s)! ✅`);
+            if (typeof renderOverview === 'function') renderOverview(); 
         }
     } catch (e) {
         console.log('Sync attempted, still offline or server unreachable.');
     }
 }
+
+// Add an event listener to trigger sync the exact moment Wi-Fi reconnects
+window.addEventListener('online', () => {
+    console.log("Connection restored. Initiating auto-sync...");
+    syncOfflinePOS();
+});
+
 setInterval(syncOfflinePOS, 30000);
 
 function openSplitPaymentModal() {
@@ -634,7 +653,6 @@ function processSplitPayment() {
     processPosCheckout('Split', { cash: cash, upi: upi });
 }
 
-// --- Phase 1 Shift Management & Accountability Functions ---
 async function checkCurrentShift() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/shifts/current`);
