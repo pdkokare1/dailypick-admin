@@ -5,9 +5,7 @@
 // FIXED: Bound to window to prevent "Illegal Invocation" crashes
 const originalFetch = window.fetch.bind(window);
 window.fetch = async function(resource, config = {}) {
-    // Only intercept calls going to our backend
     if (typeof resource === 'string' && typeof BACKEND_URL !== 'undefined' && resource.startsWith(BACKEND_URL)) {
-        // FIXED: Switched to 'adminToken' to match the rest of your app
         const token = localStorage.getItem('adminToken');
         if (token) {
             config.headers = {
@@ -16,7 +14,22 @@ window.fetch = async function(resource, config = {}) {
             };
         }
     }
-    return originalFetch(resource, config);
+    
+    const response = await originalFetch(resource, config);
+
+    // --- SECURITY: Unified Session Expiration ---
+    if (response.status === 401 || response.status === 403) {
+        // Prevent looping if the 401 is from the auth endpoint itself
+        if (typeof resource === 'string' && !resource.includes('/api/auth/')) {
+            console.warn('Unauthorized intercept. Session expired or revoked.');
+            if (typeof window.logoutUser === 'function') {
+                window.logoutUser();
+                if (typeof showToast === 'function') showToast("Session expired. Please log in again.");
+            }
+        }
+    }
+    
+    return response;
 };
 
 let currentUser = null;
@@ -138,7 +151,6 @@ window.submitPinLogin = async function() {
             localStorage.setItem('dailypick_user', JSON.stringify(currentUser));
             
             // --- NEW: Save the secure token to local storage ---
-            // FIXED: Synchronized token naming with api.js
             if (result.token) {
                 localStorage.setItem('adminToken', result.token);
             }
@@ -169,8 +181,13 @@ window.logoutUser = function() {
     localStorage.removeItem('dailypick_user');
     
     // --- NEW: Clear the secure token on logout ---
-    // FIXED: Synchronized token naming with api.js
     localStorage.removeItem('adminToken');
+    
+    // Close the secure stream if active
+    if (window.adminStreamController) {
+        window.adminStreamController.abort();
+        window.adminStreamController = null;
+    }
     
     currentUser = null;
     const overlay = document.getElementById('pin-login-overlay');
