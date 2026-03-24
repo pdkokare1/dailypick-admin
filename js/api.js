@@ -1,3 +1,5 @@
+// js/api.js
+
 // NEW: Added to store active promotions from Phase 1
 let currentPromotions = []; 
 
@@ -26,25 +28,51 @@ async function adminFetchWithAuth(url, options = {}) {
     return response;
 }
 
-// MODIFIED: Appended token to URL because EventSource cannot send Headers
+// --- SECURED & STABILIZED: Graceful SSE Reconnection ---
 function connectAdminLiveStream() {
-    if (adminEventSource) return; 
+    // Prevent duplicate connections. readyState 2 means CLOSED.
+    if (adminEventSource && adminEventSource.readyState !== 2) {
+        return; 
+    }
     
-    const token = localStorage.getItem('adminToken') || '';
+    const token = localStorage.getItem('adminToken');
+    // Do not connect if there is no token (e.g. user is logged out)
+    if (!token) return;
+
     adminEventSource = new EventSource(`${BACKEND_URL}/api/orders/stream/admin?token=${token}`);
     
+    adminEventSource.onopen = () => {
+        console.log("🟢 Live Order Stream Connected");
+    };
+
     adminEventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'NEW_ORDER') {
-            currentOrders.unshift(data.order);
-            updateDashboard();
-            playNewOrderAudio(); 
-            showToast('🚨 New Order Arrived!');
+        try {
+            const data = JSON.parse(event.data);
+            
+            // Ignore the initial connection ping
+            if (data.message) return;
+
+            if (data.type === 'NEW_ORDER') {
+                currentOrders.unshift(data.order);
+                if (typeof updateDashboard === 'function') updateDashboard();
+                if (typeof playNewOrderAudio === 'function') playNewOrderAudio(); 
+                if (typeof showToast === 'function') showToast('🚨 New Order Arrived!');
+            }
+        } catch (e) {
+            console.error("Error parsing stream data:", e);
         }
     };
     
     adminEventSource.onerror = (error) => {
-        console.warn("SSE Connection interrupted. Browser is handling auto-reconnection...", error);
+        console.warn("⚠️ Live Stream disconnected (Server restart or network drop). Silently reconnecting...");
+        
+        // Close the broken native connection to stop browser console spam
+        if (adminEventSource) {
+            adminEventSource.close();
+        }
+        
+        // Wait 5 seconds and attempt to reconnect silently in the background
+        setTimeout(connectAdminLiveStream, 5000);
     };
 }
 
@@ -66,7 +94,6 @@ function populateDropdowns(data, selectConfigs) {
     });
 }
 
-// MODIFIED: Now uses adminFetchWithAuth
 async function fetchCategories() {
     try {
         const res = await adminFetchWithAuth(`${BACKEND_URL}/api/categories`);
@@ -85,7 +112,6 @@ async function fetchCategories() {
     }
 }
 
-// MODIFIED: Now uses adminFetchWithAuth
 async function fetchBrands() {
     try {
         const res = await adminFetchWithAuth(`${BACKEND_URL}/api/brands`);
@@ -104,7 +130,6 @@ async function fetchBrands() {
     }
 }
 
-// MODIFIED: Now uses adminFetchWithAuth
 async function fetchDistributors() {
     try {
         const res = await adminFetchWithAuth(`${BACKEND_URL}/api/distributors`);
@@ -124,7 +149,6 @@ async function fetchDistributors() {
     }
 }
 
-// MODIFIED: Now uses adminFetchWithAuth
 async function fetchPromotions() {
     try {
         const res = await adminFetchWithAuth(`${BACKEND_URL}/api/promotions?all=false`);
@@ -150,7 +174,6 @@ function exportInventoryCSV() {
     window.open(`${BACKEND_URL}/api/products/export`, '_blank');
 }
 
-// MODIFIED: Now uses adminFetchWithAuth
 async function archiveProduct(id, event) {
     if(event) event.stopPropagation();
     if(!confirm("Are you sure you want to archive this product? It will be hidden from the store without breaking historical sales data.")) return;
