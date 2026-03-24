@@ -66,10 +66,8 @@ function toggleLowStockFilter() {
 }
 
 async function fetchInventory() {
-    const inventoryFeedEl = document.getElementById('inventory-feed');
-    
-    if (inventoryPage === 1 && inventoryFeedEl) {
-        inventoryFeedEl.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
+    if (inventoryPage === 1) {
+        inventoryFeed.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
     }
     
     const loadBtn = document.getElementById('load-more-btn');
@@ -89,6 +87,12 @@ async function fetchInventory() {
         else if (isLowStockFilterActive) queryUrl += `&stockStatus=low`;
         else if (isDeadStockFilterActive) queryUrl += `&stockStatus=dead`;
 
+        // --- NEW OPTIMIZED LOGIC: Send Sort Command Directly to Backend ---
+        const sortDropdown = document.getElementById('inventory-sort');
+        if (sortDropdown) {
+            queryUrl += `&sort=${sortDropdown.value}`;
+        }
+
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
         const res = await fetchFn(queryUrl);
         const result = await res.json();
@@ -103,12 +107,15 @@ async function fetchInventory() {
             }
             
             updateInventoryDashboard(); 
-            currentInventory = applyInventorySorting(currentInventory); 
+            
+            // --- OLD CODE (KEPT FOR CONSULTATION) ---
+            // currentInventory = applyInventorySorting(currentInventory); 
+            
             renderInventory(dataToRender.length < 30); 
         }
     } catch (e) { 
-        if (inventoryPage === 1 && inventoryFeedEl) {
-            inventoryFeedEl.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
+        if (inventoryPage === 1) {
+            inventoryFeed.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
         }
     } finally { 
         if (loadBtn) { 
@@ -119,15 +126,12 @@ async function fetchInventory() {
 }
 
 function renderInventory(isLastPage = true) {
-    const inventoryFeedEl = document.getElementById('inventory-feed');
-    if (!inventoryFeedEl) return;
-
     if (inventoryPage === 1) {
-        inventoryFeedEl.innerHTML = '';
+        inventoryFeed.innerHTML = '';
     }
     
     if (currentInventory.length === 0) { 
-        inventoryFeedEl.innerHTML = '<p class="empty-state">No products found.</p>'; 
+        inventoryFeed.innerHTML = '<p class="empty-state">No products found.</p>'; 
         document.getElementById('load-more-btn').classList.add('hidden'); 
         return; 
     }
@@ -248,7 +252,7 @@ function renderInventory(isLastPage = true) {
             </div>
         `;
         
-        inventoryFeedEl.appendChild(card);
+        inventoryFeed.appendChild(card);
     });
 
     const loadBtn = document.getElementById('load-more-btn');
@@ -934,25 +938,11 @@ function loadMoreInventory() {
     fetchInventory(); 
 }
 
-function applyInventorySorting(data) {
-    const sortDropdown = document.getElementById('inventory-sort');
-    const sortVal = sortDropdown ? sortDropdown.value : 'name_asc';
-    
-    if (sortVal === 'name_asc') {
-        return data.sort((a,b) => a.name.localeCompare(b.name));
-    }
-    if (sortVal === 'stock_low') {
-        return data.sort((a,b) => {
-            const aStock = a.variants ? a.variants.reduce((sum, v) => sum + v.stock, 0) : 0;
-            const bStock = b.variants ? b.variants.reduce((sum, v) => sum + v.stock, 0) : 0;
-            return aStock - bStock;
-        });
-    }
-    if (sortVal === 'recent') {
-        return data.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
-    return data;
-}
+// --- OLD CODE (KEPT FOR CONSULTATION) ---
+// function applyInventorySorting(data) {
+//     const sortDropdown = document.getElementById('inventory-sort');
+//     const sortVal = sortDropdown ? sortDropdown.value : 'name_asc';
+//     if (sortVal === 'name_asc') { return data.sort((a,b) => a.name.localeCompare(b.name)); } ...
 
 function toggleInventorySelection(id, event) {
     event.stopPropagation();
@@ -1374,7 +1364,6 @@ function compressImage(file, maxWidth = 800, maxHeight = 800) {
     });
 }
 
-// --- SECURED: Uploads to Fastify Backend instead of Cloudinary Directly ---
 async function submitNewProduct(e) {
     e.preventDefault();
     const btn = document.getElementById('submit-product-btn');
@@ -1387,7 +1376,6 @@ async function submitNewProduct(e) {
         let finalImageUrl = undefined; 
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
 
-        // NEW: Route file to backend /upload endpoint securely
         if (fileInput.files.length > 0) {
             const compressedFile = await compressImage(fileInput.files[0]);
             const formData = new FormData();
@@ -1395,7 +1383,7 @@ async function submitNewProduct(e) {
             
             const uploadRes = await fetchFn(`${BACKEND_URL}/api/products/upload`, { 
                 method: 'POST', 
-                body: formData // Browser handles multipart headers automatically
+                body: formData 
             });
             const uploadData = await uploadRes.json();
             
