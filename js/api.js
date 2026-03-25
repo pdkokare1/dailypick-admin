@@ -1,36 +1,36 @@
 // js/api.js
 
-// NEW: Added to store active promotions from Phase 1
 let currentPromotions = []; 
 
-// --- NEW: Authentication Wrapper for Admin Requests ---
 async function adminFetchWithAuth(url, options = {}) {
-    const token = localStorage.getItem('adminToken'); // Assumes token is saved here on login
+    const token = localStorage.getItem('adminToken');
     
-    // Initialize headers if they don't exist
     options.headers = options.headers || {};
     
-    // Attach JWT Token
     if (token) {
         options.headers['Authorization'] = `Bearer ${token}`;
     }
     
     const response = await fetch(url, options);
     
-    // Global Error Intercepting for Security
     if (response.status === 401 || response.status === 403) {
         console.warn('Authentication failed for:', url);
         if (typeof showToast === 'function') {
             showToast('Session Expired or Access Denied. Please log in again.');
         }
     }
+
+    if (response.status === 429) {
+        if (typeof showToast === 'function') showToast("Too many requests. Please slow down.");
+    }
     
     return response;
 }
 
-// --- SECURED & STABILIZED: Graceful SSE Reconnection via Fetch Streams ---
+// --- OPTIMIZATION: Exponential Backoff for SSE Reconnection ---
+let sseRetryCount = 0;
+
 async function connectAdminLiveStream() {
-    // Prevent duplicate connection threads
     if (window.adminStreamController) return; 
 
     const token = localStorage.getItem('adminToken');
@@ -47,6 +47,8 @@ async function connectAdminLiveStream() {
         if (!response.ok) throw new Error('Stream connection failed due to authorization or server error');
 
         console.log("🟢 Live Order Stream Connected (Secured)");
+        sseRetryCount = 0; // Reset retry count on successful connection
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
@@ -57,12 +59,12 @@ async function connectAdminLiveStream() {
 
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n\n');
-            buffer = lines.pop(); // Keep incomplete chunks in the buffer
+            buffer = lines.pop(); 
 
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     const dataStr = line.substring(6).trim();
-                    if (dataStr === ':' || !dataStr) continue; // Ignore heartbeat pings
+                    if (dataStr === ':' || !dataStr) continue; 
 
                     try {
                         const data = JSON.parse(dataStr);
@@ -81,9 +83,13 @@ async function connectAdminLiveStream() {
             }
         }
     } catch (error) {
-        console.warn("⚠️ Live Stream disconnected (Server restart or network drop). Silently reconnecting...");
+        sseRetryCount++;
+        // Caps maximum delay at 30 seconds to prevent permanent disconnect
+        const retryDelay = Math.min(1000 * (2 ** sseRetryCount), 30000); 
+        console.warn(`⚠️ Live Stream disconnected. Reconnecting in ${retryDelay/1000}s...`);
+        
         window.adminStreamController = null;
-        setTimeout(connectAdminLiveStream, 5000);
+        setTimeout(connectAdminLiveStream, retryDelay);
     }
 }
 
