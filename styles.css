@@ -38,7 +38,10 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
     padding: 16px 24px; 
     display: flex; justify-content: space-between; align-items: center; 
     border-bottom: 1px solid var(--border-soft); 
-    position: sticky; top: 0; z-index: 100; 
+    position: sticky; top: 0; z-index: 100;
+    /* Hardware acceleration to prevent top-right white box rendering glitches */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 .admin-header h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; color: var(--primary); }
 .subtitle { font-size: 13px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
@@ -334,17 +337,29 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
 .pos-qty-btn { background: white; border: 1px solid #E5E7EB; width: 28px; height: 28px; border-radius: 6px; font-weight: 800; cursor: pointer; transition: 0.2s; }
 .pos-qty-btn:hover { background: #F3F4F6; }
 
-#print-receipt-container { display: none; }
+/* HARD HIDE ALL PRINT CONTAINERS FROM UI */
+#print-receipt-container,
+#print-packing-slip-container,
+#print-barcode-container,
+#print-bulk-labels-container { 
+    display: none !important; 
+    visibility: hidden !important; 
+    position: absolute; 
+    z-index: -100; 
+}
+
 @media print {
     body { background: white; color: black; padding: 0; margin: 0; }
     .admin-header, .bottom-nav, .view-section, .modal-overlay, #toast-container { display: none !important; }
     #print-receipt-container { 
         display: block !important; 
+        visibility: visible !important;
         position: absolute; left: 0; top: 0; 
         width: 80mm; 
         padding: 5mm;
         font-family: monospace; 
         font-size: 12px;
+        z-index: 9999;
     }
 }
 
@@ -453,14 +468,10 @@ body.dark-mode .history-item { background: #06090F; border-color: #1F2937; }
 }
 
 /* Staff Login Mobile Keyboard & Visual Fixes */
-body:has(#pin-login-overlay[style*="display: flex"]) {
-    background-color: var(--bg-color) !important;
-    overflow-y: auto !important;
-}
-
-/* HARD hide everything else to absolutely prevent scrolling of background and layout breaking */
-body:has(#pin-login-overlay[style*="display: flex"]) > *:not(#pin-login-overlay):not(#toast-container) {
-    display: none !important;
+#pin-login-overlay {
+    /* Hardware acceleration to prevent top-right white box rendering glitches */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 #login-username {
