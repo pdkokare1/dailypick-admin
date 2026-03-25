@@ -120,14 +120,18 @@
 
         <article id="overview-view" class="view-section active">
             <main class="dashboard-container">
-                <div class="section-header" style="flex-wrap: wrap; gap: 8px;">
-                    <div>
-                        <h2 style="display:inline-block; margin-right: 12px;">Today's Pulse</h2>
-                        <button class="primary-btn-small" style="background:#D4AF37; color: white; margin-right: 8px; border: none;" onclick="openShiftModal()"><i data-lucide="store" class="icon-sm"></i> Register</button>
-                        <button class="primary-btn-small" style="background:#ef4444; color: white; margin-right: 8px; border: none;" onclick="openExpenseModal()"><i data-lucide="receipt" class="icon-sm"></i> Log Expense</button>
-                        <button id="eod-report-btn" class="primary-btn-small" style="background:#062C1E; color: white; border: none;" onclick="openEodReport()"><i data-lucide="flag" class="icon-sm"></i> End of Day</button>
+                <div class="section-header" style="flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; flex-direction: column; width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h2 style="margin: 0;">Today's Pulse</h2>
+                            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Search <kbd style="background: #e2e8f0; padding: 3px 6px; border-radius: 4px; font-weight:bold; color: var(--text-main);">Ctrl+K</kbd></div>
+                        </div>
+                        <div class="scrollable-actions">
+                            <button class="primary-btn-small" style="background:#D4AF37; color: white; border: none;" onclick="openShiftModal()"><i data-lucide="store" class="icon-sm"></i> Register</button>
+                            <button class="primary-btn-small" style="background:#ef4444; color: white; border: none;" onclick="openExpenseModal()"><i data-lucide="receipt" class="icon-sm"></i> Log Expense</button>
+                            <button id="eod-report-btn" class="primary-btn-small" style="background:#062C1E; color: white; border: none;" onclick="openEodReport()"><i data-lucide="flag" class="icon-sm"></i> End of Day</button>
+                        </div>
                     </div>
-                    <div style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Press <kbd style="background: #e2e8f0; padding: 3px 8px; border-radius: 6px; font-weight:bold; color: var(--text-main);">Ctrl+K</kbd> to search</div>
                 </div>
                 
                 <div class="stat-card" style="margin-bottom: 24px; padding: 24px;">
@@ -182,30 +186,33 @@
                     </div>
                 </section>
                 <section class="orders-section">
-                    <div class="section-header">
+                    <div class="section-header" style="margin-bottom: 16px;">
                         <h2>Incoming Requests</h2>
                         <button class="refresh-btn" onclick="fetchOrders()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
                     </div>
                     
-                    <div class="orders-toolbar">
-                        <div class="order-tabs">
-                            <button id="tab-All" class="tab-btn active" onclick="setOrderTab('All')">All</button>
-                            <button id="tab-Instant" class="tab-btn" onclick="setOrderTab('Instant')"><i data-lucide="zap" class="icon-sm"></i> Instant</button>
-                            <button id="tab-Routine" class="tab-btn" onclick="setOrderTab('Routine')"><i data-lucide="calendar" class="icon-sm"></i> Routine</button>
-                        </div>
-                        
-                        <div class="order-tabs" style="margin-left: 10px;">
-                            <button id="date-All" class="tab-btn active" onclick="setOrderDateFilter('All')">All Time</button>
-                            <button id="date-Today" class="tab-btn" onclick="setOrderDateFilter('Today')">Today</button>
-                            <button id="date-Yesterday" class="tab-btn" onclick="setOrderDateFilter('Yesterday')">Yesterday</button>
-                            <button id="date-7Days" class="tab-btn" onclick="setOrderDateFilter('7Days')">7 Days</button>
-                        </div>
+                    <div class="orders-toolbar" style="margin-bottom: 24px;">
+                        <div class="scrollable-actions" style="width: 100%;">
+                            <div class="order-tabs">
+                                <button id="tab-All" class="tab-btn active" onclick="setOrderTab('All')">All</button>
+                                <button id="tab-Instant" class="tab-btn" onclick="setOrderTab('Instant')"><i data-lucide="zap" class="icon-sm"></i> Instant</button>
+                                <button id="tab-Routine" class="tab-btn" onclick="setOrderTab('Routine')"><i data-lucide="calendar" class="icon-sm"></i> Routine</button>
+                            </div>
+                            
+                            <div class="order-tabs">
+                                <button id="date-All" class="tab-btn active" onclick="setOrderDateFilter('All')">All Time</button>
+                                <button id="date-Today" class="tab-btn" onclick="setOrderDateFilter('Today')">Today</button>
+                                <button id="date-Yesterday" class="tab-btn" onclick="setOrderDateFilter('Yesterday')">Yesterday</button>
+                                <button id="date-7Days" class="tab-btn" onclick="setOrderDateFilter('7Days')">7 Days</button>
+                            </div>
 
-                        <div class="order-tabs" style="margin-left: auto; margin-right: 10px;">
-                            <button id="layout-list" class="tab-btn active" onclick="toggleOrderLayout('list')"><i data-lucide="list" class="icon-sm"></i> List</button>
-                            <button id="layout-kanban" class="tab-btn" onclick="toggleOrderLayout('kanban')"><i data-lucide="columns" class="icon-sm"></i> Board</button>
+                            <div class="order-tabs">
+                                <button id="layout-list" class="tab-btn active" onclick="toggleOrderLayout('list')"><i data-lucide="list" class="icon-sm"></i> List</button>
+                                <button id="layout-kanban" class="tab-btn" onclick="toggleOrderLayout('kanban')"><i data-lucide="columns" class="icon-sm"></i> Board</button>
+                            </div>
+                            
+                            <button id="bulk-dispatch-btn" class="bulk-btn" onclick="bulkDispatchOrders()">Dispatch Selected (0)</button>
                         </div>
-                        <button id="bulk-dispatch-btn" class="bulk-btn" onclick="bulkDispatchOrders()">Dispatch Selected (0)</button>
                     </div>
 
                     <div id="orders-list-view" class="orders-feed">
@@ -251,9 +258,9 @@
                 </div>
 
                 <div class="pos-right">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
-                        <h2 style="font-size: 18px;">Current Order</h2>
-                        <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+                    <div style="margin-bottom: 24px;">
+                        <h2 style="font-size: 18px; margin-bottom: 12px;">Current Order</h2>
+                        <div class="scrollable-actions">
                             <button class="primary-btn-small" style="background: #062C1E; color: white;" onclick="addCustomPosItem()"><i data-lucide="plus" class="icon-sm"></i> Custom</button>
                             <button class="primary-btn-small" style="background: #8b5cf6; color: white; border: none;" onclick="holdCurrentCart()"><i data-lucide="pause" class="icon-sm"></i> Hold</button>
                             <button class="primary-btn-small" style="background: #3b82f6; color: white; border: none;" onclick="openHeldCartsModal()"><i data-lucide="clipboard-list" class="icon-sm"></i> Carts</button>
@@ -290,11 +297,11 @@
                             <input type="tel" id="pos-customer-phone" placeholder="Customer Phone (Optional for Loyalty)">
                         </div>
                         
-                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                            <button class="primary-btn" style="background: #10b981; flex: 1; padding: 16px; font-size: 13px;" onclick="processPosCheckout('Cash')" title="Shortcut: F1"><i data-lucide="banknote" class="icon-sm"></i> Cash (F1)</button>
-                            <button class="primary-btn" style="background: #0ea5e9; flex: 1; padding: 16px; font-size: 13px;" onclick="processPosCheckout('UPI')" title="Shortcut: F2"><i data-lucide="smartphone" class="icon-sm"></i> UPI (F2)</button>
-                            <button class="primary-btn" style="background: #6366f1; flex: 1; padding: 16px; font-size: 13px;" onclick="openSplitPaymentModal()"><i data-lucide="scissors" class="icon-sm"></i> Split</button>
-                            <button class="primary-btn" style="background: #D4AF37; flex: 1; padding: 16px; font-size: 13px;" onclick="processPosCheckout('Pay Later')"><i data-lucide="clock" class="icon-sm"></i> Pay Later</button>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <button class="primary-btn" style="background: #10b981; padding: 16px; font-size: 13px;" onclick="processPosCheckout('Cash')" title="Shortcut: F1"><i data-lucide="banknote" class="icon-sm"></i> Cash (F1)</button>
+                            <button class="primary-btn" style="background: #0ea5e9; padding: 16px; font-size: 13px;" onclick="processPosCheckout('UPI')" title="Shortcut: F2"><i data-lucide="smartphone" class="icon-sm"></i> UPI (F2)</button>
+                            <button class="primary-btn" style="background: #6366f1; padding: 16px; font-size: 13px;" onclick="openSplitPaymentModal()"><i data-lucide="scissors" class="icon-sm"></i> Split</button>
+                            <button class="primary-btn" style="background: #D4AF37; padding: 16px; font-size: 13px;" onclick="processPosCheckout('Pay Later')"><i data-lucide="clock" class="icon-sm"></i> Pay Later</button>
                         </div>
                     </div>
                 </div>
@@ -304,17 +311,17 @@
 
         <article id="inventory-view" class="view-section hidden">
             <main class="dashboard-container">
-                <div class="section-header" style="flex-wrap: wrap; gap: 12px;">
-                    <h2>Live Catalog</h2>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <div class="section-header" style="flex-direction: column; align-items: flex-start; gap: 16px; margin-bottom: 32px;">
+                    <h2 style="margin-bottom: 0;">Live Catalog</h2>
+                    <div class="scrollable-actions" style="width: 100%;">
                         <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportInventoryCSV()"><i data-lucide="download" class="icon-sm"></i> Export</button>
                         <button class="primary-btn-small" style="background: #ef4444; color: white; border: none;" onclick="openAuditMode()"><i data-lucide="clipboard-check" class="icon-sm"></i> Audit Mode</button>
                         <button class="primary-btn-small" style="background: #25D366; color: white; border: none;" onclick="openSourcingModal()"><i data-lucide="truck" class="icon-sm"></i> Sourcing</button>
                         <button class="primary-btn-small" onclick="openAddCategoryModal()">+ Category</button>
                         <button class="primary-btn-small" onclick="openAddBrandModal()">+ Brand</button>
                         <button class="primary-btn-small" onclick="openAddDistributorModal()">+ Dist.</button>
-                        <button class="primary-btn" style="width: auto; padding: 12px 24px;" onclick="openAddProductModal()">+ Add Item</button>
-                        <button class="primary-btn" style="background: #D4AF37; width: auto; padding: 12px 24px;" onclick="openRestockModal()"><i data-lucide="package-plus" class="icon-sm"></i> Receive Shipment</button>
+                        <button class="primary-btn-small" style="border-color: var(--primary); color: var(--primary);" onclick="openAddProductModal()">+ Add Item</button>
+                        <button class="primary-btn-small" style="background: #D4AF37; color: white; border: none;" onclick="openRestockModal()"><i data-lucide="package-plus" class="icon-sm"></i> Receive Shipment</button>
                     </div>
                 </div>
 
@@ -337,33 +344,32 @@
                     </div>
                 </div>
                 
-                <div class="inventory-toolbar">
-                    <input type="text" id="inventory-search-input" class="inv-search" placeholder="Search products, SKUs, or tags..." oninput="debounceInventorySearch()">
-                    
-                    <select id="inventory-cat-filter" class="inv-filter" style="max-width: 180px;" onchange="applyInventoryFilters()">
-                        <option value="All">All Categories</option>
-                    </select>
-
-                    <select id="inventory-brand-filter" class="inv-filter" style="max-width: 180px;" onchange="applyInventoryFilters()">
-                        <option value="All">All Brands</option>
-                    </select>
-
-                    <select id="inventory-dist-filter" class="inv-filter" style="max-width: 180px;" onchange="applyInventoryFilters()">
-                        <option value="All">All Distributors</option>
-                    </select>
-
-                    <select id="inventory-sort" class="inv-filter" onchange="applyInventoryFilters()">
-                        <option value="name_asc">Name (A-Z)</option>
-                        <option value="stock_low">Stock (Low - High)</option>
-                        <option value="recent">Recently Added</option>
-                    </select>
-
-                    <button id="low-stock-btn" class="inv-filter" style="background: #FEF2F2; color: #DC2626; border-color: #FECACA; font-weight: 800; cursor: pointer;" onclick="toggleLowStockFilter()"><i data-lucide="alert-triangle" class="icon-sm"></i> Low Stock</button>
-                    
-                    <button id="inv-bulk-assign-btn" class="bulk-btn" onclick="openBulkAssignModal()" style="background: #8b5cf6;">Move (0)</button>
-                    <button id="inv-bulk-price-btn" class="bulk-btn" onclick="openBulkPriceModal()" style="background: #0ea5e9;">Edit Prices (0)</button>
-                    <button id="inv-bulk-print-btn" class="bulk-btn" onclick="generateBulkShelfLabels()" style="background: #10b981;"><i data-lucide="printer" class="icon-sm"></i> Labels (0)</button>
-                    <button id="inv-bulk-btn" class="bulk-btn" onclick="bulkDeactivateInventory()">Deactivate Selected (0)</button>
+                <div class="inventory-toolbar-wrapper" style="margin-bottom: 32px;">
+                    <div style="margin-bottom: 12px;">
+                        <input type="text" id="inventory-search-input" class="inv-search" style="width: 100%;" placeholder="Search products, SKUs, or tags..." oninput="debounceInventorySearch()">
+                    </div>
+                    <div class="scrollable-actions" style="width: 100%;">
+                        <select id="inventory-cat-filter" class="inv-filter" onchange="applyInventoryFilters()">
+                            <option value="All">All Categories</option>
+                        </select>
+                        <select id="inventory-brand-filter" class="inv-filter" onchange="applyInventoryFilters()">
+                            <option value="All">All Brands</option>
+                        </select>
+                        <select id="inventory-dist-filter" class="inv-filter" onchange="applyInventoryFilters()">
+                            <option value="All">All Distributors</option>
+                        </select>
+                        <select id="inventory-sort" class="inv-filter" onchange="applyInventoryFilters()">
+                            <option value="name_asc">Name (A-Z)</option>
+                            <option value="stock_low">Stock (Low - High)</option>
+                            <option value="recent">Recently Added</option>
+                        </select>
+                        <button id="low-stock-btn" class="inv-filter" style="background: #FEF2F2; color: #DC2626; border-color: #FECACA; font-weight: 800; cursor: pointer;" onclick="toggleLowStockFilter()"><i data-lucide="alert-triangle" class="icon-sm"></i> Low Stock</button>
+                        
+                        <button id="inv-bulk-assign-btn" class="primary-btn-small" onclick="openBulkAssignModal()" style="background: #8b5cf6; color: white; border: none; display:none;">Move (0)</button>
+                        <button id="inv-bulk-price-btn" class="primary-btn-small" onclick="openBulkPriceModal()" style="background: #0ea5e9; color: white; border: none; display:none;">Edit Prices (0)</button>
+                        <button id="inv-bulk-print-btn" class="primary-btn-small" onclick="generateBulkShelfLabels()" style="background: #10b981; color: white; border: none; display:none;"><i data-lucide="printer" class="icon-sm"></i> Labels (0)</button>
+                        <button id="inv-bulk-btn" class="primary-btn-small" onclick="bulkDeactivateInventory()" style="background: var(--accent); color: white; border: none; display:none;">Deactivate Selected (0)</button>
+                    </div>
                 </div>
 
                 <div id="inventory-feed" class="inventory-feed">
@@ -383,10 +389,12 @@
                     <button class="refresh-btn" onclick="fetchAnalytics()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
                 </div>
                 
-                <div class="date-picker-row">
-                    <button id="date-btn-7" class="date-btn active" onclick="updateAnalyticsRange(7)">Last 7 Days</button>
-                    <button id="date-btn-30" class="date-btn" onclick="updateAnalyticsRange(30)">Last 30 Days</button>
-                    <button id="date-btn-all" class="date-btn" onclick="updateAnalyticsRange(999)">All Time</button>
+                <div class="scrollable-actions" style="margin-bottom: 24px;">
+                    <div class="order-tabs">
+                        <button id="date-btn-7" class="tab-btn active" onclick="updateAnalyticsRange(7)">Last 7 Days</button>
+                        <button id="date-btn-30" class="tab-btn" onclick="updateAnalyticsRange(30)">Last 30 Days</button>
+                        <button id="date-btn-all" class="tab-btn" onclick="updateAnalyticsRange(999)">All Time</button>
+                    </div>
                 </div>
 
                 <div class="chart-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px; align-items: start;">
@@ -420,9 +428,9 @@
                 <div class="section-header" style="margin-top: 48px;">
                     <h2>Data Export Hub</h2>
                 </div>
-                <div class="export-grid" style="margin-bottom: 32px;">
-                    <button class="primary-btn-small" style="background: #062C1E; color: white;" onclick="exportOrdersCSV()"><i data-lucide="package" class="icon-sm"></i> Export Orders</button>
-                    <button class="primary-btn-small" style="background: #062C1E; color: white;" onclick="exportCustomersCSV()"><i data-lucide="users" class="icon-sm"></i> Export Customers</button>
+                <div class="scrollable-actions" style="margin-bottom: 32px;">
+                    <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportOrdersCSV()"><i data-lucide="package" class="icon-sm"></i> Export Orders</button>
+                    <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportCustomersCSV()"><i data-lucide="users" class="icon-sm"></i> Export Customers</button>
                     <button class="primary-btn-small" style="background: #10b981; color: white; border: none;" onclick="exportFinancialsCSV('Daily')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Daily Rev</button>
                     <button class="primary-btn-small" style="background: #059669; color: white; border: none;" onclick="exportFinancialsCSV('Monthly')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Monthly Rev</button>
                     <button class="primary-btn-small" style="background: #047857; color: white; border: none;" onclick="exportFinancialsCSV('Quarterly')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Quarterly Rev</button>
@@ -436,7 +444,7 @@
                 <div class="section-header">
                     <h2>Customer Directory</h2>
                     <div style="display: flex; gap: 12px;">
-                        <button class="primary-btn" style="background: #D4AF37; width: auto; padding: 12px 24px;" onclick="openKhataReminders()"><i data-lucide="megaphone" class="icon-sm"></i> Khata Reminders</button>
+                        <button class="primary-btn-small" style="background: #D4AF37; color: white; border: none;" onclick="openKhataReminders()"><i data-lucide="megaphone" class="icon-sm"></i> Khata Reminders</button>
                         <button class="refresh-btn" onclick="fetchCustomers()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
                     </div>
                 </div>
@@ -761,12 +769,12 @@
                     <p style="font-size: 16px; margin-bottom: 8px;">Total Amount: <strong id="modal-total" style="font-size: 20px; color: var(--primary);">₹0</strong></p>
                     <p style="font-size: 14px; font-weight: 600; color: var(--text-muted);">Payment: <span id="modal-payment" style="color: var(--text-main);">COD</span></p>
                 </div>
-                <div style="display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap;">
+                <div class="scrollable-actions" style="margin-top: 24px;">
                     <button class="primary-btn-small" style="background: #f59e0b; color: white; border: none;" onclick="printPackingSlip()"><i data-lucide="box" class="icon-sm"></i> Packing Slip</button>
                     <button class="primary-btn-small" style="background: #334155; color: white; border: none;" onclick="printReceipt()"><i data-lucide="printer" class="icon-sm"></i> Web Receipt</button>
                     <button class="primary-btn-small" style="background: #0ea5e9; color: white; border: none;" onclick="printHardwareReceipt()"><i data-lucide="printer" class="icon-sm"></i> POS Printer</button>
                     <button class="primary-btn-small" style="background: #25D366; color: white; border: none;" onclick="sendWhatsAppReceipt()"><i data-lucide="message-circle" class="icon-sm"></i> WhatsApp</button>
-                    <button class="danger-btn-small" style="padding: 12px 24px;" onclick="cancelOrder()"><i data-lucide="x-circle" class="icon-sm"></i> Cancel</button>
+                    <button class="danger-btn-small" onclick="cancelOrder()"><i data-lucide="x-circle" class="icon-sm"></i> Cancel</button>
                 </div>
                 <button class="primary-btn" style="margin-top: 16px;" onclick="markOrderDispatched()">Mark as Dispatched</button>
             </div>
