@@ -2,7 +2,6 @@
 
 // --- NEW: Global Fetch Interceptor ---
 // This silently attaches the JWT token to every backend request without needing to rewrite every file
-// FIXED: Bound to window to prevent "Illegal Invocation" crashes
 const originalFetch = window.fetch.bind(window);
 window.fetch = async function(resource, config = {}) {
     if (typeof resource === 'string' && typeof BACKEND_URL !== 'undefined' && resource.startsWith(BACKEND_URL)) {
@@ -19,7 +18,6 @@ window.fetch = async function(resource, config = {}) {
 
     // --- SECURITY: Unified Session Expiration ---
     if (response.status === 401 || response.status === 403) {
-        // Prevent looping if the 401 is from the auth endpoint itself
         if (typeof resource === 'string' && !resource.includes('/api/auth/')) {
             console.warn('Unauthorized intercept. Session expired or revoked.');
             if (typeof window.logoutUser === 'function') {
@@ -39,15 +37,17 @@ let currentPin = '';
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("App initializing, checking for saved session...");
     const savedUser = localStorage.getItem('dailypick_user');
-    const overlay = document.getElementById('pin-login-overlay');
+    const loginContainer = document.getElementById('pin-login-container');
+    const appContainer = document.getElementById('app-container');
     
     if (savedUser) {
         console.log("Found saved session:", savedUser);
         currentUser = JSON.parse(savedUser);
         
-        // Optimistically load the app so the UI doesn't freeze
-        if (overlay) overlay.style.display = 'none';
-        document.body.classList.remove('locked-login'); // FREEZE FIX
+        // Hide login, show app
+        if (loginContainer) loginContainer.style.display = 'none';
+        if (appContainer) appContainer.style.display = 'block';
+        
         applyRoleRestrictions();
         initializeApp();
 
@@ -56,7 +56,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             const res = await fetch(`${BACKEND_URL}/api/auth/verify?id=${currentUser._id || currentUser.id}`);
             const result = await res.json();
             
-            // If the backend says this user is invalid or their role doesn't match, kick them out
             if (!res.ok || !result.success || result.data.role !== currentUser.role) {
                 console.warn("Session verification failed. Role mismatch or invalid user. Forcing logout.");
                 window.logoutUser();
@@ -68,16 +67,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         
     } else {
         console.log("No session found. Showing PIN login.");
-        if (overlay) overlay.style.display = 'flex';
-        document.body.classList.add('locked-login'); // FREEZE FIX
+        // Show login, hide app completely
+        if (loginContainer) loginContainer.style.display = 'flex';
+        if (appContainer) appContainer.style.display = 'none';
     }
 });
 
 // Keyboard support for PIN entry
 document.addEventListener('keydown', (e) => {
-    const overlay = document.getElementById('pin-login-overlay');
-    // Ensure we don't capture keydown if the user is typing in the username input
-    if (overlay && overlay.style.display !== 'none' && document.activeElement.id !== 'login-username') {
+    const loginContainer = document.getElementById('pin-login-container');
+    if (loginContainer && loginContainer.style.display !== 'none' && document.activeElement.id !== 'login-username') {
         if (e.key >= '0' && e.key <= '9') {
             window.handlePinInput(e.key);
         } else if (e.key === 'Backspace' || e.key === 'Delete') {
@@ -86,9 +85,7 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Explicitly bind functions to window so inline HTML onclicks never fail
 window.handlePinInput = function(num) {
-    console.log("PIN input received:", num);
     if (currentPin.length < 4) {
         currentPin += num;
         updatePinDisplay();
@@ -99,7 +96,6 @@ window.handlePinInput = function(num) {
 };
 
 window.clearPinInput = function() {
-    console.log("Clearing PIN input");
     currentPin = '';
     updatePinDisplay();
 };
@@ -109,8 +105,8 @@ function updatePinDisplay() {
         const dot = document.getElementById(`pin-dot-${i}`);
         if (dot) {
             if (i <= currentPin.length) {
-                const dynamicColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
-                dot.style.background = dynamicColor || '#3b82f6'; 
+                const dynamicColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+                dot.style.background = dynamicColor || '#062C1E'; 
             } else {
                 dot.style.background = 'transparent';
             }
@@ -146,22 +142,21 @@ window.submitPinLogin = async function() {
         });
         
         const result = await res.json();
-        console.log("Login response:", result);
         
         if (result.success) {
             currentUser = result.data;
             localStorage.setItem('dailypick_user', JSON.stringify(currentUser));
             
-            // --- NEW: Save the secure token to local storage ---
             if (result.token) {
                 localStorage.setItem('adminToken', result.token);
             }
             
-            const overlay = document.getElementById('pin-login-overlay');
-            if (overlay) overlay.style.display = 'none';
-            document.body.classList.remove('locked-login'); // FREEZE FIX
+            const loginContainer = document.getElementById('pin-login-container');
+            const appContainer = document.getElementById('app-container');
             
-            // Clear inputs for security
+            if (loginContainer) loginContainer.style.display = 'none';
+            if (appContainer) appContainer.style.display = 'block';
+            
             if (usernameInput) usernameInput.value = '';
             window.clearPinInput();
 
@@ -182,30 +177,29 @@ window.submitPinLogin = async function() {
 window.logoutUser = function() {
     console.log("Logging out user...");
     localStorage.removeItem('dailypick_user');
-    
-    // --- NEW: Clear the secure token on logout ---
     localStorage.removeItem('adminToken');
     
-    // Close the secure stream if active
     if (window.adminStreamController) {
         window.adminStreamController.abort();
         window.adminStreamController = null;
     }
     
     currentUser = null;
-    const overlay = document.getElementById('pin-login-overlay');
-    if (overlay) overlay.style.display = 'flex';
-    document.body.classList.add('locked-login'); // FREEZE FIX
+    
+    const loginContainer = document.getElementById('pin-login-container');
+    const appContainer = document.getElementById('app-container');
+    
+    if (loginContainer) loginContainer.style.display = 'flex';
+    if (appContainer) appContainer.style.display = 'none';
+    
     window.clearPinInput();
     
-    // Hide user displays
     const display = document.getElementById('current-user-display');
     if (display) display.style.display = 'none';
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) logoutBtn.style.display = 'none';
 };
 
-// Enforce Role-Based Access Control (RBAC)
 function applyRoleRestrictions() {
     const display = document.getElementById('current-user-display');
     if (display) {
@@ -247,7 +241,6 @@ function applyRoleRestrictions() {
     }
 }
 
-// Proceed with standard initialization after auth is cleared
 function initializeApp() {
     console.log("Initializing app modules...");
     if (typeof fetchCategories === 'function') fetchCategories(); 
@@ -263,12 +256,11 @@ function initializeApp() {
     if (typeof checkCurrentShift === 'function') checkCurrentShift();
 }
 
-// --- Phase 6 PWA Service Worker Registration ---
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js')
             .then(registration => {
-                console.log('Service Worker registered successfully with scope: ', registration.scope);
+                console.log('Service Worker registered successfully');
             })
             .catch(err => {
                 console.error('Service Worker registration failed: ', err);
