@@ -1,7 +1,6 @@
 /* app.js */
 
 // --- NEW: Global Fetch Interceptor ---
-// This silently attaches the JWT token to every backend request without needing to rewrite every file
 const originalFetch = window.fetch.bind(window);
 window.fetch = async function(resource, config = {}) {
     if (typeof resource === 'string' && typeof BACKEND_URL !== 'undefined' && resource.startsWith(BACKEND_URL)) {
@@ -25,6 +24,12 @@ window.fetch = async function(resource, config = {}) {
                 if (typeof showToast === 'function') showToast("Session expired. Please log in again.");
             }
         }
+    }
+
+    // --- PERFORMANCE: Graceful Rate-Limit Handling ---
+    if (response.status === 429) {
+        console.warn('Rate limit exceeded.');
+        if (typeof showToast === 'function') showToast("Too many requests. Please slow down.");
     }
     
     return response;
