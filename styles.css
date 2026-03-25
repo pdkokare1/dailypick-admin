@@ -39,9 +39,6 @@ body { background-color: var(--bg-color); color: var(--text-main); padding-botto
     display: flex; justify-content: space-between; align-items: center; 
     border-bottom: 1px solid var(--border-soft); 
     position: sticky; top: 0; z-index: 100;
-    /* Hardware acceleration to prevent top-right white box rendering glitches */
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
 }
 .admin-header h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; color: var(--primary); }
 .subtitle { font-size: 13px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
@@ -467,19 +464,50 @@ body.dark-mode .history-item { background: #06090F; border-color: #1F2937; }
     #toast-container { left: calc(50% + 130px); bottom: 40px; width: auto; max-width: none; transform: translateX(-50%); }
 }
 
-/* Staff Login Mobile Keyboard & Visual Fixes */
-#pin-login-overlay {
-    /* Hardware acceleration to prevent top-right white box rendering glitches */
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
+/* =========================================
+   BULLETPROOF MOBILE LOGIN & KEYBOARD FIXES
+   ========================================= */
+
+/* 1. When login is active, completely lock the app body to prevent browser scroll-reflows */
+body.locked-login {
+    overflow: hidden !important;
+    position: fixed !important;
+    width: 100vw !important;
+    height: 100vh !important;
 }
 
+/* 2. Absolute positioning directly against the locked body */
+#pin-login-overlay {
+    position: absolute;
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0; 
+    width: 100%; 
+    height: 100%;
+    background-color: var(--bg-color); 
+    z-index: 999999; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    
+    /* Anchor to top so it never jumps when keyboard pushes bottom up */
+    justify-content: flex-start; 
+    padding-top: max(8vh, 40px); 
+    
+    /* Massive bottom padding ensures content can be scrolled fully into view over keyboard */
+    padding-bottom: 40vh; 
+    
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* 3. Stop iOS automatic zooming on inputs */
 #login-username {
-    /* Prevent iOS zoom on focus which causes layout shifts */
     font-size: 16px !important; 
 }
 
-/* Ensure buttons don't flicker white on tap */
+/* 4. Ensure buttons don't flicker white on tap */
 .pin-btn {
     -webkit-tap-highlight-color: transparent;
     user-select: none;
