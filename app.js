@@ -47,6 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         // Optimistically load the app so the UI doesn't freeze
         if (overlay) overlay.style.display = 'none';
+        document.body.classList.remove('locked-login'); // FREEZE FIX
         applyRoleRestrictions();
         initializeApp();
 
@@ -68,6 +69,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
         console.log("No session found. Showing PIN login.");
         if (overlay) overlay.style.display = 'flex';
+        document.body.classList.add('locked-login'); // FREEZE FIX
     }
 });
 
@@ -157,6 +159,7 @@ window.submitPinLogin = async function() {
             
             const overlay = document.getElementById('pin-login-overlay');
             if (overlay) overlay.style.display = 'none';
+            document.body.classList.remove('locked-login'); // FREEZE FIX
             
             // Clear inputs for security
             if (usernameInput) usernameInput.value = '';
@@ -192,6 +195,7 @@ window.logoutUser = function() {
     currentUser = null;
     const overlay = document.getElementById('pin-login-overlay');
     if (overlay) overlay.style.display = 'flex';
+    document.body.classList.add('locked-login'); // FREEZE FIX
     window.clearPinInput();
     
     // Hide user displays
