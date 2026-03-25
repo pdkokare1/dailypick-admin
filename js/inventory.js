@@ -88,7 +88,6 @@ async function fetchInventory() {
         else if (isLowStockFilterActive) queryUrl += `&stockStatus=low`;
         else if (isDeadStockFilterActive) queryUrl += `&stockStatus=dead`;
 
-        // --- NEW OPTIMIZED LOGIC: Send Sort Command Directly to Backend ---
         const sortDropdown = document.getElementById('inventory-sort');
         if (sortDropdown) {
             queryUrl += `&sort=${sortDropdown.value}`;
@@ -108,9 +107,6 @@ async function fetchInventory() {
             }
             
             updateInventoryDashboard(); 
-            
-            // --- OLD CODE (KEPT FOR CONSULTATION) ---
-            // currentInventory = applyInventorySorting(currentInventory); 
             
             renderInventory(dataToRender.length < 30); 
         }
@@ -942,12 +938,6 @@ function loadMoreInventory() {
     fetchInventory(); 
 }
 
-// --- OLD CODE (KEPT FOR CONSULTATION) ---
-// function applyInventorySorting(data) {
-//     const sortDropdown = document.getElementById('inventory-sort');
-//     const sortVal = sortDropdown ? sortDropdown.value : 'name_asc';
-//     if (sortVal === 'name_asc') { return data.sort((a,b) => a.name.localeCompare(b.name)); } ...
-
 function toggleInventorySelection(id, event) {
     event.stopPropagation();
     if (selectedInventory.has(id)) {
@@ -1297,6 +1287,12 @@ function openAddProductModal() {
     document.getElementById('variants-container').innerHTML = ''; 
     document.getElementById('drop-zone').classList.remove('dragover');
     
+    // --- NEW: Reset Image Preview ---
+    const previewImg = document.getElementById('drop-zone-preview');
+    const dropContent = document.getElementById('drop-zone-content');
+    if (previewImg) previewImg.style.display = 'none';
+    if (dropContent) dropContent.style.display = 'block';
+    
     addVariantRow(); 
     document.getElementById('add-product-modal').classList.add('active'); 
 }
@@ -1316,6 +1312,20 @@ function openEditProductModal(id, e) {
     document.getElementById('new-distributor').value = p.distributorName || '';
     document.getElementById('new-tags').value = p.searchTags || ''; 
     document.getElementById('current-image-text').style.display = p.imageUrl ? 'block' : 'none';
+
+    // --- NEW: Show Existing Image Preview ---
+    const previewImg = document.getElementById('drop-zone-preview');
+    const dropContent = document.getElementById('drop-zone-content');
+    if (p.imageUrl) {
+        if (previewImg) {
+            previewImg.src = p.imageUrl;
+            previewImg.style.display = 'block';
+        }
+        if (dropContent) dropContent.style.display = 'none';
+    } else {
+        if (previewImg) previewImg.style.display = 'none';
+        if (dropContent) dropContent.style.display = 'block';
+    }
 
     const container = document.getElementById('variants-container');
     container.innerHTML = '';
@@ -1457,3 +1467,64 @@ if (invSentinel) {
     }, { rootMargin: '200px' });
     observer.observe(invSentinel);
 }
+
+// --- NEW: Drag & Drop + Image Preview Logic ---
+document.addEventListener('DOMContentLoaded', () => {
+    const fileInput = document.getElementById('new-image');
+    const dropZone = document.getElementById('drop-zone');
+    const dropContent = document.getElementById('drop-zone-content');
+    const previewImg = document.getElementById('drop-zone-preview');
+
+    if (fileInput && dropZone) {
+        // Handle file selection (click to browse)
+        fileInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        if(previewImg) {
+                            previewImg.src = e.target.result;
+                            previewImg.style.display = 'block';
+                        }
+                        if(dropContent) dropContent.style.display = 'none';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            } else {
+                if(previewImg) previewImg.style.display = 'none';
+                if(dropContent) dropContent.style.display = 'block';
+            }
+        });
+
+        // Prevent default browser behavior for drag & drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // Add visual flair when dragging over
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+        });
+
+        // Handle the actual drop
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files && files.length > 0) {
+                fileInput.files = files; // Transfer the dropped files into the hidden input
+                fileInput.dispatchEvent(new Event('change')); // Trigger the preview generation
+            }
+        });
+    }
+});
