@@ -119,6 +119,7 @@ function updatePinDisplay() {
     }
 }
 
+// --- MODIFIED: Multi-Store Login Interception ---
 window.submitPinLogin = async function() {
     console.log("Submitting PIN to backend...");
     
@@ -156,18 +157,9 @@ window.submitPinLogin = async function() {
                 localStorage.setItem('adminToken', result.token);
             }
             
-            const loginContainer = document.getElementById('pin-login-container');
-            const appContainer = document.getElementById('app-container');
+            // Try to load stores for Location Selection instead of immediately logging in
+            window.showLocationSelection();
             
-            if (loginContainer) loginContainer.style.display = 'none';
-            if (appContainer) appContainer.style.display = 'block';
-            
-            if (usernameInput) usernameInput.value = '';
-            window.clearPinInput();
-
-            applyRoleRestrictions();
-            initializeApp();
-            if (typeof showToast === 'function') showToast(`Welcome, ${currentUser.name}!`);
         } else {
             if (typeof showToast === 'function') showToast(result.message || 'Invalid Username or PIN');
             window.clearPinInput();
@@ -179,10 +171,82 @@ window.submitPinLogin = async function() {
     }
 };
 
+// --- NEW: Multi-Store Flow ---
+window.showLocationSelection = async function() {
+    try {
+        // Assume you will add an endpoint to fetch stores in the backend later
+        const res = await fetch(`${BACKEND_URL}/api/stores`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.data && data.data.length > 0) {
+                document.getElementById('pin-entry-step').style.display = 'none';
+                document.getElementById('location-selection-step').style.display = 'block';
+                
+                const storeSelect = document.getElementById('login-store-select');
+                storeSelect.innerHTML = '<option value="">Select Store...</option>';
+                data.data.forEach(s => {
+                    storeSelect.innerHTML += `<option value="${s._id}">${s.name} (${s.location})</option>`;
+                });
+                return; // Stop here and wait for user to pick location
+            }
+        }
+    } catch (e) {}
+
+    // Fallback: If no stores exist or API fails, just login normally (Backward Compatibility)
+    window.finalizeLogin();
+};
+
+window.fetchRegistersForStore = async function(storeId) {
+    if (!storeId) return;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/stores/${storeId}/registers`);
+        if (res.ok) {
+            const data = await res.json();
+            const regSelect = document.getElementById('login-register-select');
+            regSelect.innerHTML = '<option value="">Select Register...</option>';
+            if (data.data) {
+                data.data.forEach(r => {
+                    regSelect.innerHTML += `<option value="${r._id}">${r.name}</option>`;
+                });
+            }
+        }
+    } catch (e) { console.error("Error fetching registers", e); }
+};
+
+window.finalizeLogin = function() {
+    const storeSelect = document.getElementById('login-store-select');
+    const regSelect = document.getElementById('login-register-select');
+    
+    if (storeSelect && storeSelect.value) {
+        currentStoreId = storeSelect.value;
+        localStorage.setItem('dailypick_storeId', currentStoreId);
+    }
+    if (regSelect && regSelect.value) {
+        currentRegisterId = regSelect.value;
+        localStorage.setItem('dailypick_registerId', currentRegisterId);
+    }
+
+    const loginContainer = document.getElementById('pin-login-container');
+    const appContainer = document.getElementById('app-container');
+    const usernameInput = document.getElementById('login-username');
+    
+    if (loginContainer) loginContainer.style.display = 'none';
+    if (appContainer) appContainer.style.display = 'block';
+    
+    if (usernameInput) usernameInput.value = '';
+    window.clearPinInput();
+
+    applyRoleRestrictions();
+    initializeApp();
+    if (typeof showToast === 'function') showToast(`Welcome, ${currentUser.name}!`);
+};
+
 window.logoutUser = function() {
     console.log("Logging out user...");
     localStorage.removeItem('dailypick_user');
     localStorage.removeItem('adminToken');
+    localStorage.removeItem('dailypick_storeId');
+    localStorage.removeItem('dailypick_registerId');
     
     if (window.adminStreamController) {
         window.adminStreamController.abort();
@@ -190,6 +254,8 @@ window.logoutUser = function() {
     }
     
     currentUser = null;
+    currentStoreId = null;
+    currentRegisterId = null;
     
     const loginContainer = document.getElementById('pin-login-container');
     const appContainer = document.getElementById('app-container');
@@ -197,6 +263,12 @@ window.logoutUser = function() {
     if (loginContainer) loginContainer.style.display = 'flex';
     if (appContainer) appContainer.style.display = 'none';
     
+    // Reset login steps
+    const pinStep = document.getElementById('pin-entry-step');
+    const locStep = document.getElementById('location-selection-step');
+    if (pinStep) pinStep.style.display = 'block';
+    if (locStep) locStep.style.display = 'none';
+
     window.clearPinInput();
     
     const display = document.getElementById('current-user-display');
