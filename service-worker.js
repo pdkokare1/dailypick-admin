@@ -115,8 +115,6 @@ self.addEventListener('sync', (event) => {
 self.addEventListener('fetch', (event) => {
     const requestUrl = new URL(event.request.url);
 
-    // --- NEW: Bulletproof Navigation Fallback (Prevents the offline dinosaur) ---
-    // If the cashier hits refresh while offline, instantly load index.html from cache
     if (event.request.mode === 'navigate') {
         event.respondWith(
             caches.match('./index.html').then((cachedResponse) => {
@@ -163,9 +161,10 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             fetch(event.request)
                 .then((networkResponse) => {
-                    const clonedResponse = networkResponse.clone();
+                    // FIX: Clone response synchronously to prevent "Body already used" errors
+                    const responseToCache = networkResponse.clone();
                     caches.open('dailypick-api-cache').then((cache) => {
-                        cache.put(event.request, clonedResponse);
+                        cache.put(event.request, responseToCache);
                     });
                     
                     syncOfflineOrders();
@@ -182,16 +181,16 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // --- ENHANCED: Stale-While-Revalidate for Static Assets ---
-    // Returns cached files instantly, then fetches fresh ones in the background to keep the app updated
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
             const fetchPromise = fetch(event.request).then((networkResponse) => {
+                // FIX: Clone response synchronously for static assets as well
+                const responseToCache = networkResponse.clone();
                 caches.open(CACHE_NAME).then((cache) => {
-                    cache.put(event.request, networkResponse.clone());
+                    cache.put(event.request, responseToCache);
                 });
                 return networkResponse;
-            }).catch(() => {}); // Catch failures silently if offline
+            }).catch(() => {}); 
             
             return cachedResponse || fetchPromise;
         })
