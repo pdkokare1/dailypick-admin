@@ -1,6 +1,5 @@
 /* app.js */
 
-// --- NEW: Global Fetch Interceptor ---
 const originalFetch = window.fetch.bind(window);
 window.fetch = async function(resource, config = {}) {
     if (typeof resource === 'string' && typeof BACKEND_URL !== 'undefined' && resource.startsWith(BACKEND_URL)) {
@@ -15,7 +14,6 @@ window.fetch = async function(resource, config = {}) {
     
     const response = await originalFetch(resource, config);
 
-    // --- SECURITY: Unified Session Expiration ---
     if (response.status === 401 || response.status === 403) {
         if (typeof resource === 'string' && !resource.includes('/api/auth/')) {
             console.warn('Unauthorized intercept. Session expired or revoked.');
@@ -26,7 +24,6 @@ window.fetch = async function(resource, config = {}) {
         }
     }
 
-    // --- PERFORMANCE: Graceful Rate-Limit Handling ---
     if (response.status === 429) {
         console.warn('Rate limit exceeded.');
         if (typeof showToast === 'function') showToast("Too many requests. Please slow down.");
@@ -37,8 +34,65 @@ window.fetch = async function(resource, config = {}) {
 
 let currentUser = null;
 let currentPin = '';
+let realtimeSocket = null; // --- NEW: WebSocket Instance Tracker ---
+let realtimeReconnectTimeout = null;
 
-// Intercept app initialization to enforce Security PIN
+// --- NEW FUNCTIONALITY: Secure Auto-Reconnecting WebSocket ---
+window.setupRealtimeConnection = function() {
+    if (realtimeSocket && realtimeSocket.readyState <= 1) return; // Already connected or connecting
+
+    const token = localStorage.getItem('adminToken');
+    if (!token) return;
+
+    // Convert http/https to ws/wss safely
+    const wsUrl = BACKEND_URL.replace(/^http/, 'ws') + `/api/ws/pos?token=${token}`;
+    
+    try {
+        realtimeSocket = new WebSocket(wsUrl);
+
+        realtimeSocket.onopen = () => {
+            console.log("Secure Realtime WebSocket Connected");
+            if (realtimeReconnectTimeout) clearTimeout(realtimeReconnectTimeout);
+        };
+
+        realtimeSocket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                
+                // Keep-Alive / Heartbeat Response
+                if (data.type === 'PING') {
+                    realtimeSocket.send(JSON.stringify({ type: 'PONG' }));
+                    return;
+                }
+                
+                // Handle POS updates (Inventory, Orders)
+                if (data.type === 'NEW_ORDER' || data.type === 'ORDER_STATUS_UPDATED') {
+                    if (typeof fetchOrders === 'function') fetchOrders();
+                    if (typeof renderOverview === 'function') renderOverview();
+                }
+                if (data.type === 'INVENTORY_UPDATE') {
+                    if (typeof fetchInventory === 'function') fetchInventory();
+                }
+            } catch (e) {
+                console.warn("WebSocket message error", e);
+            }
+        };
+
+        realtimeSocket.onclose = () => {
+            console.warn("Realtime WebSocket Closed. Attempting reconnect in 3s...");
+            realtimeSocket = null;
+            realtimeReconnectTimeout = setTimeout(window.setupRealtimeConnection, 3000);
+        };
+
+        realtimeSocket.onerror = (err) => {
+            console.error("Realtime WebSocket Error:", err);
+            realtimeSocket.close(); // Force close to trigger auto-reconnect logic
+        };
+    } catch (e) {
+        console.error("WebSocket setup failed", e);
+    }
+};
+
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("App initializing, checking for saved session...");
     const savedUser = localStorage.getItem('dailypick_user');
@@ -49,14 +103,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.log("Found saved session:", savedUser);
         currentUser = JSON.parse(savedUser);
         
-        // Hide login, show app
         if (loginContainer) loginContainer.style.display = 'none';
         if (appContainer) appContainer.style.display = 'block';
         
         applyRoleRestrictions();
         initializeApp();
 
-        // Background check to verify the session hasn't been tampered with
         try {
             const res = await fetch(`${BACKEND_URL}/api/auth/verify?id=${currentUser._id || currentUser.id}`);
             const result = await res.json();
@@ -72,13 +124,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         
     } else {
         console.log("No session found. Showing PIN login.");
-        // Show login, hide app completely
         if (loginContainer) loginContainer.style.display = 'flex';
         if (appContainer) appContainer.style.display = 'none';
     }
 });
 
-// Keyboard support for PIN entry
 document.addEventListener('keydown', (e) => {
     const loginContainer = document.getElementById('pin-login-container');
     if (loginContainer && loginContainer.style.display !== 'none' && document.activeElement.id !== 'login-username') {
@@ -119,7 +169,6 @@ function updatePinDisplay() {
     }
 }
 
-// --- MODIFIED: Multi-Store Login Interception ---
 window.submitPinLogin = async function() {
     console.log("Submitting PIN to backend...");
     
@@ -157,7 +206,6 @@ window.submitPinLogin = async function() {
                 localStorage.setItem('adminToken', result.token);
             }
             
-            // Try to load stores for Location Selection instead of immediately logging in
             window.showLocationSelection();
             
         } else {
@@ -171,10 +219,8 @@ window.submitPinLogin = async function() {
     }
 };
 
-// --- NEW: Multi-Store Flow ---
 window.showLocationSelection = async function() {
     try {
-        // Assume you will add an endpoint to fetch stores in the backend later
         const res = await fetch(`${BACKEND_URL}/api/stores`);
         if (res.ok) {
             const data = await res.json();
@@ -187,12 +233,11 @@ window.showLocationSelection = async function() {
                 data.data.forEach(s => {
                     storeSelect.innerHTML += `<option value="${s._id}">${s.name} (${s.location})</option>`;
                 });
-                return; // Stop here and wait for user to pick location
+                return; 
             }
         }
     } catch (e) {}
 
-    // Fallback: If no stores exist or API fails, just login normally (Backward Compatibility)
     window.finalizeLogin();
 };
 
@@ -248,6 +293,14 @@ window.logoutUser = function() {
     localStorage.removeItem('dailypick_storeId');
     localStorage.removeItem('dailypick_registerId');
     
+    // Cleanly close realtime socket on logout
+    if (realtimeSocket) {
+        realtimeSocket.onclose = null; // Prevent auto-reconnect
+        realtimeSocket.close();
+        realtimeSocket = null;
+    }
+    if (realtimeReconnectTimeout) clearTimeout(realtimeReconnectTimeout);
+
     if (window.adminStreamController) {
         window.adminStreamController.abort();
         window.adminStreamController = null;
@@ -263,7 +316,6 @@ window.logoutUser = function() {
     if (loginContainer) loginContainer.style.display = 'flex';
     if (appContainer) appContainer.style.display = 'none';
     
-    // Reset login steps
     const pinStep = document.getElementById('pin-entry-step');
     const locStep = document.getElementById('location-selection-step');
     if (pinStep) pinStep.style.display = 'block';
@@ -326,6 +378,9 @@ function initializeApp() {
     if (typeof fetchPromotions === 'function') fetchPromotions(); 
     if (typeof fetchOrders === 'function') fetchOrders();
     
+    // Fire up the real-time WebSocket connection
+    window.setupRealtimeConnection();
+
     if (currentUser && currentUser.role === 'Admin') {
         if (typeof renderOverview === 'function') renderOverview(); 
     }
