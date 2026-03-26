@@ -12,7 +12,6 @@ async function exportOrdersCSV() {
         if (result.success) {
             if (result.data.length === 0) return showToast('No orders to export.');
             
-            // MODIFIED: Added Tax, Discount, and Points Redeemed columns
             let csvContent = "Order ID,Date,Customer Name,Phone,Address,Delivery Type,Total Amount,Tax (INR),Discount (INR),Points Redeemed,Payment Method,Status,Items\n";
             result.data.forEach(o => {
                 const cleanName = (o.customerName || 'Guest').replace(/,/g, '');
@@ -21,7 +20,6 @@ async function exportOrdersCSV() {
                 const date = new Date(o.createdAt).toLocaleString().replace(/,/g, '');
                 const itemsStr = o.items.map(i => `${i.qty}x ${i.name}`).join(' | ');
                 
-                // MODIFIED: Appended the new data points safely defaulting to 0
                 csvContent += `${o._id},${date},${cleanName},${cleanPhone},${cleanAddress},${o.deliveryType},${o.totalAmount},${o.taxAmount || 0},${o.discountAmount || 0},${o.pointsRedeemed || 0},${o.paymentMethod},${o.status},"${itemsStr}"\n`;
             });
             
@@ -86,7 +84,6 @@ async function exportFinancialsCSV(timeframe) {
                 }
                 
                 if (!groupedData[key]) {
-                    // MODIFIED: Added tax, discount, points tracking
                     groupedData[key] = { orders: 0, revenue: 0, tax: 0, discount: 0, points: 0 };
                 }
                 groupedData[key].orders += 1;
@@ -96,7 +93,6 @@ async function exportFinancialsCSV(timeframe) {
                 groupedData[key].points += (o.pointsRedeemed || 0);
             });
             
-            // MODIFIED: Added new columns to Financials export
             let csvContent = `Time Period (${timeframe}),Total Orders,Total Revenue (INR),Total Tax (INR),Total Discount (INR),Points Redeemed,Average Order Value (INR)\n`;
             Object.keys(groupedData).forEach(key => {
                 const d = groupedData[key];
@@ -127,7 +123,6 @@ function triggerCSVDownload(csvContent, filename) {
 
 async function fetchAnalytics() {
     try {
-        // Fetch Orders and Expenses simultaneously
         const [orderRes, expenseRes] = await Promise.all([
             fetch(`${BACKEND_URL}/api/orders`),
             fetch(`${BACKEND_URL}/api/expenses`)
@@ -167,10 +162,9 @@ function updateAnalyticsRange(daysLimit) {
 
     let revenueMap = {};
     let expenseMap = {};
-    let cogsMap = {}; // Added to track Cost of Goods Sold
+    let cogsMap = {}; 
     let labels = [];
     
-    // NEW: Variables to track ROI metrics
     let totalPeriodTax = 0;
     let totalPeriodDiscount = 0;
     let totalPeriodPoints = 0;
@@ -191,7 +185,6 @@ function updateAnalyticsRange(daysLimit) {
     let hourlyDistribution = new Array(24).fill(0); 
 
     filteredOrders.forEach(o => {
-        // NEW: Aggregate ROI and Tax metrics
         totalPeriodTax += (o.taxAmount || 0);
         totalPeriodDiscount += (o.discountAmount || 0);
         totalPeriodPoints += (o.pointsRedeemed || 0);
@@ -207,7 +200,6 @@ function updateAnalyticsRange(daysLimit) {
             itemFrequency[key].qty += i.qty;
             itemFrequency[key].revenue += (i.price * i.qty);
 
-            // --- Real Profitability Calculation (COGS) ---
             if (cogsMap[orderDate] !== undefined) {
                 const invItem = currentInventory.find(p => p._id === i.productId);
                 if (invItem && invItem.variants) {
@@ -218,7 +210,6 @@ function updateAnalyticsRange(daysLimit) {
                     }
                 }
             }
-            // ---------------------------------------------
 
             let catName = 'Uncategorized';
             const invItem = currentInventory.find(inv => inv.name === i.name);
@@ -232,7 +223,6 @@ function updateAnalyticsRange(daysLimit) {
         hourlyDistribution[hour]++;
     });
 
-    // Map Expenses to graph labels
     filteredExpenses.forEach(ex => {
         const exDate = new Date(ex.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         if (expenseMap[exDate] !== undefined) {
@@ -240,7 +230,15 @@ function updateAnalyticsRange(daysLimit) {
         }
     });
 
-    // NEW: Inject KPI Row dynamically into the DOM above the charts
+    // --- NEW: Dynamic Profit Margin Calculation ---
+    let marginPct = 0;
+    const totalRev = Object.values(revenueMap).reduce((a,b)=>a+b, 0);
+    const totalCogs = Object.values(cogsMap).reduce((a,b)=>a+b, 0);
+    const totalExp = Object.values(expenseMap).reduce((a,b)=>a+b, 0);
+    if (totalRev > 0) {
+        marginPct = (((totalRev - totalCogs - totalExp) / totalRev) * 100).toFixed(1);
+    }
+
     let kpiRow = document.getElementById('analytics-kpi-row');
     if (!kpiRow) {
         const dateRow = document.querySelector('.date-picker-row');
@@ -250,7 +248,7 @@ function updateAnalyticsRange(daysLimit) {
             kpiRow.style.marginBottom = '24px';
             kpiRow.style.marginTop = '16px';
             kpiRow.style.display = 'grid';
-            kpiRow.style.gridTemplateColumns = 'repeat(auto-fit, minmax(250px, 1fr))';
+            kpiRow.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
             kpiRow.style.gap = '16px';
             dateRow.parentNode.insertBefore(kpiRow, dateRow.nextSibling);
         }
@@ -258,13 +256,18 @@ function updateAnalyticsRange(daysLimit) {
     
     if (kpiRow) {
         kpiRow.innerHTML = `
+            <div class="stat-card" style="padding: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <h3 style="font-size: 12px; color: #166534; margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Net Profit Margin</h3>
+                <p style="font-size: 24px; font-weight: 800; color: #15803d;">${marginPct}%</p>
+                <p style="font-size: 11px; color: #16a34a; margin-top: 4px;">After COGS & Expenses</p>
+            </div>
             <div class="stat-card" style="padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                 <h3 style="font-size: 12px; color: #991b1b; margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Promotions (Discounts)</h3>
                 <p style="font-size: 24px; font-weight: 800; color: #dc2626;">-₹${totalPeriodDiscount.toFixed(2)}</p>
                 <p style="font-size: 11px; color: #b91c1c; margin-top: 4px;">Revenue invested in offers</p>
             </div>
             <div class="stat-card" style="padding: 16px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                <h3 style="font-size: 12px; color: #6b21a8; margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Loyalty Points Redeemed</h3>
+                <h3 style="font-size: 12px; color: #6b21a8; margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Points Redeemed</h3>
                 <p style="font-size: 24px; font-weight: 800; color: #8b5cf6;">${totalPeriodPoints}</p>
                 <p style="font-size: 11px; color: #7e22ce; margin-top: 4px;">Points cashed in by customers</p>
             </div>
@@ -311,6 +314,53 @@ function updateAnalyticsRange(daysLimit) {
                 </div>
             `;
         });
+    }
+
+    // --- NEW: VIP Customers (CLV) Feed ---
+    let vipFeed = document.getElementById('vip-customers-feed');
+    if (!vipFeed) {
+        const topItemsContainer = document.getElementById('top-items-feed');
+        if (topItemsContainer) {
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            header.style.marginTop = '40px';
+            header.innerHTML = '<h2>VIP Customers (CLV)</h2>';
+            
+            vipFeed = document.createElement('div');
+            vipFeed.id = 'vip-customers-feed';
+            vipFeed.className = 'top-items-list'; 
+            
+            topItemsContainer.parentNode.insertBefore(header, topItemsContainer.nextSibling);
+            header.parentNode.insertBefore(vipFeed, header.nextSibling);
+        }
+    }
+
+    if (vipFeed) {
+        let customerLTV = {};
+        filteredOrders.forEach(o => {
+            const phone = o.customerPhone || 'Walk-in / Guest';
+            if(!customerLTV[phone]) customerLTV[phone] = { name: o.customerName || 'Guest', revenue: 0, orders: 0 };
+            customerLTV[phone].revenue += o.totalAmount;
+            customerLTV[phone].orders += 1;
+        });
+        const topCustomers = Object.entries(customerLTV)
+            .map(([phone, data]) => ({phone, ...data}))
+            .sort((a,b) => b.revenue - a.revenue)
+            .slice(0, 5);
+        
+        vipFeed.innerHTML = '';
+        if (topCustomers.length === 0) {
+            vipFeed.innerHTML = `<p class="empty-state">No customer data for this period.</p>`;
+        } else {
+            topCustomers.forEach(c => {
+                vipFeed.innerHTML += `
+                    <div class="top-item-card" style="border-left: 4px solid #D4AF37;">
+                        <span class="top-item-name">${c.name} <span style="font-size:11px; color:#94A3B8; font-weight:normal; margin-left:8px;">${c.phone}</span></span>
+                        <span class="top-item-stats">${c.orders} Orders • ₹${c.revenue.toFixed(2)}</span>
+                    </div>
+                `;
+            });
+        }
     }
 }
 
