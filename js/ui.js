@@ -532,3 +532,133 @@ function calculateEodDiscrepancy() {
         resultDiv.innerHTML = `<span style="color: #f59e0b; font-weight: bold;">Overage Note: You are over by ₹${Math.abs(diff).toFixed(2)} 📈</span>`;
     }
 }
+
+// --- NEW Phase 5: Multi-Store Admin Management UI ---
+async function openStoreManagementModal() {
+    const modal = document.getElementById('manage-stores-modal');
+    modal.classList.add('active');
+    
+    // Dynamically inject the management UI replacing the placeholder
+    const formCard = modal.querySelector('.form-card');
+    formCard.innerHTML = `
+        <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <h2>Store Management</h2>
+            <button class="close-btn" onclick="document.getElementById('manage-stores-modal').classList.remove('active')" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; text-align: left;">
+            <div style="background: #F9FAFB; padding: 16px; border-radius: 12px; border: 1px solid #E5E7EB;">
+                <h3 style="margin-bottom: 12px; font-size: 15px;">Add New Store</h3>
+                <div class="input-group">
+                    <input type="text" id="new-store-name" placeholder="Store Name (e.g. Downtown)" style="margin-bottom: 8px;">
+                    <input type="text" id="new-store-location" placeholder="Location/City" style="margin-bottom: 8px;">
+                    <button class="primary-btn" style="background: #10b981;" onclick="submitNewStore()">Create Store</button>
+                </div>
+            </div>
+
+            <div style="background: #F9FAFB; padding: 16px; border-radius: 12px; border: 1px solid #E5E7EB;">
+                <h3 style="margin-bottom: 12px; font-size: 15px;">Add Terminal</h3>
+                <div class="input-group">
+                    <select id="new-register-store" style="margin-bottom: 8px;">
+                        <option value="">Select Store...</option>
+                    </select>
+                    <input type="text" id="new-register-name" placeholder="Terminal Name (e.g. Counter 1)" style="margin-bottom: 8px;">
+                    <button class="primary-btn" style="background: #3b82f6;" onclick="submitNewRegister()">Create Terminal</button>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 24px; text-align: left;">
+            <h3 style="margin-bottom: 12px; font-size: 15px;">Active Stores & Terminals</h3>
+            <div id="store-management-list" style="max-height: 200px; overflow-y: auto; background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 12px;">
+                <p class="empty-state">Loading stores...</p>
+            </div>
+        </div>
+    `;
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    await renderStoreManagementList();
+}
+
+async function renderStoreManagementList() {
+    try {
+        const listEl = document.getElementById('store-management-list');
+        const selectEl = document.getElementById('new-register-store');
+        
+        const res = await fetch(`${BACKEND_URL}/api/stores`);
+        const storeData = await res.json();
+        
+        if (storeData.success && storeData.data.length > 0) {
+            listEl.innerHTML = '';
+            selectEl.innerHTML = '<option value="">Select Store...</option>';
+            
+            for (const store of storeData.data) {
+                selectEl.innerHTML += `<option value="${store._id}">${store.name}</option>`;
+                
+                let registersHtml = '<span style="font-size:11px; color:var(--text-muted);">No terminals yet.</span>';
+                const regRes = await fetch(`${BACKEND_URL}/api/stores/${store._id}/registers`);
+                const regData = await regRes.json();
+                
+                if (regData.success && regData.data.length > 0) {
+                    registersHtml = regData.data.map(r => `<span style="background:#e2e8f0; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:4px;">${r.name}</span>`).join('');
+                }
+                
+                listEl.innerHTML += `
+                    <div style="padding: 12px; border-bottom: 1px solid #F3F4F6;">
+                        <strong style="font-size: 14px; color: var(--primary);">${store.name}</strong> <span style="font-size: 12px; color: var(--text-muted);">(${store.location})</span>
+                        <div style="margin-top: 8px;">${registersHtml}</div>
+                    </div>
+                `;
+            }
+        } else {
+            listEl.innerHTML = '<p class="empty-state">No stores configured yet.</p>';
+        }
+    } catch (e) {
+        console.error("Error loading stores", e);
+    }
+}
+
+async function submitNewStore() {
+    const name = document.getElementById('new-store-name').value.trim();
+    const location = document.getElementById('new-store-location').value.trim();
+    if (!name || !location) return showToast("Name and Location required.");
+    
+    try {
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/stores`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, location })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast("Store created successfully!");
+            document.getElementById('new-store-name').value = '';
+            document.getElementById('new-store-location').value = '';
+            await renderStoreManagementList();
+        } else {
+            showToast(data.message || "Error creating store");
+        }
+    } catch (e) { showToast("Network error"); }
+}
+
+async function submitNewRegister() {
+    const storeId = document.getElementById('new-register-store').value;
+    const name = document.getElementById('new-register-name').value.trim();
+    if (!storeId || !name) return showToast("Store and Terminal Name required.");
+    
+    try {
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/registers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, storeId })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast("Terminal created successfully!");
+            document.getElementById('new-register-name').value = '';
+            await renderStoreManagementList();
+        } else {
+            showToast(data.message || "Error creating terminal");
+        }
+    } catch (e) { showToast("Network error"); }
+}
