@@ -229,7 +229,6 @@ function openOrderModalById(id) {
     }
 }
 
-// --- ENHANCED: Proactive Inventory Health Overview ---
 async function renderOverview() {
     const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
     document.getElementById('ov-pending-count').innerText = trulyPending.length;
@@ -331,7 +330,23 @@ async function renderOverview() {
 }
 // -----------------------------------------------------
 
+// --- NEW: Digital Expense Receipts Integration ---
 async function openExpenseModal() {
+    // Dynamically add the file upload input without touching index.html
+    const formGroup = document.querySelector('#expense-modal .form-card form .input-group');
+    if (formGroup && !document.getElementById('expense-receipt-upload')) {
+        const uploadWrapper = document.createElement('div');
+        uploadWrapper.style.width = '100%';
+        uploadWrapper.style.marginTop = '16px';
+        uploadWrapper.style.marginBottom = '8px';
+        uploadWrapper.style.textAlign = 'left';
+        uploadWrapper.innerHTML = `
+            <label style="font-size:12px; font-weight:600; color:var(--text-muted);">📸 Attach Receipt (Optional)</label>
+            <input type="file" id="expense-receipt-upload" accept="image/*" style="width:100%; padding:8px; border:1px dashed #cbd5e1; border-radius:8px; margin-top:4px;">
+        `;
+        formGroup.parentNode.insertBefore(uploadWrapper, formGroup.nextSibling);
+    }
+    
     document.getElementById('expense-modal').classList.add('active');
     document.getElementById('expense-list-container').innerHTML = '<p class="empty-state">Loading cloud expenses...</p>';
     await renderExpenseList();
@@ -352,11 +367,36 @@ async function submitExpense(e) {
     btn.disabled = true;
 
     try {
+        let receiptUrl = '';
+        const fileInput = document.getElementById('expense-receipt-upload');
+        
+        // 1. Upload receipt picture to Cloudinary if provided
+        if (fileInput && fileInput.files.length > 0) {
+            showToast('Uploading receipt image...');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            // Using the global fetch which securely attaches the token
+            const uploadRes = await fetch(`${BACKEND_URL}/api/expenses/upload`, {
+                method: 'POST',
+                body: formData 
+            });
+            const uploadData = await uploadRes.json();
+            
+            if (uploadData.success) {
+                receiptUrl = uploadData.receiptUrl;
+            } else {
+                showToast('Warning: Image upload failed. Saving text only.');
+            }
+        }
+
+        // 2. Save the Expense record
         const payload = {
             desc: desc,
             amount: amt,
             dateStr: new Date().toDateString(),
-            timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            receiptUrl: receiptUrl
         };
 
         const res = await fetch(`${BACKEND_URL}/api/expenses`, {
@@ -370,6 +410,7 @@ async function submitExpense(e) {
         if (result.success) {
             document.getElementById('expense-desc').value = '';
             document.getElementById('expense-amount').value = '';
+            if (fileInput) fileInput.value = '';
             await renderExpenseList();
             showToast('Expense logged to cloud! ☁️💸');
         } else {
@@ -394,9 +435,17 @@ async function renderExpenseList() {
         container.innerHTML = '';
         if(result.success && result.data.length > 0) {
             result.data.forEach((ex) => {
+                // Display the clickable receipt link if one exists
+                const receiptHtml = ex.receiptUrl 
+                    ? `<a href="${ex.receiptUrl}" target="_blank" style="margin-left:8px; font-size:11px; color:#3b82f6; text-decoration:underline;">[View Receipt]</a>` 
+                    : '';
+                    
                 container.innerHTML += `
                     <div style="background: #fef2f2; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; border: 1px solid #fecaca; margin-bottom: 8px;">
-                        <div><strong style="font-size: 13px; color: #991b1b;">${ex.desc}</strong><br><span style="font-size: 10px; color: #b91c1c;">${ex.timeStr}</span></div>
+                        <div>
+                            <strong style="font-size: 13px; color: #991b1b;">${ex.desc}</strong>${receiptHtml}<br>
+                            <span style="font-size: 10px; color: #b91c1c;">${ex.timeStr}</span>
+                        </div>
                         <div style="font-weight: bold; color: #dc2626;">₹${ex.amount.toFixed(2)}</div>
                     </div>
                 `;
