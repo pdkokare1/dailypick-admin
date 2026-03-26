@@ -1,5 +1,15 @@
 /* js/pos.js */
 
+// --- NEW: Multi-Store Helper ---
+function getDisplayStock(variant) {
+    if (typeof currentStoreId === 'undefined' || !currentStoreId) return variant.stock; 
+    if (variant.locationInventory && Array.isArray(variant.locationInventory)) {
+        const loc = variant.locationInventory.find(l => l.storeId === currentStoreId);
+        if (loc) return loc.stock;
+    }
+    return 0; 
+}
+
 let heldCarts = JSON.parse(localStorage.getItem('dailypick_held_carts') || '[]'); 
 
 let currentCalculatedTax = 0;
@@ -353,21 +363,6 @@ function renderPosCart() {
         container.appendChild(div);
     });
 
-    // // PENDING DELETION APPROVAL (Old Promo Logic)
-    /*
-    if (typeof currentPromotions !== 'undefined') {
-        currentPromotions.forEach(promo => {
-            if (promo.isActive) {
-                if (promo.type === 'PERCENTAGE' && subtotal >= (promo.minCartValue || 0)) {
-                    totalDiscount += subtotal * (promo.value / 100);
-                } else if (promo.type === 'FLAT_AMOUNT' && subtotal >= (promo.minCartValue || 0)) {
-                    totalDiscount += promo.value;
-                }
-            }
-        });
-    }
-    */
-
     // --- NEW ADVANCED PROMO ENGINE (BOGO, Happy Hour, Category Locks) ---
     if (typeof currentPromotions !== 'undefined') {
         const now = new Date();
@@ -414,7 +409,6 @@ function renderPosCart() {
                         const gQty = promo.getQty || 1;
                         
                         applicableItems.forEach(item => {
-                            // Example: Buy 2 Get 1 Free = Total sets of 3
                             const totalSets = Math.floor(item.qty / (bQty + gQty));
                             if (totalSets > 0) {
                                 totalDiscount += totalSets * gQty * item.price;
@@ -502,11 +496,12 @@ function openPosQuickView(productId) {
     
     if(product.variants) {
         product.variants.forEach(v => {
+            const dStock = getDisplayStock(v); // MULTI-STORE SUPPORT
             list.innerHTML += `
                 <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; border: 1px solid #e2e8f0;">
                     <div>
                         <strong style="font-size: 13px;">${v.weightOrVolume}</strong>
-                        <p style="font-size: 11px; color: var(--text-muted);">Stock: ${v.stock}</p>
+                        <p style="font-size: 11px; color: var(--text-muted);">Stock: ${dStock}</p>
                     </div>
                     <button class="primary-btn-small" onclick="addToPosCart({_id: '${product._id}', name: '${product.name}', taxRate: ${product.taxRate || 0}, taxType: '${product.taxType || 'Inclusive'}', hsnCode: '${product.hsnCode || ''}'}, {_id: '${v._id}', weightOrVolume: '${v.weightOrVolume}', price: ${v.price}}); closePosQuickView();">Add ₹${v.price}</button>
                 </div>
@@ -625,7 +620,10 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         paymentMethod: paymentMethod,
         splitDetails: splitDetails, 
         pointsRedeemed: appliedLoyaltyPoints,
-        timestamp: new Date().toISOString() 
+        timestamp: new Date().toISOString(),
+        // --- NEW Phase 5: Multi-Store Data ---
+        storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null,
+        registerId: typeof currentRegisterId !== 'undefined' ? currentRegisterId : null
     };
 
     showToast('Processing payment...');
@@ -809,7 +807,10 @@ async function submitOpenShift() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userName: currentUser ? currentUser.name : 'Unknown Staff',
-                startingFloat: floatAmt
+                startingFloat: floatAmt,
+                // --- NEW Phase 5: Multi-Store Data ---
+                storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null,
+                registerId: typeof currentRegisterId !== 'undefined' ? currentRegisterId : null
             })
         });
         const result = await res.json();
