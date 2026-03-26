@@ -1,6 +1,5 @@
 /* js/pos.js */
 
-// --- NEW: Multi-Store Helper ---
 function getDisplayStock(variant) {
     if (typeof currentStoreId === 'undefined' || !currentStoreId) return variant.stock; 
     if (variant.locationInventory && Array.isArray(variant.locationInventory)) {
@@ -23,7 +22,6 @@ let appliedLoyaltyPoints = 0;
 
 let isProcessingCheckout = false;
 
-// --- NEW FUNCTIONALITY: Web Serial API Thermal Printing ---
 let thermalPort = null;
 
 window.connectThermalPrinter = async function() {
@@ -184,12 +182,9 @@ function stopPosScanner() {
                 posContinuousScanner.clear();
                 posContinuousScanner = null;
             }).catch(err => {
-                // Gracefully ignore AbortError caused by UI view switching.
-                // Do not call .clear() here as the scanner state is already interrupted.
                 posContinuousScanner = null;
             });
         } catch (e) {
-            // Failsafe catch for synchronous errors
             posContinuousScanner = null;
         }
     }
@@ -364,7 +359,6 @@ function renderPosCart() {
         container.appendChild(div);
     });
 
-    // --- NEW ADVANCED PROMO ENGINE (BOGO, Happy Hour, Category Locks) ---
     if (typeof currentPromotions !== 'undefined') {
         const now = new Date();
         const currentHourMin = now.getHours() * 100 + now.getMinutes(); 
@@ -372,7 +366,6 @@ function renderPosCart() {
         currentPromotions.forEach(promo => {
             if (promo.isActive) {
                 
-                // 1. Time & Date Validations
                 if (promo.startDate && new Date(promo.startDate) > now) return;
                 if (promo.endDate && new Date(promo.endDate) < now) return;
                 if (promo.startTime && promo.endTime) {
@@ -381,7 +374,6 @@ function renderPosCart() {
                     if (currentHourMin < start || currentHourMin > end) return;
                 }
 
-                // 2. Identify Applicable Items (Category Locks)
                 let applicableSubtotal = 0;
                 let applicableItems = [];
 
@@ -399,7 +391,6 @@ function renderPosCart() {
                     }
                 });
 
-                // 3. Apply Discount Math
                 if (applicableSubtotal > 0 && applicableSubtotal >= (promo.minCartValue || 0)) {
                     if (promo.type === 'PERCENTAGE' || promo.type === 'Percentage') {
                         totalDiscount += applicableSubtotal * (promo.value / 100);
@@ -497,7 +488,7 @@ function openPosQuickView(productId) {
     
     if(product.variants) {
         product.variants.forEach(v => {
-            const dStock = getDisplayStock(v); // MULTI-STORE SUPPORT
+            const dStock = getDisplayStock(v); 
             list.innerHTML += `
                 <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; border: 1px solid #e2e8f0;">
                     <div>
@@ -622,7 +613,6 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         splitDetails: splitDetails, 
         pointsRedeemed: appliedLoyaltyPoints,
         timestamp: new Date().toISOString(),
-        // --- NEW Phase 5: Multi-Store Data ---
         storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null,
         registerId: typeof currentRegisterId !== 'undefined' ? currentRegisterId : null
     };
@@ -704,6 +694,20 @@ async function syncOfflinePOS() {
             await deleteFromIDB(id); 
             showToast('Offline POS transaction synced! ✅');
             renderOverview(); 
+        } else {
+            // --- NEW: Offline Conflict Resolution (e.g., Stock ran out online while POS was offline) ---
+            await deleteFromIDB(id); 
+            
+            let failedQueue = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
+            failedQueue.push({
+                ...itemToSync,
+                failReason: result.message || 'Unknown backend rejection',
+                failedAt: new Date().toISOString()
+            });
+            localStorage.setItem('dailypick_failed_syncs', JSON.stringify(failedQueue));
+            
+            showToast(`Offline Sync Failed: ${result.message}`);
+            if (typeof renderOverview === 'function') renderOverview(); 
         }
     } catch (e) {
         console.log('Sync attempted, still offline or server unreachable.');
@@ -809,7 +813,6 @@ async function submitOpenShift() {
             body: JSON.stringify({
                 userName: currentUser ? currentUser.name : 'Unknown Staff',
                 startingFloat: floatAmt,
-                // --- NEW Phase 5: Multi-Store Data ---
                 storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null,
                 registerId: typeof currentRegisterId !== 'undefined' ? currentRegisterId : null
             })
