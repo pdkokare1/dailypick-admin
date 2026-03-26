@@ -184,7 +184,6 @@ function stopPosScanner() {
     }
 }
 
-// --- NEW FUNCTIONALITY: Connect POS Scanner to Scalable Autocomplete ---
 async function handlePosScan(skuOrName) {
     let foundProduct = null;
     let foundVariant = null;
@@ -204,7 +203,6 @@ async function handlePosScan(skuOrName) {
     if (!foundProduct && navigator.onLine) {
         try {
             const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-            // Uses the new fast route
             const res = await fetchFn(`${BACKEND_URL}/api/products/autocomplete?q=${encodeURIComponent(skuOrName)}`);
             const result = await res.json();
             if (result.success && result.data.length > 0) {
@@ -355,6 +353,8 @@ function renderPosCart() {
         container.appendChild(div);
     });
 
+    // // PENDING DELETION APPROVAL (Old Promo Logic)
+    /*
     if (typeof currentPromotions !== 'undefined') {
         currentPromotions.forEach(promo => {
             if (promo.isActive) {
@@ -362,6 +362,65 @@ function renderPosCart() {
                     totalDiscount += subtotal * (promo.value / 100);
                 } else if (promo.type === 'FLAT_AMOUNT' && subtotal >= (promo.minCartValue || 0)) {
                     totalDiscount += promo.value;
+                }
+            }
+        });
+    }
+    */
+
+    // --- NEW ADVANCED PROMO ENGINE (BOGO, Happy Hour, Category Locks) ---
+    if (typeof currentPromotions !== 'undefined') {
+        const now = new Date();
+        const currentHourMin = now.getHours() * 100 + now.getMinutes(); 
+
+        currentPromotions.forEach(promo => {
+            if (promo.isActive) {
+                
+                // 1. Time & Date Validations
+                if (promo.startDate && new Date(promo.startDate) > now) return;
+                if (promo.endDate && new Date(promo.endDate) < now) return;
+                if (promo.startTime && promo.endTime) {
+                    const start = parseInt(promo.startTime.replace(':', ''));
+                    const end = parseInt(promo.endTime.replace(':', ''));
+                    if (currentHourMin < start || currentHourMin > end) return;
+                }
+
+                // 2. Identify Applicable Items (Category Locks)
+                let applicableSubtotal = 0;
+                let applicableItems = [];
+
+                posCart.forEach(item => {
+                    let isApplicable = true;
+                    if (promo.applicableCategory && promo.applicableCategory !== 'All') {
+                        const invItem = currentInventory.find(p => p._id === item.productId);
+                        if (!invItem || invItem.category !== promo.applicableCategory) {
+                            isApplicable = false;
+                        }
+                    }
+                    if (isApplicable) {
+                        applicableSubtotal += (item.price * item.qty);
+                        applicableItems.push(item);
+                    }
+                });
+
+                // 3. Apply Discount Math
+                if (applicableSubtotal > 0 && applicableSubtotal >= (promo.minCartValue || 0)) {
+                    if (promo.type === 'PERCENTAGE' || promo.type === 'Percentage') {
+                        totalDiscount += applicableSubtotal * (promo.value / 100);
+                    } else if (promo.type === 'FLAT_AMOUNT' || promo.type === 'Flat') {
+                        totalDiscount += promo.value; 
+                    } else if (promo.type === 'BOGO') {
+                        const bQty = promo.buyQty || 1;
+                        const gQty = promo.getQty || 1;
+                        
+                        applicableItems.forEach(item => {
+                            // Example: Buy 2 Get 1 Free = Total sets of 3
+                            const totalSets = Math.floor(item.qty / (bQty + gQty));
+                            if (totalSets > 0) {
+                                totalDiscount += totalSets * gQty * item.price;
+                            }
+                        });
+                    }
                 }
             }
         });
@@ -600,7 +659,7 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         
         activeOrder = {
             _id: offlineOrderIdentifier,
-            orderNumber: offlineOrderIdentifier, // --- PHASE 3: Offline ID Support ---
+            orderNumber: offlineOrderIdentifier, 
             createdAt: new Date(),
             customerName: 'In-Store Customer (Offline)',
             customerPhone: phone,
@@ -768,7 +827,6 @@ async function submitOpenShift() {
     }
 }
 
-// --- NEW FUNCTIONALITY: Strict Shift Validation Logic ---
 async function submitCloseShift() {
     if (isProcessingCheckout) return;
     const actualCashStr = document.getElementById('shift-actual-cash').value;
@@ -800,7 +858,6 @@ async function submitCloseShift() {
             currentActiveShift = null;
             const disc = result.discrepancy;
             
-            // Provide exact feedback on what happened
             if (disc === 0) {
                 showToast("Register Closed. Perfect Match! ✅");
             } else if (disc < 0) {
@@ -810,7 +867,7 @@ async function submitCloseShift() {
             }
             
             closeShiftModal();
-            renderOverview(); // Update dashboard
+            renderOverview(); 
         } else {
             showToast(result.message || 'Failed to close register.');
         }
