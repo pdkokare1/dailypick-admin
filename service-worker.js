@@ -1,6 +1,6 @@
 /* service-worker.js */
 
-const CACHE_NAME = 'dailypick-admin-cache-v2';
+const CACHE_NAME = 'dailypick-admin-cache-v3'; // Incremented version
 const OFFLINE_QUEUE_NAME = 'dailypick-offline-orders';
 
 const ASSETS_TO_CACHE = [
@@ -21,7 +21,6 @@ const ASSETS_TO_CACHE = [
     'https://cdn.jsdelivr.net/npm/chart.js'
 ];
 
-// --- OPTIMIZATION: IndexedDB Setup for Offline POS Orders ---
 function openDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open('DailyPickOfflineDB', 1);
@@ -74,7 +73,6 @@ async function syncOfflineOrders() {
                 body: JSON.stringify(data.body)
             });
 
-            // If successful, remove from IndexedDB
             const delTx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
             delTx.objectStore(OFFLINE_QUEUE_NAME).delete(data.id);
         } catch (err) {
@@ -87,7 +85,7 @@ self.addEventListener('install', (event) => {
     self.skipWaiting(); 
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
-            console.log('[Service Worker] Caching Core Assets');
+            console.log('[Service Worker] Caching Core Assets for Stale-While-Revalidate');
             return cache.addAll(ASSETS_TO_CACHE);
         })
     );
@@ -98,7 +96,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME) {
+                    if (cacheName !== CACHE_NAME && cacheName !== 'dailypick-api-cache') {
                         console.log('[Service Worker] Deleting old cache:', cacheName);
                         return caches.delete(cacheName);
                     }
@@ -108,7 +106,6 @@ self.addEventListener('activate', (event) => {
     );
 });
 
-// Trigger sync when internet connection is restored
 self.addEventListener('sync', (event) => {
     if (event.tag === 'sync-offline-orders') {
         event.waitUntil(syncOfflineOrders());
@@ -118,7 +115,17 @@ self.addEventListener('sync', (event) => {
 self.addEventListener('fetch', (event) => {
     const requestUrl = new URL(event.request.url);
 
-    // --- NEW CAPABILITY: Intercept POS checkouts for Offline Mode ---
+    // --- NEW: Bulletproof Navigation Fallback (Prevents the offline dinosaur) ---
+    // If the cashier hits refresh while offline, instantly load index.html from cache
+    if (event.request.mode === 'navigate') {
+        event.respondWith(
+            caches.match('./index.html').then((cachedResponse) => {
+                return cachedResponse || fetch(event.request).catch(() => caches.match('./index.html'));
+            })
+        );
+        return;
+    }
+
     if (event.request.method === 'POST' && requestUrl.pathname.includes('/api/orders/pos')) {
         event.respondWith(
             fetch(event.request.clone()).catch(async (err) => {
@@ -126,12 +133,10 @@ self.addEventListener('fetch', (event) => {
                 const body = await event.request.clone().json();
                 await saveOfflineOrder(event.request.url, event.request.headers, body);
                 
-                // Register background sync to trigger when online
                 if ('sync' in self.registration) {
                     await self.registration.sync.register('sync-offline-orders');
                 }
 
-                // Return a fake success so the POS UI clears the cart and lets the cashier continue
                 return new Response(JSON.stringify({ 
                     success: true, 
                     message: 'Saved Offline. Will sync when online.', 
@@ -163,9 +168,7 @@ self.addEventListener('fetch', (event) => {
                         cache.put(event.request, clonedResponse);
                     });
                     
-                    // Attempt to flush offline queue if we just made a successful API call
                     syncOfflineOrders();
-                    
                     return networkResponse;
                 })
                 .catch(async () => {
@@ -179,16 +182,18 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // --- ENHANCED: Stale-While-Revalidate for Static Assets ---
+    // Returns cached files instantly, then fetches fresh ones in the background to keep the app updated
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) {
-                fetch(event.request).then((networkResponse) => {
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-                }).catch(() => {});
-                
-                return cachedResponse;
-            }
-            return fetch(event.request);
+            const fetchPromise = fetch(event.request).then((networkResponse) => {
+                caches.open(CACHE_NAME).then((cache) => {
+                    cache.put(event.request, networkResponse.clone());
+                });
+                return networkResponse;
+            }).catch(() => {}); // Catch failures silently if offline
+            
+            return cachedResponse || fetchPromise;
         })
     );
 });
