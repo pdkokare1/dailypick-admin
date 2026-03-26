@@ -6,6 +6,8 @@ async function adminFetchWithAuth(url, options = {}) {
     const token = localStorage.getItem('adminToken');
     
     options.headers = options.headers || {};
+    // --- PHASE 3: Seamless Integration with Phase 1 Secure Refresh Cookies ---
+    options.credentials = 'include';
     
     if (token) {
         options.headers['Authorization'] = `Bearer ${token}`;
@@ -41,13 +43,14 @@ async function connectAdminLiveStream() {
     try {
         const response = await fetch(`${BACKEND_URL}/api/orders/stream/admin`, {
             headers: { 'Authorization': `Bearer ${token}` },
+            credentials: 'include', // --- PHASE 3: Allow secure stream auth ---
             signal: window.adminStreamController.signal
         });
 
         if (!response.ok) throw new Error('Stream connection failed due to authorization or server error');
 
         console.log("🟢 Live Order Stream Connected (Secured)");
-        sseRetryCount = 0; // Reset retry count on successful connection
+        sseRetryCount = 0; 
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -75,6 +78,9 @@ async function connectAdminLiveStream() {
                             if (typeof updateDashboard === 'function') updateDashboard();
                             if (typeof playNewOrderAudio === 'function') playNewOrderAudio(); 
                             if (typeof showToast === 'function') showToast('🚨 New Order Arrived!');
+                        } else if (data.type === 'EXPIRY_WARNING') {
+                            // --- NEW PHASE 3: Listen for Expiry Warnings from Cron ---
+                            if (typeof showToast === 'function') showToast(data.message);
                         }
                     } catch (e) {
                         console.error("Error parsing stream data:", e);
@@ -84,7 +90,6 @@ async function connectAdminLiveStream() {
         }
     } catch (error) {
         sseRetryCount++;
-        // Caps maximum delay at 30 seconds to prevent permanent disconnect
         const retryDelay = Math.min(1000 * (2 ** sseRetryCount), 30000); 
         console.warn(`⚠️ Live Stream disconnected. Reconnecting in ${retryDelay/1000}s...`);
         
