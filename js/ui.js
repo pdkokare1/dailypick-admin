@@ -282,11 +282,28 @@ async function renderOverview() {
     if (actionFeed) {
         actionFeed.innerHTML = '';
         let criticalTasks = [];
+
+        // --- NEW: Offline Conflict Resolution UI Injection ---
+        let failedSyncs = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
+        failedSyncs.forEach((failItem, index) => {
+            criticalTasks.push({
+                type: 'error',
+                title: `Offline Sync Failed (Order: ₹${failItem.totalAmount || 0})`,
+                msg: `Reason: ${failItem.failReason}. Please review and adjust stock manually if needed.`,
+                action: () => {
+                    if (confirm("Clear this error? Ensure you have adjusted stock manually if necessary.")) {
+                        let currentFails = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
+                        currentFails.splice(index, 1);
+                        localStorage.setItem('dailypick_failed_syncs', JSON.stringify(currentFails));
+                        renderOverview(); // Refresh the list
+                    }
+                }
+            });
+        });
         
         currentInventory.forEach(p => {
             if(p.variants) {
                 p.variants.forEach(v => {
-                    // Critical: Out of Stock
                     if (v.stock <= 0) {
                         criticalTasks.push({
                             type: 'error',
@@ -295,7 +312,6 @@ async function renderOverview() {
                             action: () => jumpToInventoryWithFilter('out')
                         });
                     }
-                    // Warning: Low Stock with predicted runway
                     else if (v.stock <= (v.lowStockThreshold || 5)) {
                         let runway = typeof calculateStockRunway === 'function' ? calculateStockRunway(v) : null;
                         criticalTasks.push({
@@ -328,11 +344,8 @@ async function renderOverview() {
         }
     }
 }
-// -----------------------------------------------------
 
-// --- NEW: Digital Expense Receipts Integration ---
 async function openExpenseModal() {
-    // Dynamically add the file upload input without touching index.html
     const formGroup = document.querySelector('#expense-modal .form-card form .input-group');
     if (formGroup && !document.getElementById('expense-receipt-upload')) {
         const uploadWrapper = document.createElement('div');
@@ -370,13 +383,11 @@ async function submitExpense(e) {
         let receiptUrl = '';
         const fileInput = document.getElementById('expense-receipt-upload');
         
-        // 1. Upload receipt picture to Cloudinary if provided
         if (fileInput && fileInput.files.length > 0) {
             showToast('Uploading receipt image...');
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
 
-            // Using the global fetch which securely attaches the token
             const uploadRes = await fetch(`${BACKEND_URL}/api/expenses/upload`, {
                 method: 'POST',
                 body: formData 
@@ -390,7 +401,6 @@ async function submitExpense(e) {
             }
         }
 
-        // 2. Save the Expense record
         const payload = {
             desc: desc,
             amount: amt,
@@ -435,7 +445,6 @@ async function renderExpenseList() {
         container.innerHTML = '';
         if(result.success && result.data.length > 0) {
             result.data.forEach((ex) => {
-                // Display the clickable receipt link if one exists
                 const receiptHtml = ex.receiptUrl 
                     ? `<a href="${ex.receiptUrl}" target="_blank" style="margin-left:8px; font-size:11px; color:#3b82f6; text-decoration:underline;">[View Receipt]</a>` 
                     : '';
@@ -533,12 +542,10 @@ function calculateEodDiscrepancy() {
     }
 }
 
-// --- NEW Phase 5: Multi-Store Admin Management UI ---
 async function openStoreManagementModal() {
     const modal = document.getElementById('manage-stores-modal');
     modal.classList.add('active');
     
-    // Dynamically inject the management UI replacing the placeholder
     const formCard = modal.querySelector('.form-card');
     formCard.innerHTML = `
         <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
