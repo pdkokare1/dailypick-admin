@@ -1,6 +1,5 @@
 /* js/inventory.js */
 
-// --- NEW: Multi-Store Helper ---
 function getDisplayStock(variant) {
     if (typeof currentStoreId === 'undefined' || !currentStoreId) return variant.stock; 
     if (variant.locationInventory && Array.isArray(variant.locationInventory)) {
@@ -76,6 +75,9 @@ function toggleLowStockFilter() {
     }
 }
 
+// --- NEW: AbortController to prevent overlapping API calls & save bandwidth ---
+let inventoryAbortController = null;
+
 async function fetchInventory() {
     const invFeedEl = document.getElementById('inventory-feed');
     if (inventoryPage === 1 && invFeedEl) {
@@ -87,6 +89,13 @@ async function fetchInventory() {
         loadBtn.innerText = 'Loading...'; 
         loadBtn.disabled = true; 
     }
+
+    // Cancel any previous pending request if a new one is fired rapidly
+    if (inventoryAbortController) {
+        inventoryAbortController.abort();
+    }
+    inventoryAbortController = new AbortController();
+    const signal = inventoryAbortController.signal;
 
     try {
         let queryUrl = `${BACKEND_URL}/api/products?all=true&page=${inventoryPage}&limit=30`;
@@ -105,7 +114,7 @@ async function fetchInventory() {
         }
 
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(queryUrl);
+        const res = await fetchFn(queryUrl, { signal });
         const result = await res.json();
         
         if (result.success) { 
@@ -122,6 +131,10 @@ async function fetchInventory() {
             renderInventory(dataToRender.length < 30); 
         }
     } catch (e) { 
+        if (e.name === 'AbortError') {
+            console.log('Previous inventory fetch aborted successfully to save bandwidth.');
+            return; // Exit silently, a new request is already handling the UI
+        }
         if (inventoryPage === 1 && invFeedEl) {
             invFeedEl.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
         }
@@ -564,7 +577,6 @@ async function submitRestock(e) {
     btn.innerText = 'Processing...'; 
     btn.disabled = true;
     
-    // --- NEW: Added Payment Status Field ---
     const paymentStatusEl = document.getElementById('restock-payment-status');
     const paymentStatus = paymentStatusEl ? paymentStatusEl.value : 'Paid';
 
@@ -575,7 +587,6 @@ async function submitRestock(e) {
         purchasingPrice: document.getElementById('restock-cost').value,
         newSellingPrice: document.getElementById('restock-sell').value,
         paymentStatus: paymentStatus,
-        // --- NEW Phase 5: Multi-Store Data ---
         storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null
     };
     
@@ -594,7 +605,7 @@ async function submitRestock(e) {
             showToast('Shipment Received & Logged! 📦'); 
             closeRestockModal(); 
             fetchInventory(); 
-            if (paymentStatus === 'Credit') fetchDistributors(); // Refresh balances
+            if (paymentStatus === 'Credit') fetchDistributors(); 
         } else { 
             showToast('Failed to process restock.'); 
         }
@@ -606,7 +617,6 @@ async function submitRestock(e) {
     }
 }
 
-// --- NEW FUNCTIONALITY: Accounts Payable Ledger UI ---
 async function openAccountsPayable() {
     const container = document.getElementById('ap-ledger-list');
     if (!container) return;
@@ -620,7 +630,7 @@ async function openAccountsPayable() {
         const result = await res.json();
         
         if (result.success) {
-            currentDistributors = result.data; // Update local cache
+            currentDistributors = result.data; 
             const debtors = currentDistributors.filter(d => d.totalPendingAmount > 0);
             
             container.innerHTML = '';
@@ -679,7 +689,7 @@ async function submitDistributorPayment(id, amount, mode, note) {
         const result = await res.json();
         if (result.success) {
             showToast('Supplier payment logged successfully! ✅');
-            openAccountsPayable(); // Refresh the list instantly
+            openAccountsPayable(); 
         } else {
             showToast(result.message || 'Error processing payment.');
         }
@@ -712,7 +722,7 @@ function openRTVModal(productId, variantId, event) {
     
     document.getElementById('rtv-form').reset();
     document.getElementById('rtv-item-name').innerText = product.name;
-    const dStock = getDisplayStock(variant); // MULTI-STORE
+    const dStock = getDisplayStock(variant); 
     document.getElementById('rtv-item-variant').innerText = `${variant.weightOrVolume} (Current Stock: ${dStock})`;
     document.getElementById('rtv-distributor').value = product.distributorName || '';
     document.getElementById('rtv-max-qty').innerText = dStock;
@@ -740,7 +750,6 @@ async function submitRTV(e) {
         returnedQuantity: parseInt(document.getElementById('rtv-qty').value),
         refundAmount: parseFloat(document.getElementById('rtv-refund').value) || 0,
         reason: document.getElementById('rtv-reason').value,
-        // --- NEW Phase 5: Multi-Store Data ---
         storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null
     };
     
@@ -921,7 +930,7 @@ function openSourcingModal() {
     currentInventory.forEach(p => {
         if (p.variants) {
             p.variants.forEach(v => {
-                const dStock = getDisplayStock(v); // MULTI-STORE
+                const dStock = getDisplayStock(v); 
                 if (dStock <= (v.lowStockThreshold || 5)) {
                     const dist = p.distributorName || 'Unassigned Distributor';
                     if (!reorderData[dist]) reorderData[dist] = [];
