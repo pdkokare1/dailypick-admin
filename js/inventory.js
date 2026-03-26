@@ -75,9 +75,6 @@ function toggleLowStockFilter() {
     }
 }
 
-// --- NEW: AbortController to prevent overlapping API calls & save bandwidth ---
-let inventoryAbortController = null;
-
 async function fetchInventory() {
     const invFeedEl = document.getElementById('inventory-feed');
     if (inventoryPage === 1 && invFeedEl) {
@@ -89,13 +86,6 @@ async function fetchInventory() {
         loadBtn.innerText = 'Loading...'; 
         loadBtn.disabled = true; 
     }
-
-    // Cancel any previous pending request if a new one is fired rapidly
-    if (inventoryAbortController) {
-        inventoryAbortController.abort();
-    }
-    inventoryAbortController = new AbortController();
-    const signal = inventoryAbortController.signal;
 
     try {
         let queryUrl = `${BACKEND_URL}/api/products?all=true&page=${inventoryPage}&limit=30`;
@@ -114,7 +104,7 @@ async function fetchInventory() {
         }
 
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(queryUrl, { signal });
+        const res = await fetchFn(queryUrl);
         const result = await res.json();
         
         if (result.success) { 
@@ -131,10 +121,6 @@ async function fetchInventory() {
             renderInventory(dataToRender.length < 30); 
         }
     } catch (e) { 
-        if (e.name === 'AbortError') {
-            console.log('Previous inventory fetch aborted successfully to save bandwidth.');
-            return; // Exit silently, a new request is already handling the UI
-        }
         if (inventoryPage === 1 && invFeedEl) {
             invFeedEl.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
         }
@@ -1458,6 +1444,78 @@ function openEditProductModal(id, e) {
 
 function closeAddProductModal() { 
     document.getElementById('add-product-modal').classList.remove('active'); 
+}
+
+// --- NEW FUNCTIONALITY: Gemini AI Auto-Fill ---
+async function autoFillProduct() {
+    const nameInput = document.getElementById('new-name').value.trim();
+    if (!nameInput) return showToast("Please enter a Product Name first!");
+
+    const btn = document.getElementById('btn-autofill');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader" class="icon-sm"></i> Thinking...';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    btn.disabled = true;
+
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/products/autofill`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productName: nameInput })
+        });
+
+        const result = await res.json();
+        
+        if (result.success && result.data) {
+            const { category, brand, searchTags } = result.data;
+
+            // Auto-Select Category
+            if (category) {
+                const catSelect = document.getElementById('new-category');
+                for (let i = 0; i < catSelect.options.length; i++) {
+                    if (catSelect.options[i].value === category) {
+                        catSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            // Auto-Select or Add Brand dynamically
+            if (brand) {
+                const brandSelect = document.getElementById('new-brand');
+                let brandFound = false;
+                for (let i = 0; i < brandSelect.options.length; i++) {
+                    if (brandSelect.options[i].value.toLowerCase() === brand.toLowerCase()) {
+                        brandSelect.selectedIndex = i;
+                        brandFound = true;
+                        break;
+                    }
+                }
+                if (!brandFound) {
+                    const newOption = new Option(brand, brand);
+                    brandSelect.add(newOption);
+                    brandSelect.value = brand;
+                }
+            }
+
+            // Auto-Fill Search Tags
+            if (searchTags) {
+                document.getElementById('new-tags').value = searchTags;
+            }
+
+            showToast("✨ Auto-Filled via Gemini AI!");
+        } else {
+            showToast(result.message || "Failed to auto-fill.");
+        }
+    } catch (err) {
+        console.error("Auto-Fill Error:", err);
+        showToast("Network error during AI auto-fill.");
+    } finally {
+        btn.innerHTML = originalText;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        btn.disabled = false;
+    }
 }
 
 function compressImage(file, maxWidth = 800, maxHeight = 800) {
