@@ -16,11 +16,10 @@ let isProcessingCheckout = false;
 // --- NEW FUNCTIONALITY: Web Serial API Thermal Printing ---
 let thermalPort = null;
 
-// Expose to window so you can attach it to a "Connect Printer" button in your UI
 window.connectThermalPrinter = async function() {
     try {
         thermalPort = await navigator.serial.requestPort();
-        await thermalPort.open({ baudRate: 9600 }); // Standard ESC/POS baud rate
+        await thermalPort.open({ baudRate: 9600 }); 
         if (typeof showToast === 'function') showToast("Thermal Printer Connected! 🖨️");
     } catch (e) {
         console.error("Printer connection failed", e);
@@ -29,12 +28,11 @@ window.connectThermalPrinter = async function() {
 };
 
 async function printThermalReceipt(order) {
-    if (!thermalPort) return; // Silent abort if no printer connected
+    if (!thermalPort) return; 
     try {
         const writer = thermalPort.writable.getWriter();
         const encoder = new TextEncoder();
         
-        // ESC/POS raw byte commands
         const ESC = '\x1B';
         const GS = '\x1D';
         const INIT = ESC + '@';
@@ -48,7 +46,10 @@ async function printThermalReceipt(order) {
         receipt += "123 Main Street\n";
         receipt += "--------------------------------\n";
         receipt += ALIGN_LEFT;
-        receipt += `Order: ${order._id.substring(0,8)}\n`;
+        
+        // --- PHASE 3: Utilize New Sequential Order Identifier ---
+        receipt += `Order: ${order.orderNumber || order._id.substring(0,8)}\n`;
+        
         receipt += `Date: ${new Date().toLocaleString()}\n`;
         receipt += "--------------------------------\n";
         order.items.forEach(item => {
@@ -184,18 +185,10 @@ function stopPosScanner() {
     }
 }
 
-// --- OPTIMIZATION: Updated POS Scan to hit backend if local cache doesn't have it (due to server pagination) ---
 async function handlePosScan(skuOrName) {
     let foundProduct = null;
     let foundVariant = null;
 
-    // --- OLD CODE (KEPT FOR CONSULTATION) ---
-    // for (const p of currentInventory) {
-    //     if (!p.isActive || !p.variants) continue;
-    //     for (const v of p.variants) {
-    //         if (v.sku === skuOrName) { ...
-    
-    // First, check local active inventory
     for (const p of currentInventory) {
         if (!p.isActive || !p.variants) continue;
         for (const v of p.variants) {
@@ -208,7 +201,6 @@ async function handlePosScan(skuOrName) {
         if (foundProduct) break;
     }
 
-    // NEW LOGIC: Fallback to Server Search if Server-Side pagination hid the item locally
     if (!foundProduct && navigator.onLine) {
         try {
             const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
@@ -591,7 +583,6 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
             showToast('Transaction Complete! ✅');
             activeOrder = result.orderData;
             
-            // --- NEW: Trigger Thermal Printing if available ---
             if (thermalPort) printThermalReceipt(activeOrder);
             
             clearPosCart();
@@ -604,8 +595,11 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         
         await saveToIDB(payload);
         
+        const offlineOrderIdentifier = 'OFFL-' + Date.now().toString().slice(-4);
+        
         activeOrder = {
-            _id: 'OFFL' + Date.now().toString().slice(-4),
+            _id: offlineOrderIdentifier,
+            orderNumber: offlineOrderIdentifier, // --- PHASE 3: Offline ID Support ---
             createdAt: new Date(),
             customerName: 'In-Store Customer (Offline)',
             customerPhone: phone,
