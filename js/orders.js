@@ -62,7 +62,6 @@ function printReceipt() {
     const earnedPoints = Math.floor(activeOrder.totalAmount / 100);
     const pointsHtml = `<div style="text-align: center; font-size: 13px; font-weight: bold; color: #16a34a; margin-top: 12px; padding-top: 8px; border-top: 1px dashed black;">⭐ You earned ${earnedPoints} Points on this order!</div>`;
 
-    // --- ENHANCED: Display new sequential orderNumber or fallback to old ID ---
     const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
 
     pContainer.innerHTML = `
@@ -104,7 +103,6 @@ function sendWhatsAppReceipt() {
     const ptsText = (activeOrder.pointsRedeemed && activeOrder.pointsRedeemed > 0) ? `%0A*Pts Redeemed: -₹${activeOrder.pointsRedeemed.toFixed(2)}*` : '';
     
     const itemsText = activeOrder.items.map(i => `${i.qty}x ${i.name} - ₹${(i.price * i.qty).toFixed(2)}`).join('%0A');
-    // --- ENHANCED: Order ID formatting ---
     const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
     
     const text = `*DailyPick Receipt*%0AOrder ID: #${orderDisplayId}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: ₹${activeOrder.totalAmount.toFixed(2)}*${ptsText}%0APayment: ${activeOrder.paymentMethod}%0A%0A⭐ You earned ${earnedPoints} Points!%0A%0AThank you for shopping with us!`;
@@ -156,7 +154,9 @@ async function cancelOrder() {
     }
 }
 
-// --- OPTIMIZED: Paginated Fetch Request ---
+// --- NEW: AbortController to prevent overlapping API calls & race conditions ---
+let ordersAbortController = null;
+
 async function fetchOrders() {
     const feed = document.getElementById('orders-list-view');
     if (ordersPage === 1 && feed) {
@@ -166,12 +166,19 @@ async function fetchOrders() {
     const loadBtn = document.getElementById('load-more-orders-btn');
     if (loadBtn) { loadBtn.innerText = 'Loading...'; loadBtn.disabled = true; }
 
+    // Cancel any previous pending request if tabs are clicked rapidly
+    if (ordersAbortController) {
+        ordersAbortController.abort();
+    }
+    ordersAbortController = new AbortController();
+    const signal = ordersAbortController.signal;
+
     try {
         let url = `${BACKEND_URL}/api/orders?page=${ordersPage}&limit=30`;
         if (currentOrderTab !== 'All') url += `&tab=${currentOrderTab}`;
         if (currentOrderDateFilter !== 'All') url += `&dateFilter=${currentOrderDateFilter}`;
 
-        const res = await fetch(url);
+        const res = await fetch(url, { signal });
         const result = await res.json();
         
         if (result.success) {
@@ -194,6 +201,10 @@ async function fetchOrders() {
             }
         }
     } catch (e) { 
+        if (e.name === 'AbortError') {
+            console.log('Previous order fetch aborted successfully to prevent UI glitches.');
+            return; // Exit silently
+        }
         console.error("Order Fetch Error:", e); 
     } finally {
         if (loadBtn) { loadBtn.innerText = 'Load More Orders'; loadBtn.disabled = false; }
@@ -308,7 +319,6 @@ async function updateOrderStatus(orderId, newStatus, event) {
     }
 }
 
-// --- NEW: Safe pagination rendering using Global Stats ---
 function updateDashboard(isLastPage = true) {
     const dailyRevenueEl = document.getElementById('daily-revenue');
     const pendingCountEl = document.getElementById('pending-count');
@@ -379,7 +389,6 @@ function renderListView(orders) {
         card.style.flex = '1';
         if(isPacking) card.style.borderLeft = '4px solid #4338CA';
 
-        // --- ENHANCED: Order Number Display ---
         const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
 
         card.innerHTML = `
@@ -431,7 +440,6 @@ function renderKanbanView(orders) {
         }
 
         const itemsPreview = order.items.map(i => `${i.qty}x ${i.name}`).join(', ').substring(0, 30) + '...';
-        // --- ENHANCED: Order Number Display ---
         const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
 
         card.innerHTML = `
@@ -466,7 +474,6 @@ function openOrderModal(order) {
     
     document.getElementById('modal-customer-address').innerText = order.deliveryAddress || 'N/A';
     
-    // --- NEW FUNCTIONALITY: Display Driver Info ---
     const driverDisplayEl = document.getElementById('modal-driver-display');
     if (driverDisplayEl) {
         if (order.deliveryDriverName && order.deliveryDriverName !== 'Unassigned') {
@@ -499,7 +506,6 @@ function openOrderModal(order) {
         li.style.padding = '8px 0'; 
         li.style.borderBottom = '1px solid #eee';
         
-        // --- NEW FUNCTIONALITY: Add Partial Refund Button visually if order is active ---
         let removeBtnHtml = '';
         if (order.status !== 'Completed' && order.status !== 'Cancelled') {
             removeBtnHtml = `<button onclick="openPartialRefundModal('${i.productId}', '${i.variantId}', '${i.name}', ${i.qty}, ${i.price})" style="background: none; border: none; color: #ef4444; cursor: pointer; margin-left: 12px;" title="Remove / Refund Item"><i data-lucide="minus-circle" class="icon-sm"></i></button>`;
@@ -559,7 +565,6 @@ async function markOrderDispatched() {
     }
 }
 
-// --- NEW FUNCTIONALITY: Driver Assignment ---
 function openAssignDriverModal() {
     if (!activeOrder) return showToast('No order selected.');
     document.getElementById('assign-driver-name').value = activeOrder.deliveryDriverName !== 'Unassigned' ? activeOrder.deliveryDriverName : '';
@@ -592,14 +597,13 @@ async function submitAssignDriver(event) {
         
         if (result.success) {
             showToast('Driver assigned successfully!');
-            // Update local state
             const localOrder = currentOrders.find(o => o._id === activeOrder._id);
             if (localOrder) {
                 localOrder.deliveryDriverName = driverName;
                 localOrder.driverPhone = driverPhone;
             }
             closeAssignDriverModal();
-            openOrderModal(activeOrder); // Refresh modal view
+            openOrderModal(activeOrder); 
         } else {
             showToast(result.message || 'Error assigning driver.');
         }
@@ -611,7 +615,6 @@ async function submitAssignDriver(event) {
     }
 }
 
-// --- NEW FUNCTIONALITY: Partial Refunds ---
 let currentRefundItem = null;
 
 function openPartialRefundModal(productId, variantId, name, maxQty, price) {
@@ -657,7 +660,6 @@ async function submitPartialRefund() {
         
         if (result.success) {
             showToast('Item refunded successfully!');
-            // Update local state safely to avoid full refetch
             const localOrder = currentOrders.find(o => o._id === activeOrder._id);
             if (localOrder) {
                 localOrder.totalAmount = newTotalAmount;
@@ -669,8 +671,8 @@ async function submitPartialRefund() {
                     }
                 }
             }
-            openOrderModal(activeOrder); // Refresh view
-            if (typeof fetchInventory === 'function') fetchInventory(); // Refresh stock
+            openOrderModal(activeOrder); 
+            if (typeof fetchInventory === 'function') fetchInventory(); 
         } else {
             showToast(result.message || 'Error processing refund.');
         }
