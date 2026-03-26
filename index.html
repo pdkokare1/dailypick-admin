@@ -917,8 +917,12 @@
 
                     <div class="input-group">
                         <label>Product Name</label>
-                        <input type="text" id="new-name" required placeholder="e.g., Almond Milk">
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="new-name" required placeholder="e.g., Almond Milk" style="flex: 1; margin-bottom: 0;">
+                            <button type="button" class="primary-btn" id="btn-autofill" style="background: #8b5cf6; width: auto; padding: 0 16px;" onclick="autoFillProduct()"><i data-lucide="sparkles" class="icon-sm"></i> Auto-Fill</button>
+                        </div>
                     </div>
+                    
                     <div class="input-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                         <div><label>Category</label><select id="new-category" required></select></div>
                         <div><label>Brand (Optional)</label><select id="new-brand"><option value="">Select Brand</option></select></div>
