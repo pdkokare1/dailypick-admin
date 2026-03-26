@@ -62,10 +62,13 @@ function printReceipt() {
     const earnedPoints = Math.floor(activeOrder.totalAmount / 100);
     const pointsHtml = `<div style="text-align: center; font-size: 13px; font-weight: bold; color: #16a34a; margin-top: 12px; padding-top: 8px; border-top: 1px dashed black;">⭐ You earned ${earnedPoints} Points on this order!</div>`;
 
+    // --- ENHANCED: Display new sequential orderNumber or fallback to old ID ---
+    const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
+
     pContainer.innerHTML = `
         <div style="text-align: center; border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
             <h2 style="margin:0; font-size:18px;">DAILYPICK</h2>
-            <p style="margin:0;">Order #${activeOrder._id.toString().slice(-4).toUpperCase()}</p>
+            <p style="margin:0;">Order #${orderDisplayId}</p>
             <p style="margin:0;">Date: ${new Date(activeOrder.createdAt).toLocaleString()}</p>
         </div>
         <div style="border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
@@ -101,7 +104,10 @@ function sendWhatsAppReceipt() {
     const ptsText = (activeOrder.pointsRedeemed && activeOrder.pointsRedeemed > 0) ? `%0A*Pts Redeemed: -₹${activeOrder.pointsRedeemed.toFixed(2)}*` : '';
     
     const itemsText = activeOrder.items.map(i => `${i.qty}x ${i.name} - ₹${(i.price * i.qty).toFixed(2)}`).join('%0A');
-    const text = `*DailyPick Receipt*%0AOrder ID: #${activeOrder._id.slice(-4).toUpperCase()}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: ₹${activeOrder.totalAmount.toFixed(2)}*${ptsText}%0APayment: ${activeOrder.paymentMethod}%0A%0A⭐ You earned ${earnedPoints} Points!%0A%0AThank you for shopping with us!`;
+    // --- ENHANCED: Order ID formatting ---
+    const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
+    
+    const text = `*DailyPick Receipt*%0AOrder ID: #${orderDisplayId}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: ₹${activeOrder.totalAmount.toFixed(2)}*${ptsText}%0APayment: ${activeOrder.paymentMethod}%0A%0A⭐ You earned ${earnedPoints} Points!%0A%0AThank you for shopping with us!`;
 
     window.open(`https://wa.me/91${phone}?text=${text}`, '_blank');
 }
@@ -373,9 +379,12 @@ function renderListView(orders) {
         card.style.flex = '1';
         if(isPacking) card.style.borderLeft = '4px solid #4338CA';
 
+        // --- ENHANCED: Order Number Display ---
+        const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
+
         card.innerHTML = `
             <div class="order-info">
-                <h4>Order #${order._id.toString().slice(-4).toUpperCase()}</h4>
+                <h4>Order #${orderDisplayId}</h4>
                 <p class="order-meta">${order.customerName || 'Guest'} • ${isRoutine ? '📅 Routine' : '⚡ Instant'} ${isPacking ? '• 📦 Packing' : ''}</p>
             </div>
             <div class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</div>
@@ -422,10 +431,12 @@ function renderKanbanView(orders) {
         }
 
         const itemsPreview = order.items.map(i => `${i.qty}x ${i.name}`).join(', ').substring(0, 30) + '...';
+        // --- ENHANCED: Order Number Display ---
+        const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
 
         card.innerHTML = `
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <h4>#${order._id.toString().slice(-4).toUpperCase()}</h4>
+                <h4>#${orderDisplayId}</h4>
                 <span class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</span>
             </div>
             <p style="margin-bottom: 4px; font-weight: 600; color: var(--text-main);">${order.customerName || 'Guest'}</p>
@@ -445,7 +456,8 @@ function renderKanbanView(orders) {
 
 function openOrderModal(order) {
     activeOrder = order;
-    document.getElementById('modal-order-id').innerText = `Order #${order._id.toString().slice(-4).toUpperCase()}`;
+    const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
+    document.getElementById('modal-order-id').innerText = `Order #${orderDisplayId}`;
     document.getElementById('modal-customer-name').innerText = order.customerName || 'Guest';
     
     const phoneEl = document.getElementById('modal-customer-phone');
@@ -454,6 +466,17 @@ function openOrderModal(order) {
     
     document.getElementById('modal-customer-address').innerText = order.deliveryAddress || 'N/A';
     
+    // --- NEW FUNCTIONALITY: Display Driver Info ---
+    const driverDisplayEl = document.getElementById('modal-driver-display');
+    if (driverDisplayEl) {
+        if (order.deliveryDriverName && order.deliveryDriverName !== 'Unassigned') {
+            driverDisplayEl.innerHTML = `<p style="margin-top: 8px; font-size: 13px; color: #10b981; font-weight: 600;"><i data-lucide="truck" class="icon-sm"></i> Assigned to: ${order.deliveryDriverName} ${order.driverPhone ? `(${order.driverPhone})` : ''}</p>`;
+        } else {
+            driverDisplayEl.innerHTML = `<p style="margin-top: 8px; font-size: 13px; color: #f59e0b; font-weight: 600;"><i data-lucide="truck" class="icon-sm"></i> Driver: Unassigned</p>`;
+        }
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
     document.getElementById('modal-delivery-badge').innerHTML = `
         <span class="type-badge ${order.deliveryType === 'Routine' ? 'type-routine' : 'type-instant'}">
             ${order.deliveryType} ${order.deliveryType === 'Routine' ? '(' + order.scheduleTime + ')' : ''}
@@ -467,16 +490,34 @@ function openOrderModal(order) {
     const listEl = document.getElementById('modal-packing-list'); 
     listEl.innerHTML = '';
     
-    order.items.forEach(i => {
+    order.items.forEach((i, index) => {
         const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
         const li = document.createElement('li'); 
         li.style.display = 'flex'; 
         li.style.justifyContent = 'space-between'; 
+        li.style.alignItems = 'center';
         li.style.padding = '8px 0'; 
         li.style.borderBottom = '1px solid #eee';
-        li.innerHTML = `<span>${i.name}${variantText}</span><span class="item-qty">x${i.qty}</span>`;
+        
+        // --- NEW FUNCTIONALITY: Add Partial Refund Button visually if order is active ---
+        let removeBtnHtml = '';
+        if (order.status !== 'Completed' && order.status !== 'Cancelled') {
+            removeBtnHtml = `<button onclick="openPartialRefundModal('${i.productId}', '${i.variantId}', '${i.name}', ${i.qty}, ${i.price})" style="background: none; border: none; color: #ef4444; cursor: pointer; margin-left: 12px;" title="Remove / Refund Item"><i data-lucide="minus-circle" class="icon-sm"></i></button>`;
+        }
+
+        li.innerHTML = `
+            <div style="display: flex; flex-direction: column;">
+                <span>${i.name}${variantText}</span>
+                <span style="font-size: 11px; color: var(--text-muted);">₹${i.price} each</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <span class="item-qty">x${i.qty}</span>
+                ${removeBtnHtml}
+            </div>
+        `;
         listEl.appendChild(li);
     });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     
     const orderModalOverlay = document.getElementById('order-modal-overlay');
     if(orderModalOverlay) orderModalOverlay.classList.add('active');
@@ -509,12 +550,132 @@ async function markOrderDispatched() {
     showToast('Dispatching to rider... 📦');
     
     try {
-        await fetch(`${BACKEND_URL}/api/orders/${targetOrderId}/dispatch`, { method: 'PUT' });
+        await adminFetchWithAuth(`${BACKEND_URL}/api/orders/${targetOrderId}/dispatch`, { method: 'PUT' });
     } catch (e) { 
         showToast('Network error updating database.'); 
         fetchOrders(); 
     } finally {
         isProcessingOrderAction = false;
+    }
+}
+
+// --- NEW FUNCTIONALITY: Driver Assignment ---
+function openAssignDriverModal() {
+    if (!activeOrder) return showToast('No order selected.');
+    document.getElementById('assign-driver-name').value = activeOrder.deliveryDriverName !== 'Unassigned' ? activeOrder.deliveryDriverName : '';
+    document.getElementById('assign-driver-phone').value = activeOrder.driverPhone || '';
+    document.getElementById('assign-driver-modal').classList.add('active');
+}
+
+function closeAssignDriverModal() {
+    document.getElementById('assign-driver-modal').classList.remove('active');
+}
+
+async function submitAssignDriver(event) {
+    event.preventDefault();
+    if (!activeOrder) return;
+    
+    const driverName = document.getElementById('assign-driver-name').value.trim();
+    const driverPhone = document.getElementById('assign-driver-phone').value.trim();
+    const btn = event.target.querySelector('button[type="submit"]');
+    
+    btn.innerText = 'Assigning...';
+    btn.disabled = true;
+
+    try {
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/orders/${activeOrder._id}/driver`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ driverName, driverPhone })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            showToast('Driver assigned successfully!');
+            // Update local state
+            const localOrder = currentOrders.find(o => o._id === activeOrder._id);
+            if (localOrder) {
+                localOrder.deliveryDriverName = driverName;
+                localOrder.driverPhone = driverPhone;
+            }
+            closeAssignDriverModal();
+            openOrderModal(activeOrder); // Refresh modal view
+        } else {
+            showToast(result.message || 'Error assigning driver.');
+        }
+    } catch (e) {
+        showToast('Network error.');
+    } finally {
+        btn.innerText = 'Assign Driver';
+        btn.disabled = false;
+    }
+}
+
+// --- NEW FUNCTIONALITY: Partial Refunds ---
+let currentRefundItem = null;
+
+function openPartialRefundModal(productId, variantId, name, maxQty, price) {
+    currentRefundItem = { productId, variantId, price };
+    document.getElementById('refund-item-name').innerText = name;
+    document.getElementById('refund-qty').value = 1;
+    document.getElementById('refund-qty').max = maxQty;
+    document.getElementById('partial-refund-modal').classList.add('active');
+}
+
+function closePartialRefundModal() {
+    currentRefundItem = null;
+    document.getElementById('partial-refund-modal').classList.remove('active');
+}
+
+async function submitPartialRefund() {
+    if (!activeOrder || !currentRefundItem) return;
+    
+    const qtyToRefund = parseInt(document.getElementById('refund-qty').value);
+    if (isNaN(qtyToRefund) || qtyToRefund < 1) return showToast("Invalid quantity.");
+    
+    const confirmRefund = confirm(`Are you sure you want to remove ${qtyToRefund} unit(s) of this item? Stock will be returned to inventory.`);
+    if (!confirmRefund) return;
+
+    const refundValue = qtyToRefund * currentRefundItem.price;
+    const newTotalAmount = activeOrder.totalAmount - refundValue;
+
+    closePartialRefundModal();
+    showToast('Processing partial refund...');
+
+    try {
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/orders/${activeOrder._id}/partial-refund`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                productId: currentRefundItem.productId,
+                variantId: currentRefundItem.variantId,
+                qtyToRefund: qtyToRefund,
+                newTotalAmount: newTotalAmount
+            })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            showToast('Item refunded successfully!');
+            // Update local state safely to avoid full refetch
+            const localOrder = currentOrders.find(o => o._id === activeOrder._id);
+            if (localOrder) {
+                localOrder.totalAmount = newTotalAmount;
+                const itemToUpdate = localOrder.items.find(i => i.productId === currentRefundItem.productId && i.variantId === currentRefundItem.variantId);
+                if (itemToUpdate) {
+                    itemToUpdate.qty -= qtyToRefund;
+                    if (itemToUpdate.qty <= 0) {
+                        localOrder.items = localOrder.items.filter(i => i !== itemToUpdate);
+                    }
+                }
+            }
+            openOrderModal(activeOrder); // Refresh view
+            if (typeof fetchInventory === 'function') fetchInventory(); // Refresh stock
+        } else {
+            showToast(result.message || 'Error processing refund.');
+        }
+    } catch (e) {
+        showToast('Network error.');
     }
 }
 
@@ -536,8 +697,10 @@ async function printHardwareReceipt() {
         const alignLeft = encoder.encode('\x1B\x61\x00');
         const cutPaper = encoder.encode('\x1D\x56\x00');
         
+        const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
+
         let text = "          DAILYPICK          \n";
-        text += `Order #${activeOrder._id.toString().slice(-4).toUpperCase()}\n`;
+        text += `Order #${orderDisplayId}\n`;
         text += `Date: ${new Date(activeOrder.createdAt).toLocaleString()}\n`;
         text += "--------------------------------\n";
         
