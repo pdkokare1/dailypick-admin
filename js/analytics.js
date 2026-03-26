@@ -138,6 +138,11 @@ async function fetchAnalytics() {
         if (expenseResult.success) {
             allHistoricalExpenses = expenseResult.data;
         }
+        
+        // --- NEW: Ensure Inventory is loaded for Wastage calculations ---
+        if (typeof currentInventory !== 'undefined' && currentInventory.length === 0 && typeof fetchInventory === 'function') {
+            await fetchInventory();
+        }
 
         updateAnalyticsRange(7); 
     } catch (e) {
@@ -230,7 +235,6 @@ function updateAnalyticsRange(daysLimit) {
         }
     });
 
-    // --- NEW: Dynamic Profit Margin Calculation ---
     let marginPct = 0;
     const totalRev = Object.values(revenueMap).reduce((a,b)=>a+b, 0);
     const totalCogs = Object.values(cogsMap).reduce((a,b)=>a+b, 0);
@@ -301,40 +305,23 @@ function updateAnalyticsRange(daysLimit) {
         .slice(0, 8); 
 
     const feed = document.getElementById('top-items-feed');
-    feed.innerHTML = '';
-    
-    if (topItems.length === 0) {
-        feed.innerHTML = `<p class="empty-state">No sales data for the selected timeframe.</p>`;
-    } else {
-        topItems.forEach(item => {
-            feed.innerHTML += `
-                <div class="top-item-card">
-                    <span class="top-item-name">${item.name}</span>
-                    <span class="top-item-stats">${item.qty} units • ₹${item.revenue}</span>
-                </div>
-            `;
-        });
-    }
-
-    // --- NEW: VIP Customers (CLV) Feed ---
-    let vipFeed = document.getElementById('vip-customers-feed');
-    if (!vipFeed) {
-        const topItemsContainer = document.getElementById('top-items-feed');
-        if (topItemsContainer) {
-            const header = document.createElement('div');
-            header.className = 'section-header';
-            header.style.marginTop = '40px';
-            header.innerHTML = '<h2>VIP Customers (CLV)</h2>';
-            
-            vipFeed = document.createElement('div');
-            vipFeed.id = 'vip-customers-feed';
-            vipFeed.className = 'top-items-list'; 
-            
-            topItemsContainer.parentNode.insertBefore(header, topItemsContainer.nextSibling);
-            header.parentNode.insertBefore(vipFeed, header.nextSibling);
+    if (feed) {
+        feed.innerHTML = '';
+        if (topItems.length === 0) {
+            feed.innerHTML = `<p class="empty-state">No sales data for the selected timeframe.</p>`;
+        } else {
+            topItems.forEach(item => {
+                feed.innerHTML += `
+                    <div class="top-item-card">
+                        <span class="top-item-name">${item.name}</span>
+                        <span class="top-item-stats">${item.qty} units • ₹${item.revenue}</span>
+                    </div>
+                `;
+            });
         }
     }
 
+    let vipFeed = document.getElementById('vip-customers-feed');
     if (vipFeed) {
         let customerLTV = {};
         filteredOrders.forEach(o => {
@@ -360,6 +347,82 @@ function updateAnalyticsRange(daysLimit) {
                     </div>
                 `;
             });
+        }
+    }
+
+    // --- NEW FUNCTIONALITY: Wastage & Returns Analytics ---
+    if (typeof currentInventory !== 'undefined') {
+        let totalRTVValue = 0;
+        let totalRTVItems = 0;
+        let totalExpiredValue = 0;
+        let totalExpiredItems = 0;
+        let rtvList = [];
+        let expiredList = [];
+
+        currentInventory.forEach(p => {
+            if(p.variants) {
+                p.variants.forEach(v => {
+                    if (v.returnHistory && v.returnHistory.length > 0) {
+                        v.returnHistory.forEach(rtv => {
+                            totalRTVValue += (rtv.refundAmount || 0);
+                            totalRTVItems += (rtv.returnedQuantity || 0);
+                            rtvList.push({ name: p.name, reason: rtv.reason, qty: rtv.returnedQuantity, loss: rtv.refundAmount });
+                        });
+                    }
+
+                    if (v.expiryDate) {
+                        const expDate = new Date(v.expiryDate);
+                        if (expDate < today && v.stock > 0) {
+                            const loss = v.stock * v.price; 
+                            totalExpiredValue += loss;
+                            totalExpiredItems += v.stock;
+                            expiredList.push({ name: p.name, qty: v.stock, loss: loss, date: expDate.toLocaleDateString() });
+                        }
+                    }
+                });
+            }
+        });
+
+        const wastageKpiRow = document.getElementById('wastage-kpi-row');
+        if (wastageKpiRow) {
+            wastageKpiRow.innerHTML = `
+                <div class="stat-card" style="padding: 16px; background: #fff1f2; border: 1px solid #ffe4e6; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    <h3 style="font-size: 12px; color: #be123c; margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Returned to Vendor (RTV)</h3>
+                    <p style="font-size: 24px; font-weight: 800; color: #e11d48;">₹${totalRTVValue.toFixed(2)}</p>
+                    <p style="font-size: 11px; color: #9f1239; margin-top: 4px;">${totalRTVItems} units returned historically</p>
+                </div>
+                <div class="stat-card" style="padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    <h3 style="font-size: 12px; color: #991b1b; margin-bottom: 4px; text-transform: uppercase; font-weight: 700;">Expired Stock (Unsold)</h3>
+                    <p style="font-size: 24px; font-weight: 800; color: #dc2626;">₹${totalExpiredValue.toFixed(2)}</p>
+                    <p style="font-size: 11px; color: #b91c1c; margin-top: 4px;">${totalExpiredItems} units currently expired on shelves</p>
+                </div>
+            `;
+        }
+
+        const wastageFeed = document.getElementById('wastage-returns-feed');
+        if (wastageFeed) {
+            wastageFeed.innerHTML = '';
+            if (rtvList.length === 0 && expiredList.length === 0) {
+                wastageFeed.innerHTML = '<p class="empty-state">No wastage or returns recorded.</p>';
+            } else {
+                rtvList.sort((a,b) => b.loss - a.loss);
+                expiredList.sort((a,b) => b.loss - a.loss);
+                
+                let combinedOffenders = [];
+                rtvList.slice(0,3).forEach(i => combinedOffenders.push(`
+                    <div class="top-item-card" style="border-left: 4px solid #e11d48;">
+                        <span class="top-item-name">${i.name} <span style="font-size:11px; color:#94A3B8; font-weight:normal; margin-left:8px;">RTV: ${i.reason}</span></span>
+                        <span class="top-item-stats">${i.qty} units • ₹${i.loss.toFixed(2)}</span>
+                    </div>
+                `));
+                expiredList.slice(0,3).forEach(i => combinedOffenders.push(`
+                    <div class="top-item-card" style="border-left: 4px solid #dc2626;">
+                        <span class="top-item-name">${i.name} <span style="font-size:11px; color:#94A3B8; font-weight:normal; margin-left:8px;">Expired: ${i.date}</span></span>
+                        <span class="top-item-stats">${i.qty} units • ₹${i.loss.toFixed(2)}</span>
+                    </div>
+                `));
+                wastageFeed.innerHTML = combinedOffenders.join('');
+            }
         }
     }
 }
