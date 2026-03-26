@@ -34,17 +34,46 @@ window.fetch = async function(resource, config = {}) {
 
 let currentUser = null;
 let currentPin = '';
-let realtimeSocket = null; // --- NEW: WebSocket Instance Tracker ---
+let realtimeSocket = null; 
 let realtimeReconnectTimeout = null;
 
-// --- NEW FUNCTIONALITY: Secure Auto-Reconnecting WebSocket ---
+// --- NEW FUNCTIONALITY: Kiosk Mode Screen Wake Lock ---
+let wakeLock = null;
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => {
+                console.log('Screen Wake Lock released');
+            });
+            console.log('Screen Wake Lock acquired - Kiosk Mode Active');
+        }
+    } catch (err) {
+        console.warn(`Wake Lock Error: ${err.name}, ${err.message}`);
+    }
+}
+
+document.addEventListener('visibilitychange', async () => {
+    if (wakeLock !== null && document.visibilityState === 'visible') {
+        await requestWakeLock();
+    }
+});
+
+// --- NEW FUNCTIONALITY: Prevent Accidental Tab Closure ---
+window.addEventListener('beforeunload', function (e) {
+    // If cart is not empty OR a shift is currently open, warn the user before closing
+    if ((typeof posCart !== 'undefined' && posCart.length > 0) || (typeof currentActiveShift !== 'undefined' && currentActiveShift !== null)) {
+        e.preventDefault();
+        e.returnValue = 'You have an active transaction or open shift. Are you sure you want to leave?';
+    }
+});
+
 window.setupRealtimeConnection = function() {
-    if (realtimeSocket && realtimeSocket.readyState <= 1) return; // Already connected or connecting
+    if (realtimeSocket && realtimeSocket.readyState <= 1) return; 
 
     const token = localStorage.getItem('adminToken');
     if (!token) return;
 
-    // Convert http/https to ws/wss safely
     const wsUrl = BACKEND_URL.replace(/^http/, 'ws') + `/api/ws/pos?token=${token}`;
     
     try {
@@ -59,13 +88,11 @@ window.setupRealtimeConnection = function() {
             try {
                 const data = JSON.parse(event.data);
                 
-                // Keep-Alive / Heartbeat Response
                 if (data.type === 'PING') {
                     realtimeSocket.send(JSON.stringify({ type: 'PONG' }));
                     return;
                 }
                 
-                // Handle POS updates (Inventory, Orders)
                 if (data.type === 'NEW_ORDER' || data.type === 'ORDER_STATUS_UPDATED') {
                     if (typeof fetchOrders === 'function') fetchOrders();
                     if (typeof renderOverview === 'function') renderOverview();
@@ -86,7 +113,7 @@ window.setupRealtimeConnection = function() {
 
         realtimeSocket.onerror = (err) => {
             console.error("Realtime WebSocket Error:", err);
-            realtimeSocket.close(); // Force close to trigger auto-reconnect logic
+            realtimeSocket.close(); 
         };
     } catch (e) {
         console.error("WebSocket setup failed", e);
@@ -129,6 +156,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
+// --- NEW FUNCTIONALITY: Hardware Scanner Protection ---
 document.addEventListener('keydown', (e) => {
     const loginContainer = document.getElementById('pin-login-container');
     if (loginContainer && loginContainer.style.display !== 'none' && document.activeElement.id !== 'login-username') {
@@ -137,6 +165,12 @@ document.addEventListener('keydown', (e) => {
         } else if (e.key === 'Backspace' || e.key === 'Delete') {
             window.clearPinInput();
         }
+    }
+
+    // Intercept dangerous browser shortcuts fired by rapid USB scanners
+    if ((e.ctrlKey || e.metaKey) && ['p', 's', 'j', 'g', 'f', 'o'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        console.warn(`Blocked potentially dangerous scanner shortcut: Ctrl+${e.key}`);
     }
 });
 
@@ -293,13 +327,17 @@ window.logoutUser = function() {
     localStorage.removeItem('dailypick_storeId');
     localStorage.removeItem('dailypick_registerId');
     
-    // Cleanly close realtime socket on logout
     if (realtimeSocket) {
-        realtimeSocket.onclose = null; // Prevent auto-reconnect
+        realtimeSocket.onclose = null; 
         realtimeSocket.close();
         realtimeSocket = null;
     }
     if (realtimeReconnectTimeout) clearTimeout(realtimeReconnectTimeout);
+    
+    // Release wake lock if held
+    if (wakeLock !== null) {
+        wakeLock.release().then(() => wakeLock = null);
+    }
 
     if (window.adminStreamController) {
         window.adminStreamController.abort();
@@ -378,8 +416,8 @@ function initializeApp() {
     if (typeof fetchPromotions === 'function') fetchPromotions(); 
     if (typeof fetchOrders === 'function') fetchOrders();
     
-    // Fire up the real-time WebSocket connection
     window.setupRealtimeConnection();
+    requestWakeLock(); // Trigger Kiosk Screen Lock
 
     if (currentUser && currentUser.role === 'Admin') {
         if (typeof renderOverview === 'function') renderOverview(); 
