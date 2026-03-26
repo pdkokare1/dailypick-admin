@@ -139,7 +139,6 @@ async function fetchAnalytics() {
             allHistoricalExpenses = expenseResult.data;
         }
         
-        // --- NEW: Ensure Inventory is loaded for Wastage calculations ---
         if (typeof currentInventory !== 'undefined' && currentInventory.length === 0 && typeof fetchInventory === 'function') {
             await fetchInventory();
         }
@@ -350,7 +349,6 @@ function updateAnalyticsRange(daysLimit) {
         }
     }
 
-    // --- NEW FUNCTIONALITY: Wastage & Returns Analytics ---
     if (typeof currentInventory !== 'undefined') {
         let totalRTVValue = 0;
         let totalRTVItems = 0;
@@ -427,6 +425,7 @@ function updateAnalyticsRange(daysLimit) {
     }
 }
 
+// --- OPTIMIZED: Smooth Animations added to Charts ---
 function renderChart(labels, revenueData, profitData) {
     const ctx = document.getElementById('revenueChart').getContext('2d');
     if (revenueChartInstance) revenueChartInstance.destroy(); 
@@ -460,6 +459,7 @@ function renderChart(labels, revenueData, profitData) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: { duration: 1000, easing: 'easeOutQuart' }, // Smooth load
             plugins: { 
                 legend: { 
                     display: true, 
@@ -497,6 +497,7 @@ function renderCategoryChart(labels, data) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: { duration: 1000, easing: 'easeOutQuart' }, // Smooth load
             plugins: { 
                 legend: { position: 'right', labels: { boxWidth: 12, font: {size: 10} } } 
             }
@@ -504,9 +505,21 @@ function renderCategoryChart(labels, data) {
     });
 }
 
+// --- OPTIMIZED: Dynamic Heatmap Coloring for Peak Hours ---
 function renderHourlyChart(labels, data) {
     const ctx = document.getElementById('hourlyChart').getContext('2d');
     if (hourlyChartInstance) hourlyChartInstance.destroy();
+    
+    const maxVal = Math.max(...data) || 1;
+    
+    // Dynamic Heatmap Logic: Color shifts based on traffic volume
+    const dynamicColors = data.map(val => {
+        const intensity = val / maxVal;
+        if (intensity > 0.8) return '#ef4444'; // Red (Peak traffic)
+        if (intensity > 0.5) return '#f59e0b'; // Amber (Medium traffic)
+        if (intensity > 0) return '#3b82f6';   // Blue (Low traffic)
+        return '#e2e8f0';                      // Gray (Zero traffic)
+    });
     
     hourlyChartInstance = new Chart(ctx, {
         type: 'bar',
@@ -515,13 +528,14 @@ function renderHourlyChart(labels, data) {
             datasets: [{
                 label: 'Total Orders',
                 data: data,
-                backgroundColor: '#3b82f6',
+                backgroundColor: dynamicColors, 
                 borderRadius: 4
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: { duration: 1000, easing: 'easeOutQuart' }, // Smooth load
             plugins: { legend: { display: false } },
             scales: { 
                 y: { beginAtZero: true, ticks: { stepSize: 1 } },
