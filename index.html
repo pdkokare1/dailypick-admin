@@ -316,6 +316,8 @@
                     <div class="scrollable-actions" style="width: 100%;">
                         <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportInventoryCSV()"><i data-lucide="download" class="icon-sm"></i> Export</button>
                         <button class="primary-btn-small" style="background: #ef4444; color: white; border: none;" onclick="openAuditMode()"><i data-lucide="clipboard-check" class="icon-sm"></i> Audit Mode</button>
+                        <button class="primary-btn-small" style="background: #dc2626; color: white; border: none; margin-right: 8px;" onclick="openAccountsPayable()"><i data-lucide="wallet" class="icon-sm"></i> Pay Suppliers</button>
+                        
                         <button class="primary-btn-small" style="background: #25D366; color: white; border: none;" onclick="openSourcingModal()"><i data-lucide="truck" class="icon-sm"></i> Sourcing</button>
                         <button class="primary-btn-small" onclick="openAddCategoryModal()">+ Category</button>
                         <button class="primary-btn-small" onclick="openAddBrandModal()">+ Brand</button>
@@ -701,6 +703,16 @@
                         <label>Distributor</label>
                         <select id="restock-distributor" required></select>
                     </div>
+                    
+                    <div class="input-group">
+                        <label>Supplier Payment Status</label>
+                        <select id="restock-payment-status" required>
+                            <option value="Paid">Paid in Full (Cash/Bank)</option>
+                            <option value="Credit">On Credit (Khata)</option>
+                        </select>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Selecting 'On Credit' will automatically add the total cost of this restock to the Distributor's pending balance.</p>
+                    </div>
+
                     <hr style="border: 0; border-top: 1px dashed #CBD5E1; margin: 24px 0;">
                     <div class="input-group">
                         <label>Scan or Select Item</label>
@@ -728,6 +740,19 @@
                     <div id="margin-display" style="font-size:14px; font-weight:800; color:#0C4A6E; margin-bottom:24px; background: #E0F2FE; padding: 12px; border-radius: 10px; text-align:center;">Margin: --% | Profit: ₹--</div>
                     <button type="submit" id="submit-restock-btn" class="primary-btn" disabled>Process Restock</button>
                 </form>
+            </div>
+        </div>
+
+        <div id="accounts-payable-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 350;">
+            <div class="form-card" style="max-width: 550px; max-height: 90vh; overflow-y: auto;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2>Supplier Ledger (Accounts Payable)</h2>
+                    <button class="close-btn" onclick="closeAccountsPayable()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px; font-weight: 600; line-height: 1.5;">Review outstanding debts to your distributors and log payments to clear them from your ledger.</p>
+                <div id="ap-ledger-list">
+                    <p class="empty-state">Loading balances...</p>
+                </div>
             </div>
         </div>
 
@@ -759,8 +784,7 @@
                 <div class="delivery-info-card">
                     <div id="modal-delivery-badge" style="margin-bottom:16px;"></div>
                     <p style="margin-bottom: 12px;"><strong><i data-lucide="phone" class="icon-sm"></i> Phone:</strong> <a href="#" id="modal-customer-phone">...</a></p>
-                    <p style="margin-bottom: 12px;"><strong><i data-lucide="map-pin" class="icon-sm"></i> Route:</strong> <span id="modal-customer-address">...</span></p>
-                    <div id="modal-driver-display" style="border-top: 1px dashed #CBD5E1; padding-top: 8px; margin-top: 8px;"></div>
+                    <p><strong><i data-lucide="map-pin" class="icon-sm"></i> Route:</strong> <span id="modal-customer-address">...</span></p>
                 </div>
                 <div class="packing-list-container">
                     <h3 style="font-weight: 800; margin-bottom: 16px;">Packing List</h3>
@@ -771,50 +795,13 @@
                     <p style="font-size: 14px; font-weight: 600; color: var(--text-muted);">Payment: <span id="modal-payment" style="color: var(--text-main);">COD</span></p>
                 </div>
                 <div class="scrollable-actions" style="margin-top: 24px;">
-                    <button class="primary-btn-small" style="background: #8b5cf6; color: white; border: none;" onclick="openAssignDriverModal()"><i data-lucide="truck" class="icon-sm"></i> Assign Driver</button>
                     <button class="primary-btn-small" style="background: #f59e0b; color: white; border: none;" onclick="printPackingSlip()"><i data-lucide="box" class="icon-sm"></i> Packing Slip</button>
                     <button class="primary-btn-small" style="background: #334155; color: white; border: none;" onclick="printReceipt()"><i data-lucide="printer" class="icon-sm"></i> Web Receipt</button>
                     <button class="primary-btn-small" style="background: #0ea5e9; color: white; border: none;" onclick="printHardwareReceipt()"><i data-lucide="printer" class="icon-sm"></i> POS Printer</button>
                     <button class="primary-btn-small" style="background: #25D366; color: white; border: none;" onclick="sendWhatsAppReceipt()"><i data-lucide="message-circle" class="icon-sm"></i> WhatsApp</button>
-                    <button class="danger-btn-small" onclick="cancelOrder()"><i data-lucide="x-circle" class="icon-sm"></i> Cancel Order</button>
+                    <button class="danger-btn-small" onclick="cancelOrder()"><i data-lucide="x-circle" class="icon-sm"></i> Cancel</button>
                 </div>
                 <button class="primary-btn" style="margin-top: 16px;" onclick="markOrderDispatched()">Mark as Dispatched</button>
-            </div>
-        </div>
-
-        <div id="assign-driver-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 300;">
-            <div class="form-card" style="max-width: 480px;">
-                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h2>Assign Delivery Driver</h2>
-                    <button class="close-btn" onclick="closeAssignDriverModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
-                </div>
-                <form onsubmit="submitAssignDriver(event)">
-                    <div class="input-group">
-                        <label>Driver Name</label>
-                        <input type="text" id="assign-driver-name" required placeholder="e.g., Raju">
-                    </div>
-                    <div class="input-group">
-                        <label>Driver Phone (Optional)</label>
-                        <input type="tel" id="assign-driver-phone" placeholder="e.g., 9876543210">
-                    </div>
-                    <button type="submit" class="primary-btn" style="background: #8b5cf6; margin-top: 16px;">Assign Driver</button>
-                </form>
-            </div>
-        </div>
-
-        <div id="partial-refund-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 300;">
-            <div class="form-card" style="max-width: 480px;">
-                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h2>Remove Item (Partial Refund)</h2>
-                    <button class="close-btn" onclick="closePartialRefundModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
-                </div>
-                <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px;">You are removing <strong><span id="refund-item-name" style="color:var(--text-main);"></span></strong> from the order. This will automatically adjust the cart total and return the physical stock to your inventory.</p>
-                
-                <div class="input-group">
-                    <label>Quantity to Remove</label>
-                    <input type="number" id="refund-qty" required min="1" value="1">
-                </div>
-                <button type="button" class="primary-btn" style="background: #ef4444; margin-top: 16px;" onclick="submitPartialRefund()">Confirm Refund</button>
             </div>
         </div>
 
