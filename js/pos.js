@@ -47,7 +47,6 @@ async function printThermalReceipt(order) {
         receipt += "--------------------------------\n";
         receipt += ALIGN_LEFT;
         
-        // --- PHASE 3: Utilize New Sequential Order Identifier ---
         receipt += `Order: ${order.orderNumber || order._id.substring(0,8)}\n`;
         
         receipt += `Date: ${new Date().toLocaleString()}\n`;
@@ -185,6 +184,7 @@ function stopPosScanner() {
     }
 }
 
+// --- NEW FUNCTIONALITY: Connect POS Scanner to Scalable Autocomplete ---
 async function handlePosScan(skuOrName) {
     let foundProduct = null;
     let foundVariant = null;
@@ -204,7 +204,8 @@ async function handlePosScan(skuOrName) {
     if (!foundProduct && navigator.onLine) {
         try {
             const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-            const res = await fetchFn(`${BACKEND_URL}/api/products?search=${encodeURIComponent(skuOrName)}`);
+            // Uses the new fast route
+            const res = await fetchFn(`${BACKEND_URL}/api/products/autocomplete?q=${encodeURIComponent(skuOrName)}`);
             const result = await res.json();
             if (result.success && result.data.length > 0) {
                 foundProduct = result.data[0];
@@ -767,12 +768,22 @@ async function submitOpenShift() {
     }
 }
 
+// --- NEW FUNCTIONALITY: Strict Shift Validation Logic ---
 async function submitCloseShift() {
     if (isProcessingCheckout) return;
-    const actualCash = document.getElementById('shift-actual-cash').value;
-    if (!actualCash) return showToast("Enter the actual physical cash counted.");
+    const actualCashStr = document.getElementById('shift-actual-cash').value;
+    
+    if (!actualCashStr) {
+        return showToast("Enter the actual physical cash counted in the drawer.");
+    }
+    const actualCash = parseFloat(actualCashStr);
     
     isProcessingCheckout = true;
+    const btn = event.target;
+    const originalText = btn.innerText;
+    btn.innerText = 'Verifying...';
+    btn.disabled = true;
+
     try {
         const res = await fetch(`${BACKEND_URL}/api/shifts/close`, {
             method: 'PUT',
@@ -782,19 +793,32 @@ async function submitCloseShift() {
                 actualCash: actualCash
             })
         });
+        
         const result = await res.json();
+        
         if (result.success) {
             currentActiveShift = null;
             const disc = result.discrepancy;
-            let msg = disc === 0 ? "Perfect Match!" : (disc < 0 ? `Short by ₹${Math.abs(disc).toFixed(2)}` : `Over by ₹${Math.abs(disc).toFixed(2)}`);
-            showToast(`Register Closed. ${msg}`);
+            
+            // Provide exact feedback on what happened
+            if (disc === 0) {
+                showToast("Register Closed. Perfect Match! ✅");
+            } else if (disc < 0) {
+                showToast(`Register Closed. Warning: Drawer is SHORT by ₹${Math.abs(disc).toFixed(2)}`);
+            } else {
+                showToast(`Register Closed. Drawer is OVER by ₹${Math.abs(disc).toFixed(2)}`);
+            }
+            
             closeShiftModal();
+            renderOverview(); // Update dashboard
         } else {
-            showToast(result.message);
+            showToast(result.message || 'Failed to close register.');
         }
     } catch(e) {
         showToast('Network error closing shift.');
     } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
         isProcessingCheckout = false;
     }
 }
