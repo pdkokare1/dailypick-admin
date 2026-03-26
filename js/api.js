@@ -3,7 +3,7 @@
 let currentPromotions = []; 
 
 async function adminFetchWithAuth(url, options = {}) {
-    const token = localStorage.getItem('adminToken');
+    let token = localStorage.getItem('adminToken');
     
     options.headers = options.headers || {};
     // --- PHASE 3: Seamless Integration with Phase 1 Secure Refresh Cookies ---
@@ -13,9 +13,37 @@ async function adminFetchWithAuth(url, options = {}) {
         options.headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const response = await fetch(url, options);
+    let response = await fetch(url, options);
     
-    if (response.status === 401 || response.status === 403) {
+    // --- NEW FUNCTIONALITY: Silent Session Refresh ---
+    if (response.status === 401) {
+        try {
+            const refreshRes = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
+                method: 'POST',
+                credentials: 'include' // Ensures the secure HTTP-only cookie is sent
+            });
+            const refreshData = await refreshRes.json();
+            
+            if (refreshData.success && refreshData.token) {
+                // Save new token and retry original request
+                localStorage.setItem('adminToken', refreshData.token);
+                options.headers['Authorization'] = `Bearer ${refreshData.token}`;
+                response = await fetch(url, options); 
+            } else {
+                // Original fallback logic
+                console.warn('Authentication failed for:', url);
+                if (typeof showToast === 'function') {
+                    showToast('Session Expired or Access Denied. Please log in again.');
+                }
+            }
+        } catch (e) {
+            // Original fallback logic on network error
+            console.warn('Authentication failed for:', url);
+            if (typeof showToast === 'function') {
+                showToast('Session Expired or Access Denied. Please log in again.');
+            }
+        }
+    } else if (response.status === 403) {
         console.warn('Authentication failed for:', url);
         if (typeof showToast === 'function') {
             showToast('Session Expired or Access Denied. Please log in again.');
