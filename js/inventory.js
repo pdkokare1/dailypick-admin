@@ -1,5 +1,14 @@
 /* js/inventory.js */
 
+// --- NEW: Cloudinary Image Compression helper ---
+function optimizeCloudinaryUrl(url, width) {
+    if (!url || !url.includes('cloudinary.com')) return url;
+    if (url.includes('/upload/')) {
+        return url.replace('/upload/', `/upload/q_auto,f_auto,w_${width}/`);
+    }
+    return url;
+}
+
 function calculateStockRunway(variant) {
     if (!variant.purchaseHistory || variant.purchaseHistory.length < 2) return null;
     
@@ -148,8 +157,10 @@ function renderInventory(isLastPage = true) {
         
         const checkboxHtml = `<input type="checkbox" class="order-checkbox" ${selectedInventory.has(p._id) ? 'checked' : ''} onclick="toggleInventorySelection('${p._id}', event)">`;
         
+        // --- NEW: Applying Cloudinary Compression to Admin Thumbnails ---
+        const optimizedUrl = optimizeCloudinaryUrl(p.imageUrl, 150);
         const thumb = p.imageUrl 
-            ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
+            ? `<img src="${optimizedUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
             : `<div style="width:40px; height:40px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">📦</div>`;
         
         const vCount = p.variants ? p.variants.length : 0;
@@ -1287,7 +1298,6 @@ function openAddProductModal() {
     document.getElementById('variants-container').innerHTML = ''; 
     document.getElementById('drop-zone').classList.remove('dragover');
     
-    // --- NEW: Reset Image Preview ---
     const previewImg = document.getElementById('drop-zone-preview');
     const dropContent = document.getElementById('drop-zone-content');
     if (previewImg) previewImg.style.display = 'none';
@@ -1313,7 +1323,6 @@ function openEditProductModal(id, e) {
     document.getElementById('new-tags').value = p.searchTags || ''; 
     document.getElementById('current-image-text').style.display = p.imageUrl ? 'block' : 'none';
 
-    // --- NEW: Show Existing Image Preview ---
     const previewImg = document.getElementById('drop-zone-preview');
     const dropContent = document.getElementById('drop-zone-content');
     if (p.imageUrl) {
@@ -1468,7 +1477,6 @@ if (invSentinel) {
     observer.observe(invSentinel);
 }
 
-// --- NEW: Drag & Drop + Image Preview Logic ---
 document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('new-image');
     const dropZone = document.getElementById('drop-zone');
@@ -1476,7 +1484,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewImg = document.getElementById('drop-zone-preview');
 
     if (fileInput && dropZone) {
-        // Handle file selection (click to browse)
         fileInput.addEventListener('change', function() {
             if (this.files && this.files[0]) {
                 const file = this.files[0];
@@ -1497,7 +1504,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Prevent default browser behavior for drag & drop
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dropZone.addEventListener(eventName, preventDefaults, false);
         });
@@ -1507,7 +1513,6 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation();
         }
 
-        // Add visual flair when dragging over
         ['dragenter', 'dragover'].forEach(eventName => {
             dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
         });
@@ -1516,14 +1521,13 @@ document.addEventListener('DOMContentLoaded', () => {
             dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
         });
 
-        // Handle the actual drop
         dropZone.addEventListener('drop', (e) => {
             const dt = e.dataTransfer;
             const files = dt.files;
             
             if (files && files.length > 0) {
-                fileInput.files = files; // Transfer the dropped files into the hidden input
-                fileInput.dispatchEvent(new Event('change')); // Trigger the preview generation
+                fileInput.files = files;
+                fileInput.dispatchEvent(new Event('change')); 
             }
         });
     }
