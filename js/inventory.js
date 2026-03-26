@@ -1,5 +1,15 @@
 /* js/inventory.js */
 
+// --- NEW: Multi-Store Helper ---
+function getDisplayStock(variant) {
+    if (typeof currentStoreId === 'undefined' || !currentStoreId) return variant.stock; 
+    if (variant.locationInventory && Array.isArray(variant.locationInventory)) {
+        const loc = variant.locationInventory.find(l => l.storeId === currentStoreId);
+        if (loc) return loc.stock;
+    }
+    return 0; 
+}
+
 function calculateStockRunway(variant) {
     if (!variant.purchaseHistory || variant.purchaseHistory.length < 2) return null;
     
@@ -13,7 +23,8 @@ function calculateStockRunway(variant) {
     const velocity = totalQtyBought / daysElapsed;
     if (velocity <= 0) return null;
     
-    return Math.ceil(variant.stock / velocity);
+    const dStock = getDisplayStock(variant);
+    return Math.ceil(dStock / velocity);
 }
 
 function toggleSpecialFilter(type) {
@@ -158,10 +169,11 @@ function renderInventory(isLastPage = true) {
         
         if (p.variants) {
             p.variants.forEach(v => {
-                totalStock += v.stock;
-                if (v.stock <= 0) {
+                const dStock = getDisplayStock(v); // MULTI-STORE
+                totalStock += dStock;
+                if (dStock <= 0) {
                     lowestStockFlag = 'out';
-                } else if (lowestStockFlag !== 'out' && v.stock <= (v.lowStockThreshold || 5)) {
+                } else if (lowestStockFlag !== 'out' && dStock <= (v.lowStockThreshold || 5)) {
                     lowestStockFlag = 'low';
                 }
             });
@@ -197,15 +209,16 @@ function renderInventory(isLastPage = true) {
 
             let runwayDays = v.daysOfStock !== undefined ? v.daysOfStock : calculateStockRunway(v);
             let runwayHtml = '';
+            const dStock = getDisplayStock(v); // MULTI-STORE
             
             if (runwayDays !== null && runwayDays !== undefined) {
-                if (v.stock > 15 && runwayDays > 30) {
+                if (dStock > 15 && runwayDays > 30) {
                     runwayHtml = `<span style="background:#f3f4f6; color:#4b5563; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:bold; margin-left:8px; border: 1px solid #e5e7eb;">🕸️ Dead Stock</span>`;
-                } else if (v.stock > 0 && runwayDays <= 3) {
+                } else if (dStock > 0 && runwayDays <= 3) {
                     runwayHtml = `<span style="background:#fef2f2; color:#dc2626; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:bold; margin-left:8px; border: 1px solid #fecaca;">🔥 ${runwayDays} Days Left</span>`;
-                } else if (v.stock > 0 && v.averageDailySales && v.averageDailySales > 2) {
+                } else if (dStock > 0 && v.averageDailySales && v.averageDailySales > 2) {
                     runwayHtml = `<span style="background:#ecfdf5; color:#059669; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:bold; margin-left:8px; border: 1px solid #a7f3d0;">📈 High Velocity</span>`;
-                } else if (v.stock > 0 && runwayDays < 999) {
+                } else if (dStock > 0 && runwayDays < 999) {
                     runwayHtml = `<span style="color:var(--text-muted); font-size:9px; margin-left:8px;">${runwayDays} Days Left</span>`;
                 }
             }
@@ -218,7 +231,7 @@ function renderInventory(isLastPage = true) {
                     <input class="inline-edit-input" type="number" value="${v.price}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'price', this, event)" title="Press Enter to save">
                     ${marginHtml}
                     <span style="color: var(--text-muted); margin-left: 8px;">Qty:</span>
-                    <input class="inline-edit-input" type="number" value="${v.stock}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'stock', this, event)" title="Press Enter to save">
+                    <input class="inline-edit-input" type="number" value="${dStock}" onkeydown="saveInlineEdit('${p._id}', '${v._id}', 'stock', this, event)" title="Press Enter to save">
                     <button class="quick-restock-btn" onclick="openRestockHistory('${p._id}', '${v._id}', event)" title="Restock History">🕒</button>
                     <button class="quick-restock-btn" onclick="quickRestock('${p._id}', '${v._id}', event)" title="Quick Restock">📦</button>
                     <button class="quick-restock-btn" style="color: #dc2626; border-color: #fca5a5; background: #fef2f2;" onclick="openRTVModal('${p._id}', '${v._id}', event)" title="Return to Vendor (RTV)">🔙</button>
@@ -487,7 +500,7 @@ async function searchRestockItem(overrideSearchTerm = null) {
                     itemDiv.className = 'restock-result-item';
                     itemDiv.innerHTML = `
                         <h4>${p.name}</h4>
-                        <p>${v.weightOrVolume} • Current Stock: ${v.stock} • SKU: ${v.sku || 'N/A'}</p>
+                        <p>${v.weightOrVolume} • Current Stock: ${getDisplayStock(v)} • SKU: ${v.sku || 'N/A'}</p>
                     `;
                     itemDiv.onclick = () => selectItemForRestock(p, v);
                     resultsContainer.appendChild(itemDiv);
@@ -506,7 +519,7 @@ function selectItemForRestock(product, variant) {
     document.getElementById('restock-search').value = '';
     
     document.getElementById('restock-item-name').innerText = product.name;
-    document.getElementById('restock-item-variant').innerText = `${variant.weightOrVolume} (Current Stock: ${variant.stock})`;
+    document.getElementById('restock-item-variant').innerText = `${variant.weightOrVolume} (Current Stock: ${getDisplayStock(variant)})`;
     document.getElementById('restock-product-id').value = product._id; 
     document.getElementById('restock-variant-id').value = variant._id;
     document.getElementById('restock-sell').value = variant.price; 
@@ -561,7 +574,9 @@ async function submitRestock(e) {
         addedQuantity: document.getElementById('restock-qty').value,
         purchasingPrice: document.getElementById('restock-cost').value,
         newSellingPrice: document.getElementById('restock-sell').value,
-        paymentStatus: paymentStatus
+        paymentStatus: paymentStatus,
+        // --- NEW Phase 5: Multi-Store Data ---
+        storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null
     };
     
     try {
@@ -697,10 +712,11 @@ function openRTVModal(productId, variantId, event) {
     
     document.getElementById('rtv-form').reset();
     document.getElementById('rtv-item-name').innerText = product.name;
-    document.getElementById('rtv-item-variant').innerText = `${variant.weightOrVolume} (Current Stock: ${variant.stock})`;
+    const dStock = getDisplayStock(variant); // MULTI-STORE
+    document.getElementById('rtv-item-variant').innerText = `${variant.weightOrVolume} (Current Stock: ${dStock})`;
     document.getElementById('rtv-distributor').value = product.distributorName || '';
-    document.getElementById('rtv-max-qty').innerText = variant.stock;
-    document.getElementById('rtv-qty').max = variant.stock;
+    document.getElementById('rtv-max-qty').innerText = dStock;
+    document.getElementById('rtv-qty').max = dStock;
     
     document.getElementById('rtv-modal').classList.add('active');
 }
@@ -723,7 +739,9 @@ async function submitRTV(e) {
         distributorName: document.getElementById('rtv-distributor').value,
         returnedQuantity: parseInt(document.getElementById('rtv-qty').value),
         refundAmount: parseFloat(document.getElementById('rtv-refund').value) || 0,
-        reason: document.getElementById('rtv-reason').value
+        reason: document.getElementById('rtv-reason').value,
+        // --- NEW Phase 5: Multi-Store Data ---
+        storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null
     };
     
     try {
@@ -874,11 +892,12 @@ function updateInventoryDashboard() {
     currentInventory.forEach(p => {
         if(p.variants) {
             p.variants.forEach(v => {
-                if (v.stock <= 0) outOfStock++;
-                else if (v.stock <= (v.lowStockThreshold || 5)) lowStock++;
-                else if (v.stock > 15) deadStock++; 
+                const dStock = getDisplayStock(v); // MULTI-STORE
+                if (dStock <= 0) outOfStock++;
+                else if (dStock <= (v.lowStockThreshold || 5)) lowStock++;
+                else if (dStock > 15) deadStock++; 
 
-                totalValue += (v.stock * v.price);
+                totalValue += (dStock * v.price);
             });
         }
     });
@@ -902,7 +921,8 @@ function openSourcingModal() {
     currentInventory.forEach(p => {
         if (p.variants) {
             p.variants.forEach(v => {
-                if (v.stock <= (v.lowStockThreshold || 5)) {
+                const dStock = getDisplayStock(v); // MULTI-STORE
+                if (dStock <= (v.lowStockThreshold || 5)) {
                     const dist = p.distributorName || 'Unassigned Distributor';
                     if (!reorderData[dist]) reorderData[dist] = [];
                     
@@ -917,7 +937,7 @@ function openSourcingModal() {
                         if (suggestedQty < 10) suggestedQty = 10;
                     }
 
-                    reorderData[dist].push(`- ${p.name} (${v.weightOrVolume}) | Current: ${v.stock} | Suggested Order: ${suggestedQty}`);
+                    reorderData[dist].push(`- ${p.name} (${v.weightOrVolume}) | Current: ${dStock} | Suggested Order: ${suggestedQty}`);
                     totalItemsCount++;
                 }
             });
@@ -1304,7 +1324,7 @@ function handleAuditScan(e) {
         if (foundProduct && foundVariant) {
             playBeep();
             document.getElementById('audit-item-name').innerText = `${foundProduct.name} (${foundVariant.weightOrVolume})`;
-            document.getElementById('audit-expected-stock').innerText = foundVariant.stock;
+            document.getElementById('audit-expected-stock').innerText = getDisplayStock(foundVariant);
             document.getElementById('audit-actual-stock').value = '';
             document.getElementById('audit-pid').value = foundProduct._id;
             document.getElementById('audit-vid').value = foundVariant._id;
@@ -1325,8 +1345,10 @@ async function submitAuditCorrection() {
     const vid = document.getElementById('audit-vid').value;
     const product = currentInventory.find(p => p._id === pid);
     const variant = product.variants.find(v => v._id === vid);
+    
+    const currentStock = getDisplayStock(variant);
 
-    if (variant.stock === actual) {
+    if (currentStock === actual) {
         showToast("Count matches! No correction needed.");
     } else {
         variant.stock = actual;
