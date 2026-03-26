@@ -184,11 +184,12 @@ function stopPosScanner() {
                 posContinuousScanner.clear();
                 posContinuousScanner = null;
             }).catch(err => {
-                posContinuousScanner.clear();
+                // Gracefully ignore AbortError caused by UI view switching.
+                // Do not call .clear() here as the scanner state is already interrupted.
                 posContinuousScanner = null;
             });
         } catch (e) {
-            posContinuousScanner.clear();
+            // Failsafe catch for synchronous errors
             posContinuousScanner = null;
         }
     }
