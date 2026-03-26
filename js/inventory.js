@@ -1,14 +1,5 @@
 /* js/inventory.js */
 
-// --- NEW: Cloudinary Image Compression helper ---
-function optimizeCloudinaryUrl(url, width) {
-    if (!url || !url.includes('cloudinary.com')) return url;
-    if (url.includes('/upload/')) {
-        return url.replace('/upload/', `/upload/q_auto,f_auto,w_${width}/`);
-    }
-    return url;
-}
-
 function calculateStockRunway(variant) {
     if (!variant.purchaseHistory || variant.purchaseHistory.length < 2) return null;
     
@@ -157,10 +148,8 @@ function renderInventory(isLastPage = true) {
         
         const checkboxHtml = `<input type="checkbox" class="order-checkbox" ${selectedInventory.has(p._id) ? 'checked' : ''} onclick="toggleInventorySelection('${p._id}', event)">`;
         
-        // --- NEW: Applying Cloudinary Compression to Admin Thumbnails ---
-        const optimizedUrl = optimizeCloudinaryUrl(p.imageUrl, 150);
         const thumb = p.imageUrl 
-            ? `<img src="${optimizedUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
+            ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
             : `<div style="width:40px; height:40px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">📦</div>`;
         
         const vCount = p.variants ? p.variants.length : 0;
@@ -562,12 +551,17 @@ async function submitRestock(e) {
     btn.innerText = 'Processing...'; 
     btn.disabled = true;
     
+    // --- NEW: Added Payment Status Field ---
+    const paymentStatusEl = document.getElementById('restock-payment-status');
+    const paymentStatus = paymentStatusEl ? paymentStatusEl.value : 'Paid';
+
     const payload = {
         invoiceNumber: document.getElementById('restock-invoice').value.trim(),
         variantId: document.getElementById('restock-variant-id').value,
         addedQuantity: document.getElementById('restock-qty').value,
         purchasingPrice: document.getElementById('restock-cost').value,
-        newSellingPrice: document.getElementById('restock-sell').value
+        newSellingPrice: document.getElementById('restock-sell').value,
+        paymentStatus: paymentStatus
     };
     
     try {
@@ -585,6 +579,7 @@ async function submitRestock(e) {
             showToast('Shipment Received & Logged! 📦'); 
             closeRestockModal(); 
             fetchInventory(); 
+            if (paymentStatus === 'Credit') fetchDistributors(); // Refresh balances
         } else { 
             showToast('Failed to process restock.'); 
         }
@@ -593,6 +588,88 @@ async function submitRestock(e) {
     } finally { 
         btn.innerText = 'Process Restock'; 
         btn.disabled = false; 
+    }
+}
+
+// --- NEW FUNCTIONALITY: Accounts Payable Ledger UI ---
+async function openAccountsPayable() {
+    const container = document.getElementById('ap-ledger-list');
+    if (!container) return;
+    
+    document.getElementById('accounts-payable-modal').classList.add('active');
+    container.innerHTML = '<p class="empty-state">Loading distributor balances...</p>';
+    
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/distributors`);
+        const result = await res.json();
+        
+        if (result.success) {
+            currentDistributors = result.data; // Update local cache
+            const debtors = currentDistributors.filter(d => d.totalPendingAmount > 0);
+            
+            container.innerHTML = '';
+            if (debtors.length === 0) {
+                container.innerHTML = '<p class="empty-state" style="color:#10b981;">All supplier bills are paid! 🎉</p>';
+                return;
+            }
+            
+            debtors.forEach(d => {
+                container.innerHTML += `
+                    <div style="background: #fef2f2; padding: 16px; border-radius: 8px; border: 1px solid #fecaca; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4 style="color:#991b1b; margin-bottom:4px;">${d.name}</h4>
+                            <p style="font-size:12px; color:#b91c1c; font-weight:600;">Total Paid Lifetime: ₹${d.totalPaidAmount.toFixed(2)}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size:18px; font-weight:800; color:#dc2626; margin-bottom:8px;">₹${d.totalPendingAmount.toFixed(2)}</div>
+                            <button class="primary-btn-small" style="background:#dc2626;" onclick="promptDistributorPayment('${d._id}', '${d.name}', ${d.totalPendingAmount})">Log Payment</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    } catch(e) {
+        container.innerHTML = '<p class="empty-state">Error loading balances.</p>';
+    }
+}
+
+function closeAccountsPayable() {
+    document.getElementById('accounts-payable-modal').classList.remove('active');
+}
+
+function promptDistributorPayment(id, name, maxAmount) {
+    const amountStr = prompt(`Logging payment to ${name}.\nOutstanding Balance: ₹${maxAmount}\n\nEnter amount paid (₹):`, maxAmount);
+    if (!amountStr) return;
+    
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount) || amount <= 0) return showToast("Invalid amount.");
+    
+    const mode = prompt("Payment Mode (e.g. Bank Transfer, Cash, UPI):", "Bank Transfer");
+    const note = prompt("Reference Note / Check Number (Optional):", "");
+    
+    submitDistributorPayment(id, amount, mode, note);
+}
+
+async function submitDistributorPayment(id, amount, mode, note) {
+    showToast('Processing payment record...');
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/distributors/${id}/pay`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount, paymentMode: mode, referenceNote: note })
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            showToast('Supplier payment logged successfully! ✅');
+            openAccountsPayable(); // Refresh the list instantly
+        } else {
+            showToast(result.message || 'Error processing payment.');
+        }
+    } catch(e) {
+        showToast('Network error logging payment.');
     }
 }
 
