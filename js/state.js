@@ -34,6 +34,12 @@ let selectedInventory = new Set();
 const CLOUDINARY_CLOUD_NAME = 'dz2q2tq30'; 
 const CLOUDINARY_UPLOAD_PRESET = 'dailypick_preset'; 
 
+// --- NEW: Multi-Store State Variables ---
+let currentStoreId = localStorage.getItem('dailypick_storeId') || null;
+let currentRegisterId = localStorage.getItem('dailypick_registerId') || null;
+let availableStores = [];
+let availableRegisters = [];
+
 // --- OPTIMIZATION: IndexedDB Offline Queue Logic (Singleton Connection) ---
 const dbName = "DailyPickDB";
 const storeName = "offlineOrders";
