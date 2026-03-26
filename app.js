@@ -37,11 +37,12 @@ let currentPin = '';
 let realtimeSocket = null; 
 let realtimeReconnectTimeout = null;
 
-// --- NEW FUNCTIONALITY: Kiosk Mode Screen Wake Lock ---
+// --- OPTIMIZED: Kiosk Mode Screen Wake Lock ---
 let wakeLock = null;
 async function requestWakeLock() {
     try {
-        if ('wakeLock' in navigator) {
+        // FIX: Only request Wake Lock if the document is actively visible to prevent NotAllowedError
+        if ('wakeLock' in navigator && document.visibilityState === 'visible') {
             wakeLock = await navigator.wakeLock.request('screen');
             wakeLock.addEventListener('release', () => {
                 console.log('Screen Wake Lock released');
@@ -54,7 +55,7 @@ async function requestWakeLock() {
 }
 
 document.addEventListener('visibilitychange', async () => {
-    if (wakeLock !== null && document.visibilityState === 'visible') {
+    if (wakeLock === null && document.visibilityState === 'visible') {
         await requestWakeLock();
     }
 });
