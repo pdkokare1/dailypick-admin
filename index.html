@@ -163,7 +163,9 @@
                             <button class="primary-btn-small" style="background:#D4AF37; color: white; border: none;" onclick="openShiftModal()"><i data-lucide="store" class="icon-sm"></i> Register Cash</button>
                             <button class="primary-btn-small" style="background:#ef4444; color: white; border: none;" onclick="openExpenseModal()"><i data-lucide="receipt" class="icon-sm"></i> Log Expense</button>
                             <button id="eod-report-btn" class="primary-btn-small" style="background:#062C1E; color: white; border: none;" onclick="openEodReport()"><i data-lucide="flag" class="icon-sm"></i> End of Day</button>
-                            <button class="primary-btn-small" style="background:#3b82f6; color: white; border: none;" onclick="openStoreManagementModal()"><i data-lucide="map" class="icon-sm"></i> Manage Stores</button>
+                            <button class="primary-btn-small admin-only" style="background:#8b5cf6; color: white; border: none;" onclick="openStaffModal()"><i data-lucide="users" class="icon-sm"></i> Staff</button>
+                            <button class="primary-btn-small admin-only" style="background:#ec4899; color: white; border: none;" onclick="openPromotionsModal()"><i data-lucide="tag" class="icon-sm"></i> Promos</button>
+                            <button class="primary-btn-small admin-only" style="background:#3b82f6; color: white; border: none;" onclick="openStoreManagementModal()"><i data-lucide="map" class="icon-sm"></i> Manage Stores</button>
                         </div>
                     </div>
                 </div>
@@ -349,6 +351,7 @@
                     <h2 style="margin-bottom: 0;">Live Catalog</h2>
                     <div class="scrollable-actions" style="width: 100%;">
                         <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportInventoryCSV()"><i data-lucide="download" class="icon-sm"></i> Export</button>
+                        <button class="primary-btn-small" style="background: #14b8a6; color: white; border: none;" onclick="openBulkImportModal()"><i data-lucide="upload" class="icon-sm"></i> Bulk Import</button>
                         <button class="primary-btn-small" style="background: #ef4444; color: white; border: none;" onclick="openAuditMode()"><i data-lucide="clipboard-check" class="icon-sm"></i> Audit Mode</button>
                         <button class="primary-btn-small" style="background: #dc2626; color: white; border: none; margin-right: 8px;" onclick="openAccountsPayable()"><i data-lucide="wallet" class="icon-sm"></i> Pay Suppliers</button>
                         
@@ -1101,6 +1104,90 @@
                 <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px; font-weight: 600; line-height: 1.5;">Click WhatsApp to send a pre-filled, friendly payment reminder directly to the customer.</p>
                 <div id="khata-reminders-list" style="display: flex; flex-direction: column; gap: 12px;">
                     </div>
+            </div>
+        </div>
+
+        <div id="staff-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 350;">
+            <div class="form-card drawer-content" style="max-width: 550px; overflow-y: auto;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2>Staff Management</h2>
+                    <button class="close-btn" onclick="closeStaffModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                <div style="background: #F9FAFB; padding: 16px; border-radius: 12px; border: 1px solid #E5E7EB; margin-bottom: 24px;">
+                    <h3 style="margin-bottom: 12px; font-size: 15px;">Add New User</h3>
+                    <form onsubmit="submitNewStaff(event)">
+                        <div class="input-group">
+                            <input type="text" id="new-staff-name" placeholder="Full Name" required style="margin-bottom: 8px;">
+                            <input type="text" id="new-staff-username" placeholder="Login Username" required style="margin-bottom: 8px;">
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <input type="password" id="new-staff-pin" placeholder="4-Digit PIN" required maxlength="4" style="flex: 1;">
+                                <select id="new-staff-role" required style="flex: 1;">
+                                    <option value="Cashier">Cashier</option>
+                                    <option value="Admin">Admin</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="primary-btn" style="background: #8b5cf6;">Create User</button>
+                        </div>
+                    </form>
+                </div>
+                <h3 style="margin-bottom: 12px; font-size: 15px;">Active Team Members</h3>
+                <div id="staff-list-container" style="display: flex; flex-direction: column; gap: 12px;">
+                    <p class="empty-state">Loading staff...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="promotions-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 350;">
+            <div class="form-card drawer-content" style="max-width: 600px; overflow-y: auto;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2>Promotions Engine</h2>
+                    <button class="close-btn" onclick="closePromotionsModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                <div style="background: #FFF0F6; padding: 16px; border-radius: 12px; border: 1px solid #FBCFE8; margin-bottom: 24px;">
+                    <h3 style="margin-bottom: 12px; font-size: 15px; color: #BE185D;">Create New Promotion</h3>
+                    <form onsubmit="submitNewPromotion(event)">
+                        <div class="input-group">
+                            <input type="text" id="promo-code" placeholder="Promo Code (e.g. SUMMER10)" required style="margin-bottom: 8px;">
+                            <select id="promo-type" required style="margin-bottom: 8px;" onchange="document.getElementById('promo-value').placeholder = this.value === 'percentage' ? 'Discount % (e.g. 10)' : 'Flat Discount ₹ (e.g. 50)'">
+                                <option value="percentage">Percentage Discount (%)</option>
+                                <option value="fixed">Fixed Amount Discount (₹)</option>
+                            </select>
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <input type="number" id="promo-value" placeholder="Discount % (e.g. 10)" required style="flex: 1;">
+                                <input type="number" id="promo-min-order" placeholder="Min Order Value (₹)" required style="flex: 1;">
+                            </div>
+                            <button type="submit" class="primary-btn" style="background: #ec4899;">Launch Promo</button>
+                        </div>
+                    </form>
+                </div>
+                <h3 style="margin-bottom: 12px; font-size: 15px;">Active Promotions</h3>
+                <div id="promotions-list-container" style="display: flex; flex-direction: column; gap: 12px;">
+                    <p class="empty-state">Loading active promotions...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="bulk-import-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 350;">
+            <div class="form-card drawer-content" style="max-width: 550px; overflow-y: auto;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2>Bulk Import Inventory</h2>
+                    <button class="close-btn" onclick="closeBulkImportModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                <div style="background: #F0FDFA; padding: 16px; border-radius: 12px; border: 1px solid #CCFBF1; margin-bottom: 24px;">
+                    <h3 style="margin-bottom: 8px; font-size: 15px; color: #0F766E;">Step 1: Download Template</h3>
+                    <p style="font-size: 12px; color: #115E59; margin-bottom: 12px;">Ensure your data matches the exact format required before uploading.</p>
+                    <button type="button" class="primary-btn-small" style="background: white; border-color: #5EEAD4; color: #0F766E;" onclick="downloadSampleCSV()"><i data-lucide="download" class="icon-sm"></i> Download Sample CSV</button>
+                </div>
+                <div style="background: #F9FAFB; padding: 16px; border-radius: 12px; border: 1px solid #E5E7EB;">
+                    <h3 style="margin-bottom: 8px; font-size: 15px;">Step 2: Upload Data</h3>
+                    <form onsubmit="submitBulkImport(event)">
+                        <div class="input-group">
+                            <input type="file" id="bulk-csv-upload" accept=".csv" required style="margin-bottom: 12px; padding: 8px; border: 1px dashed #cbd5e1; border-radius: 8px; width: 100%;">
+                            <button type="submit" id="bulk-import-submit-btn" class="primary-btn" style="background: #14b8a6;"><i data-lucide="upload-cloud" class="icon-sm"></i> Start Import</button>
+                        </div>
+                    </form>
+                </div>
+                <div id="bulk-import-results" style="margin-top: 16px; font-size: 13px; font-weight: 600;"></div>
             </div>
         </div>
         
