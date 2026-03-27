@@ -587,3 +587,11 @@ body.dark-mode .skeleton {
     background-size: 200% 100%;
 }
 @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* Phase 6 Enhancements */
+.offline-banner { background: #ef4444; color: white; padding: 10px; text-align: center; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; z-index: 9999; }
+.quick-cash-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; margin-bottom: 16px; }
+.quick-cash-btn { background: #F3F4F6; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px 8px; font-size: 13px; font-weight: 800; color: var(--text-main); cursor: pointer; transition: 0.2s; }
+.quick-cash-btn:active { transform: scale(0.95); background: #E5E7EB; }
+body.dark-mode .quick-cash-btn { background: #1F2937; border-color: #374151; color: white; }
+}
