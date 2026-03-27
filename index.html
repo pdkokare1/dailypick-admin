@@ -127,11 +127,21 @@
     <div id="app-container" style="display: none;">
         
         <header class="admin-header">
-            <div>
-                <h1>DAILYPICK.</h1>
-                <p id="header-subtitle" class="subtitle">Store Overview</p>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button onclick="toggleSidebar()" style="background: none; border: none; cursor: pointer; color: var(--primary); display: flex; align-items: center;" title="Toggle Sidebar">
+                    <i data-lucide="menu" class="icon-md"></i>
+                </button>
+                <div>
+                    <h1>DAILYPICK.</h1>
+                    <p id="header-subtitle" class="subtitle">Store Overview</p>
+                </div>
             </div>
             <div style="display: flex; gap: 12px; align-items: center;">
+                <div class="header-search-container" onclick="focusHeaderSearch()" style="cursor: text;">
+                    <i data-lucide="search" class="icon-sm" style="color: var(--text-muted);"></i>
+                    <input type="text" class="header-search-input" placeholder="Search (Ctrl+K)..." readonly style="cursor: text;">
+                </div>
+
                 <span id="current-user-display" style="font-size: 12px; font-weight: 700; display: none;"></span>
                 <button id="logout-btn" onclick="logoutUser()" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; display: none;">Logout</button>
                 <button id="dark-mode-toggle" onclick="toggleDarkMode()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--primary);" title="Toggle Dark Mode"><i data-lucide="moon" class="icon-md"></i></button>
@@ -591,8 +601,8 @@
             </div>
         </div>
 
-        <div id="sourcing-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
-            <div class="form-card" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+        <div id="sourcing-modal" class="modal-overlay drawer-overlay hidden-modal">
+            <div class="form-card drawer-content" style="max-width: 600px; overflow-y: auto;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2>Supplier Sourcing</h2>
                     <button class="close-btn" onclick="closeSourcingModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
@@ -604,8 +614,8 @@
             </div>
         </div>
 
-        <div id="rtv-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 250;">
-            <div class="form-card" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+        <div id="rtv-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 250;">
+            <div class="form-card drawer-content" style="max-width: 600px; overflow-y: auto;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2>Return to Vendor (RTV)</h2>
                     <button class="close-btn" onclick="closeRTVModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
@@ -739,8 +749,8 @@
             </div>
         </div>
 
-        <div id="restock-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
-            <div class="form-card" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+        <div id="restock-modal" class="modal-overlay drawer-overlay hidden-modal">
+            <div class="form-card drawer-content" style="max-width: 600px; overflow-y: auto;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2>Receive Shipment</h2>
                     <button class="close-btn" onclick="closeRestockModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
@@ -794,8 +804,8 @@
             </div>
         </div>
 
-        <div id="accounts-payable-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 350;">
-            <div class="form-card" style="max-width: 550px; max-height: 90vh; overflow-y: auto;">
+        <div id="accounts-payable-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 350;">
+            <div class="form-card drawer-content" style="max-width: 550px; overflow-y: auto;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2>Supplier Ledger (Accounts Payable)</h2>
                     <button class="close-btn" onclick="closeAccountsPayable()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
@@ -823,8 +833,8 @@
             </div>
         </div>
 
-        <div id="order-modal-overlay" class="modal-overlay" onclick="closeOrderModal()">
-            <div class="modal-content" onclick="event.stopPropagation()">
+        <div id="order-modal-overlay" class="modal-overlay drawer-overlay" onclick="closeOrderModal()">
+            <div class="modal-content drawer-content" onclick="event.stopPropagation()">
                 <div class="modal-header" style="display: flex; justify-content: space-between; margin-bottom: 24px;">
                     <div>
                         <h2 id="modal-order-id" style="font-weight: 800;">Order #...</h2>
@@ -893,8 +903,8 @@
             </div>
         </div>
 
-        <div id="add-product-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
-            <div class="form-card" style="max-height: 90vh; overflow-y: auto; width: 95%; max-width: 650px;">
+        <div id="add-product-modal" class="modal-overlay drawer-overlay hidden-modal">
+            <div class="form-card drawer-content" style="overflow-y: auto; width: 100%; max-width: 650px;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2 id="modal-form-title">Add New Product</h2>
                     <button class="close-btn" onclick="closeAddProductModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
@@ -997,8 +1007,8 @@
             </div>
         </div>
 
-        <div id="customer-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center;">
-            <div class="form-card" style="max-width: 550px; max-height: 90vh; overflow-y: auto;">
+        <div id="customer-modal" class="modal-overlay drawer-overlay hidden-modal">
+            <div class="form-card drawer-content" style="max-width: 550px; overflow-y: auto;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2>Customer Deep-Dive</h2>
                     <button class="close-btn" onclick="closeCustomerModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
@@ -1082,8 +1092,8 @@
             </div>
         </div>
 
-        <div id="khata-reminders-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 250;">
-            <div class="form-card" style="max-width: 550px; max-height: 90vh; overflow-y: auto;">
+        <div id="khata-reminders-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 250;">
+            <div class="form-card drawer-content" style="max-width: 550px; overflow-y: auto;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2>Khata (Pay Later) Debtors</h2>
                     <button class="close-btn" onclick="closeKhataReminders()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
