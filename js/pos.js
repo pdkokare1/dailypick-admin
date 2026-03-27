@@ -35,6 +35,7 @@ window.connectThermalPrinter = async function() {
     }
 };
 
+// --- OPTIMIZATION: Advanced Thermal Receipt Formatting ---
 async function printThermalReceipt(order) {
     if (!thermalPort) return; 
     try {
@@ -50,21 +51,41 @@ async function printThermalReceipt(order) {
         const BOLD_OFF = ESC + 'E' + '\x00';
         const CUT = GS + 'V' + '\x41' + '\x03';
 
-        let receipt = INIT + ALIGN_CENTER + BOLD_ON + "DAILYPICK\n" + BOLD_OFF;
-        receipt += "123 Main Street\n";
+        let receipt = INIT + ALIGN_CENTER + BOLD_ON + "DAILYPICK.\n" + BOLD_OFF;
+        receipt += "Retail & Supermarket\n";
         receipt += "--------------------------------\n";
         receipt += ALIGN_LEFT;
         
         receipt += `Order: ${order.orderNumber || order._id.substring(0,8)}\n`;
-        
         receipt += `Date: ${new Date().toLocaleString()}\n`;
+        if (order.customerPhone) {
+            receipt += `Customer: ${order.customerPhone}\n`;
+        }
         receipt += "--------------------------------\n";
+        
+        let rawSubtotal = 0;
         order.items.forEach(item => {
-            receipt += `${item.name.substring(0, 20)}\n`;
-            receipt += `  ${item.qty} x ${item.price} = Rs. ${item.qty * item.price}\n`;
+            receipt += `${item.name.substring(0, 25)}\n`;
+            receipt += `  ${item.qty} x ${item.price.toFixed(2)} = Rs. ${(item.qty * item.price).toFixed(2)}\n`;
+            rawSubtotal += (item.qty * item.price);
         });
+        
         receipt += "--------------------------------\n";
-        receipt += BOLD_ON + `TOTAL: Rs. ${order.totalAmount}\n` + BOLD_OFF;
+        receipt += `Subtotal: Rs. ${rawSubtotal.toFixed(2)}\n`;
+        
+        if (order.discountAmount > 0) {
+            receipt += `Promo Discount: -Rs. ${order.discountAmount.toFixed(2)}\n`;
+        }
+        if (order.pointsRedeemed > 0) {
+            receipt += `Loyalty Used: -Rs. ${order.pointsRedeemed.toFixed(2)}\n`;
+        }
+        if (order.taxAmount > 0) {
+            receipt += `Included Tax: Rs. ${order.taxAmount.toFixed(2)}\n`;
+        }
+        
+        receipt += "--------------------------------\n";
+        receipt += BOLD_ON + `TOTAL DUE: Rs. ${order.totalAmount.toFixed(2)}\n` + BOLD_OFF;
+        receipt += `Paid via: ${order.paymentMethod}\n`;
         receipt += "--------------------------------\n";
         receipt += ALIGN_CENTER + "Thank you for shopping!\n\n\n\n\n" + CUT;
 
@@ -392,9 +413,9 @@ function renderPosCart() {
                 });
 
                 if (applicableSubtotal > 0 && applicableSubtotal >= (promo.minCartValue || 0)) {
-                    if (promo.type === 'PERCENTAGE' || promo.type === 'Percentage') {
+                    if (promo.type === 'PERCENTAGE' || promo.type === 'percentage') {
                         totalDiscount += applicableSubtotal * (promo.value / 100);
-                    } else if (promo.type === 'FLAT_AMOUNT' || promo.type === 'Flat') {
+                    } else if (promo.type === 'FLAT_AMOUNT' || promo.type === 'fixed') {
                         totalDiscount += promo.value; 
                     } else if (promo.type === 'BOGO') {
                         const bQty = promo.buyQty || 1;
@@ -620,7 +641,8 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
     showToast('Processing payment...');
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/orders/pos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -642,7 +664,10 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
     } catch (e) {
         showToast('Network offline. Saving transaction to IndexedDB...');
         
-        await saveToIDB(payload);
+        // Ensure IDB is available
+        if (typeof saveToIDB === 'function') {
+            await saveToIDB(payload);
+        }
         
         const offlineOrderIdentifier = 'OFFL-' + Date.now().toString().slice(-4);
         
@@ -666,24 +691,28 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
         if (thermalPort) printThermalReceipt(activeOrder);
         
         clearPosCart();
-        renderOverview(); 
+        if (typeof renderOverview === 'function') renderOverview(); 
     } finally {
         isProcessingCheckout = false; 
     }
 }
 
+// --- OPTIMIZATION: Robust Offline Sync Validation ---
+let isSyncing = false;
 async function syncOfflinePOS() {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || isSyncing) return;
+    if (typeof getAllFromIDB !== 'function') return;
 
+    isSyncing = true;
     try {
         const offlineQueue = await getAllFromIDB();
         if (offlineQueue.length === 0) return;
 
         const itemToSync = offlineQueue[0]; 
-        
         const { id, ...payloadToSync } = itemToSync;
 
-        const res = await fetch(`${BACKEND_URL}/api/orders/pos`, {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/orders/pos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payloadToSync)
@@ -693,9 +722,8 @@ async function syncOfflinePOS() {
         if (result.success) {
             await deleteFromIDB(id); 
             showToast('Offline POS transaction synced! ✅');
-            renderOverview(); 
+            if (typeof renderOverview === 'function') renderOverview(); 
         } else {
-            // --- NEW: Offline Conflict Resolution (e.g., Stock ran out online while POS was offline) ---
             await deleteFromIDB(id); 
             
             let failedQueue = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
@@ -711,6 +739,8 @@ async function syncOfflinePOS() {
         }
     } catch (e) {
         console.log('Sync attempted, still offline or server unreachable.');
+    } finally {
+        isSyncing = false;
     }
 }
 setInterval(syncOfflinePOS, 30000);
@@ -765,7 +795,8 @@ function processSplitPayment() {
 
 async function checkCurrentShift() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/shifts/current`);
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/shifts/current`);
         const result = await res.json();
         if (result.success && result.data) {
             currentActiveShift = result.data;
@@ -807,11 +838,12 @@ async function submitOpenShift() {
     
     isProcessingCheckout = true;
     try {
-        const res = await fetch(`${BACKEND_URL}/api/shifts/open`, {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/shifts/open`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                userName: currentUser ? currentUser.name : 'Unknown Staff',
+                userName: typeof currentUser !== 'undefined' && currentUser ? currentUser.name : 'Unknown Staff',
                 startingFloat: floatAmt,
                 storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null,
                 registerId: typeof currentRegisterId !== 'undefined' ? currentRegisterId : null
@@ -848,7 +880,8 @@ async function submitCloseShift() {
     btn.disabled = true;
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/shifts/close`, {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/shifts/close`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -872,7 +905,7 @@ async function submitCloseShift() {
             }
             
             closeShiftModal();
-            renderOverview(); 
+            if (typeof renderOverview === 'function') renderOverview(); 
         } else {
             showToast(result.message || 'Failed to close register.');
         }
