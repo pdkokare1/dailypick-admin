@@ -35,7 +35,6 @@ window.connectThermalPrinter = async function() {
     }
 };
 
-// --- PHASE 4 OPTIMIZATION: Advanced Thermal Receipt Formatting via Global Settings ---
 async function printThermalReceipt(order) {
     if (!thermalPort) return; 
     try {
@@ -316,6 +315,25 @@ function updatePosCartItemQty(index, delta) {
     renderPosCart();
 }
 
+// --- PHASE 5 OPTIMIZATION: Customer-Facing Display (CFD) Broadcaster ---
+function broadcastCFDUpdate(subtotal) {
+    if (typeof realtimeSocket !== 'undefined' && realtimeSocket && realtimeSocket.readyState === 1) {
+        const cfdPayload = {
+            cart: posCart.map(i => ({ name: i.name, qty: i.qty, price: i.price, selectedVariant: i.selectedVariant })),
+            subtotal: subtotal || 0,
+            discount: currentCalculatedDiscount || 0,
+            tax: currentCalculatedTax || 0,
+            total: currentGrandTotal || 0
+        };
+        
+        realtimeSocket.send(JSON.stringify({
+            type: 'CFD_STATE_UPDATE',
+            storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null,
+            payload: cfdPayload
+        }));
+    }
+}
+
 function clearPosCart() {
     posCart = [];
     document.getElementById('pos-customer-phone').value = '';
@@ -323,6 +341,7 @@ function clearPosCart() {
     appliedLoyaltyPoints = 0;
     clearLoyaltyUI();
     renderPosCart();
+    broadcastCFDUpdate(0); // Clear CFD Screen
 }
 
 function renderPosCart() {
@@ -346,6 +365,7 @@ function renderPosCart() {
         if(loyaltyLine) loyaltyLine.style.display = 'none';
 
         currentCalculatedTax = 0; currentCalculatedDiscount = 0; currentGrandTotal = 0;
+        broadcastCFDUpdate(0);
         return;
     }
 
@@ -480,6 +500,9 @@ function renderPosCart() {
     }
 
     totalEl.innerText = `₹${grandTotal.toFixed(2)}`;
+    
+    // Transmit Live Update to Customer Display Screen
+    broadcastCFDUpdate(subtotal);
 }
 
 function addCustomPosItem() {
