@@ -3,30 +3,23 @@
 let categoryChartInstance = null; 
 let hourlyChartInstance = null;
 let revenueChartInstance = null;
+let allHistoricalOrders = [];
+let allHistoricalExpenses = [];
 
 async function exportOrdersCSV() {
     showToast('Fetching orders for export...');
     try {
-        const res = await fetch(`${BACKEND_URL}/api/orders`);
-        const result = await res.json();
-        if (result.success) {
-            if (result.data.length === 0) return showToast('No orders to export.');
-            
-            let csvContent = "Order ID,Date,Customer Name,Phone,Address,Delivery Type,Total Amount,Tax (INR),Discount (INR),Points Redeemed,Payment Method,Status,Items\n";
-            result.data.forEach(o => {
-                const cleanName = (o.customerName || 'Guest').replace(/,/g, '');
-                const cleanPhone = o.customerPhone || '';
-                const cleanAddress = (o.deliveryAddress || '').replace(/,/g, ';').replace(/\n/g, ' ');
-                const date = new Date(o.createdAt).toLocaleString().replace(/,/g, '');
-                const itemsStr = o.items.map(i => `${i.qty}x ${i.name}`).join(' | ');
-                
-                csvContent += `${o._id},${date},${cleanName},${cleanPhone},${cleanAddress},${o.deliveryType},${o.totalAmount},${o.taxAmount || 0},${o.discountAmount || 0},${o.pointsRedeemed || 0},${o.paymentMethod},${o.status},"${itemsStr}"\n`;
-            });
-            
-            triggerCSVDownload(csvContent, "dailypick_orders_export.csv");
-        } else {
-            showToast('Failed to fetch orders.');
-        }
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/orders/export`);
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Orders_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast("Export successful!");
     } catch(e) {
         showToast('Network error during export.');
     }
@@ -35,23 +28,17 @@ async function exportOrdersCSV() {
 async function exportCustomersCSV() {
     showToast('Fetching customers for export...');
     try {
-        const res = await fetch(`${BACKEND_URL}/api/orders/customers`);
-        const result = await res.json();
-        if (result.success) {
-            if (result.data.length === 0) return showToast('No customers to export.');
-            
-            let csvContent = "Name,Phone Number,Total Orders,Lifetime Value (INR),Last Active Date\n";
-            result.data.forEach(c => {
-                const cleanName = (c.name || 'Guest').replace(/,/g, '');
-                const date = new Date(c.lastOrderDate).toLocaleString().replace(/,/g, '');
-                
-                csvContent += `${cleanName},${c.phone},${c.orderCount},${c.lifetimeValue},${date}\n`;
-            });
-            
-            triggerCSVDownload(csvContent, "dailypick_customers_export.csv");
-        } else {
-            showToast('Failed to fetch customers.');
-        }
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/customers/export`);
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Customers_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast("Export successful!");
     } catch(e) {
         showToast('Network error during export.');
     }
@@ -60,7 +47,8 @@ async function exportCustomersCSV() {
 async function exportFinancialsCSV(timeframe) {
     showToast(`Generating ${timeframe} financials export...`);
     try {
-        const res = await fetch(`${BACKEND_URL}/api/orders`);
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/orders`);
         const result = await res.json();
         if (result.success) {
             const orders = result.data.filter(o => o.status !== 'Cancelled');
@@ -123,9 +111,10 @@ function triggerCSVDownload(csvContent, filename) {
 
 async function fetchAnalytics() {
     try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
         const [orderRes, expenseRes] = await Promise.all([
-            fetch(`${BACKEND_URL}/api/orders`),
-            fetch(`${BACKEND_URL}/api/expenses`)
+            fetchFn(`${BACKEND_URL}/api/orders`),
+            fetchFn(`${BACKEND_URL}/api/expenses`)
         ]);
         
         const orderResult = await orderRes.json();
@@ -144,6 +133,10 @@ async function fetchAnalytics() {
         }
 
         updateAnalyticsRange(7); 
+        
+        // --- PHASE 6: Invoke Leaderboard Fetch ---
+        fetchLeaderboard();
+        
     } catch (e) {
         console.error("Analytics Error", e);
     }
@@ -425,7 +418,6 @@ function updateAnalyticsRange(daysLimit) {
     }
 }
 
-// --- OPTIMIZED: Smooth Animations added to Charts ---
 function renderChart(labels, revenueData, profitData) {
     const ctx = document.getElementById('revenueChart').getContext('2d');
     if (revenueChartInstance) revenueChartInstance.destroy(); 
@@ -459,7 +451,7 @@ function renderChart(labels, revenueData, profitData) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: { duration: 1000, easing: 'easeOutQuart' }, // Smooth load
+            animation: { duration: 1000, easing: 'easeOutQuart' }, 
             plugins: { 
                 legend: { 
                     display: true, 
@@ -497,7 +489,7 @@ function renderCategoryChart(labels, data) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: { duration: 1000, easing: 'easeOutQuart' }, // Smooth load
+            animation: { duration: 1000, easing: 'easeOutQuart' }, 
             plugins: { 
                 legend: { position: 'right', labels: { boxWidth: 12, font: {size: 10} } } 
             }
@@ -505,20 +497,18 @@ function renderCategoryChart(labels, data) {
     });
 }
 
-// --- OPTIMIZED: Dynamic Heatmap Coloring for Peak Hours ---
 function renderHourlyChart(labels, data) {
     const ctx = document.getElementById('hourlyChart').getContext('2d');
     if (hourlyChartInstance) hourlyChartInstance.destroy();
     
     const maxVal = Math.max(...data) || 1;
     
-    // Dynamic Heatmap Logic: Color shifts based on traffic volume
     const dynamicColors = data.map(val => {
         const intensity = val / maxVal;
-        if (intensity > 0.8) return '#ef4444'; // Red (Peak traffic)
-        if (intensity > 0.5) return '#f59e0b'; // Amber (Medium traffic)
-        if (intensity > 0) return '#3b82f6';   // Blue (Low traffic)
-        return '#e2e8f0';                      // Gray (Zero traffic)
+        if (intensity > 0.8) return '#ef4444'; 
+        if (intensity > 0.5) return '#f59e0b'; 
+        if (intensity > 0) return '#3b82f6';   
+        return '#e2e8f0';                      
     });
     
     hourlyChartInstance = new Chart(ctx, {
@@ -535,7 +525,7 @@ function renderHourlyChart(labels, data) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: { duration: 1000, easing: 'easeOutQuart' }, // Smooth load
+            animation: { duration: 1000, easing: 'easeOutQuart' }, 
             plugins: { legend: { display: false } },
             scales: { 
                 y: { beginAtZero: true, ticks: { stepSize: 1 } },
@@ -543,4 +533,54 @@ function renderHourlyChart(labels, data) {
             }
         }
     });
+}
+
+// --- PHASE 6: Cashier Leaderboard Fetcher & Renderer ---
+async function fetchLeaderboard() {
+    const feed = document.getElementById('leaderboard-feed');
+    if (!feed) return;
+    
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/analytics/leaderboard`);
+        const result = await res.json();
+
+        if (result.success && result.data && result.data.length > 0) {
+            feed.innerHTML = '';
+            result.data.forEach((staff, index) => {
+                const isTop = index === 0;
+                
+                let accuracyColor = '#10b981'; 
+                let accuracyText = 'Excellent Accuracy';
+                if (staff.netDiscrepancy < -500) {
+                    accuracyColor = '#ef4444'; 
+                    accuracyText = 'High Shortage Warning';
+                } else if (staff.netDiscrepancy < 0) {
+                    accuracyColor = '#f59e0b'; 
+                    accuracyText = 'Minor Discrepancies';
+                }
+
+                feed.innerHTML += `
+                    <div class="top-item-card" style="${isTop ? 'border: 2px solid #8b5cf6;' : ''}">
+                        <div style="display:flex; align-items:center; gap:16px; flex: 1;">
+                            ${isTop ? `<div style="background:#ede9fe; color:#6d28d9; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">👑</div>` : `<div style="background:#F3F4F6; color:var(--text-muted); width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">#${index+1}</div>`}
+                            <div>
+                                <span class="top-item-name" style="display:block; font-size: 15px;">${staff._id}</span>
+                                <span style="font-size:11px; color:${accuracyColor}; font-weight:700;">${accuracyText}</span>
+                            </div>
+                        </div>
+                        <div class="top-item-stats" style="text-align: right;">
+                            <span style="display:block; color:var(--primary); font-weight:800; font-size:16px;">₹${staff.totalRevenueHandled.toLocaleString()}</span>
+                            <span style="font-size:11px; color:var(--text-muted);">${staff.totalShifts} Shifts Completed</span>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            feed.innerHTML = '<p class="empty-state">No shift data available for leaderboard.</p>';
+        }
+    } catch (e) {
+        console.warn("Leaderboard fetch failed", e);
+        feed.innerHTML = '<p class="empty-state">Leaderboard data unavailable.</p>';
+    }
 }
