@@ -207,6 +207,12 @@ function stopPosScanner() {
             posContinuousScanner.stop().then(() => {
                 posContinuousScanner.clear();
                 posContinuousScanner = null;
+                // NEW: Ensure all video tracks are definitively stopped to free memory
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+                        stream.getTracks().forEach(track => track.stop());
+                    }).catch(e => {});
+                }
             }).catch(err => {
                 posContinuousScanner = null;
             });
@@ -315,7 +321,6 @@ function updatePosCartItemQty(index, delta) {
     renderPosCart();
 }
 
-// --- PHASE 5 OPTIMIZATION: Customer-Facing Display (CFD) Broadcaster ---
 function broadcastCFDUpdate(subtotal) {
     if (typeof realtimeSocket !== 'undefined' && realtimeSocket && realtimeSocket.readyState === 1) {
         const cfdPayload = {
@@ -341,7 +346,7 @@ function clearPosCart() {
     appliedLoyaltyPoints = 0;
     clearLoyaltyUI();
     renderPosCart();
-    broadcastCFDUpdate(0); // Clear CFD Screen
+    broadcastCFDUpdate(0); 
 }
 
 function renderPosCart() {
@@ -459,6 +464,19 @@ function renderPosCart() {
         });
     }
 
+    // NEW: Loyalty Tier System Check
+    let tierDiscountAmount = 0;
+    let tierName = "";
+    if (currentCustomerProfile && currentCustomerProfile.loyaltyPoints >= 500) {
+        tierName = "Gold Tier (5% Off)";
+        tierDiscountAmount = subtotal * 0.05;
+        totalDiscount += tierDiscountAmount;
+    } else if (currentCustomerProfile && currentCustomerProfile.loyaltyPoints >= 200) {
+        tierName = "Silver Tier (2% Off)";
+        tierDiscountAmount = subtotal * 0.02;
+        totalDiscount += tierDiscountAmount;
+    }
+
     let hasExclusive = posCart.some(i => i.taxType === 'Exclusive');
     let preLoyaltyTotal = subtotal - totalDiscount + (hasExclusive ? totalTax : 0);
     
@@ -473,7 +491,11 @@ function renderPosCart() {
     currentGrandTotal = grandTotal;
 
     if(subtotalEl) subtotalEl.innerText = `₹${subtotal.toFixed(2)}`;
-    if(discountEl) discountEl.innerText = `-₹${totalDiscount.toFixed(2)}`;
+    
+    if(discountEl) {
+        discountEl.innerHTML = `-₹${totalDiscount.toFixed(2)} ${tierDiscountAmount > 0 ? `<br><span style="font-size:10px; color:#8b5cf6; font-weight:800;">(Incl. ${tierName})</span>` : ''}`;
+    }
+    
     if(taxEl) taxEl.innerText = `₹${totalTax.toFixed(2)}`;
 
     let loyaltyLine = document.getElementById('pos-loyalty-line');
@@ -501,7 +523,6 @@ function renderPosCart() {
 
     totalEl.innerText = `₹${grandTotal.toFixed(2)}`;
     
-    // Transmit Live Update to Customer Display Screen
     broadcastCFDUpdate(subtotal);
 }
 
@@ -693,7 +714,6 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
     } catch (e) {
         showToast('Network offline. Saving transaction to IndexedDB...');
         
-        // Ensure IDB is available
         if (typeof saveToIDB === 'function') {
             await saveToIDB(payload);
         }
@@ -806,6 +826,24 @@ function calculateSplit() {
     } else {
         balanceEl.innerText = `-₹${Math.abs(balance).toFixed(2)} (Overpaid)`;
         balanceEl.style.color = '#ef4444';
+    }
+}
+
+// NEW: Add quick cash denomination logic
+function addQuickCash(amount) {
+    const cashInput = document.getElementById('split-cash-input');
+    let current = parseFloat(cashInput.value) || 0;
+    cashInput.value = current + amount;
+    calculateSplit();
+}
+
+// NEW: Add Exact Cash logic
+function setExactCash() {
+    const upi = parseFloat(document.getElementById('split-upi-input').value) || 0;
+    const remaining = currentGrandTotal - upi;
+    if (remaining > 0) {
+        document.getElementById('split-cash-input').value = remaining.toFixed(2);
+        calculateSplit();
     }
 }
 
