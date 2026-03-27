@@ -1,6 +1,6 @@
 /* service-worker.js */
 
-const CACHE_NAME = 'dailypick-admin-cache-v3'; // Incremented version
+const CACHE_NAME = 'dailypick-admin-cache-v4'; 
 const OFFLINE_QUEUE_NAME = 'dailypick-offline-orders';
 
 const ASSETS_TO_CACHE = [
@@ -17,8 +17,8 @@ const ASSETS_TO_CACHE = [
     './js/crm.js',
     './js/analytics.js',
     './manifest.json',
-    'https://unpkg.com/html5-qrcode',
-    'https://cdn.jsdelivr.net/npm/chart.js'
+    '[https://unpkg.com/html5-qrcode](https://unpkg.com/html5-qrcode)',
+    '[https://cdn.jsdelivr.net/npm/chart.js](https://cdn.jsdelivr.net/npm/chart.js)'
 ];
 
 function openDB() {
@@ -39,9 +39,12 @@ async function saveOfflineOrder(requestUrl, headers, body) {
     const db = await openDB();
     const tx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
     const store = tx.objectStore(OFFLINE_QUEUE_NAME);
+    
+    const headersArray = Array.from(headers.entries());
+    
     const orderData = {
         url: requestUrl,
-        headers: Array.from(headers.entries()),
+        headers: headersArray,
         body: body,
         timestamp: Date.now()
     };
@@ -67,14 +70,17 @@ async function syncOfflineOrders() {
     for (const data of requests) {
         try {
             const headers = new Headers(data.headers);
-            await fetch(data.url, {
+            
+            const response = await fetch(data.url, {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify(data.body)
             });
 
-            const delTx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
-            delTx.objectStore(OFFLINE_QUEUE_NAME).delete(data.id);
+            if (response.ok || response.status === 400) { 
+                const delTx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
+                delTx.objectStore(OFFLINE_QUEUE_NAME).delete(data.id);
+            }
         } catch (err) {
             console.error('[Service Worker] Sync failed for order, will retry later:', err);
         }
@@ -161,7 +167,6 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             fetch(event.request)
                 .then((networkResponse) => {
-                    // FIX: Clone response synchronously to prevent "Body already used" errors
                     const responseToCache = networkResponse.clone();
                     caches.open('dailypick-api-cache').then((cache) => {
                         cache.put(event.request, responseToCache);
@@ -184,7 +189,6 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
             const fetchPromise = fetch(event.request).then((networkResponse) => {
-                // FIX: Clone response synchronously for static assets as well
                 const responseToCache = networkResponse.clone();
                 caches.open(CACHE_NAME).then((cache) => {
                     cache.put(event.request, responseToCache);
