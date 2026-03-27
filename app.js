@@ -380,6 +380,8 @@ function applyRoleRestrictions() {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) logoutBtn.style.display = 'block';
 
+    const adminOnlyElements = document.querySelectorAll('.admin-only');
+
     if (currentUser.role === 'Cashier') {
         const navOverview = document.getElementById('nav-overview');
         const navInventory = document.getElementById('nav-inventory');
@@ -393,6 +395,8 @@ function applyRoleRestrictions() {
         
         const eodBtn = document.getElementById('eod-report-btn');
         if (eodBtn) eodBtn.style.display = 'none';
+
+        adminOnlyElements.forEach(el => el.style.display = 'none');
         
         if (typeof switchView === 'function') switchView('pos'); 
     } else {
@@ -408,6 +412,8 @@ function applyRoleRestrictions() {
         
         const eodBtn = document.getElementById('eod-report-btn');
         if (eodBtn) eodBtn.style.display = 'inline-block';
+
+        adminOnlyElements.forEach(el => el.style.display = 'inline-flex');
     }
 }
 
@@ -440,3 +446,229 @@ if ('serviceWorker' in navigator) {
             });
     });
 }
+
+// ==========================================
+// PHASE 3 LOGIC ADDITIONS
+// ==========================================
+
+// --- STAFF MANAGEMENT ---
+window.openStaffModal = async function() {
+    document.getElementById('staff-modal').classList.add('active');
+    await fetchStaff();
+};
+
+window.closeStaffModal = function() {
+    document.getElementById('staff-modal').classList.remove('active');
+};
+
+window.fetchStaff = async function() {
+    const container = document.getElementById('staff-list-container');
+    container.innerHTML = '<p class="empty-state">Loading staff...</p>';
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/users/staff`); // Assuming standard path
+        if (!res.ok) throw new Error('Failed to load staff');
+        const data = await res.json();
+        
+        if (data.success && data.data.length > 0) {
+            container.innerHTML = '';
+            data.data.forEach(user => {
+                const roleBadgeColor = user.role === 'Admin' ? '#8b5cf6' : '#10b981';
+                container.innerHTML += `
+                    <div style="background: white; padding: 16px; border-radius: 12px; border: 1px solid #E5E7EB; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <p style="font-weight: 800; font-size: 14px; margin-bottom: 4px;">${user.name}</p>
+                            <p style="font-size: 12px; color: var(--text-muted); font-weight: 600;">@${user.username}</p>
+                        </div>
+                        <span style="background: ${roleBadgeColor}20; color: ${roleBadgeColor}; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800;">${user.role}</span>
+                    </div>
+                `;
+            });
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        } else {
+            container.innerHTML = '<p class="empty-state">No active staff found.</p>';
+        }
+    } catch (e) {
+        container.innerHTML = `<p class="empty-state" style="color:#ef4444;">Error: ${e.message}</p>`;
+    }
+};
+
+window.submitNewStaff = async function(e) {
+    e.preventDefault();
+    const name = document.getElementById('new-staff-name').value.trim();
+    const username = document.getElementById('new-staff-username').value.trim();
+    const pin = document.getElementById('new-staff-pin').value.trim();
+    const role = document.getElementById('new-staff-role').value;
+
+    if (!name || !username || pin.length !== 4) {
+        showToast("Please provide valid details. PIN must be 4 digits.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, username, pin, role })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast("User created successfully!");
+            document.getElementById('new-staff-name').value = '';
+            document.getElementById('new-staff-username').value = '';
+            document.getElementById('new-staff-pin').value = '';
+            await fetchStaff();
+        } else {
+            showToast(data.message || "Failed to create user");
+        }
+    } catch (e) {
+        showToast("Network Error: Could not save user.");
+    }
+};
+
+// --- PROMOTIONS ENGINE ---
+window.openPromotionsModal = async function() {
+    document.getElementById('promotions-modal').classList.add('active');
+    await fetchPromotionsList();
+};
+
+window.closePromotionsModal = function() {
+    document.getElementById('promotions-modal').classList.remove('active');
+};
+
+window.fetchPromotionsList = async function() {
+    const container = document.getElementById('promotions-list-container');
+    container.innerHTML = '<p class="empty-state">Loading active promotions...</p>';
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/promotions`); 
+        if (!res.ok) throw new Error('Failed to load promotions');
+        const data = await res.json();
+        
+        if (data.success && data.data.length > 0) {
+            container.innerHTML = '';
+            data.data.forEach(promo => {
+                const isPercentage = promo.discountType === 'percentage';
+                const discountText = isPercentage ? `${promo.discountValue}% OFF` : `₹${promo.discountValue} OFF`;
+                container.innerHTML += `
+                    <div style="background: white; padding: 16px; border-radius: 12px; border: 1px solid #E5E7EB; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <p style="font-weight: 800; font-size: 15px; margin-bottom: 4px; color: #BE185D;">${promo.code}</p>
+                            <p style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Min Order: ₹${promo.minOrderValue || 0}</p>
+                        </div>
+                        <span style="background: #FBCFE8; color: #9D174D; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 800;">${discountText}</span>
+                    </div>
+                `;
+            });
+        } else {
+            container.innerHTML = '<p class="empty-state">No active promotions.</p>';
+        }
+    } catch (e) {
+        container.innerHTML = `<p class="empty-state" style="color:#ef4444;">Error: ${e.message}</p>`;
+    }
+};
+
+window.submitNewPromotion = async function(e) {
+    e.preventDefault();
+    const code = document.getElementById('promo-code').value.trim().toUpperCase();
+    const type = document.getElementById('promo-type').value;
+    const value = parseFloat(document.getElementById('promo-value').value);
+    const minOrder = parseFloat(document.getElementById('promo-min-order').value) || 0;
+
+    if (!code || isNaN(value)) {
+        showToast("Valid code and discount value required.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/promotions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, discountType: type, discountValue: value, minOrderValue: minOrder })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast("Promotion launched!");
+            document.getElementById('promo-code').value = '';
+            document.getElementById('promo-value').value = '';
+            document.getElementById('promo-min-order').value = '';
+            await fetchPromotionsList();
+            if (typeof fetchPromotions === 'function') fetchPromotions(); // Refresh globally
+        } else {
+            showToast(data.message || "Failed to create promo");
+        }
+    } catch (e) {
+        showToast("Network Error: Could not save promo.");
+    }
+};
+
+// --- BULK INVENTORY IMPORT ---
+window.openBulkImportModal = function() {
+    document.getElementById('bulk-import-modal').classList.add('active');
+    document.getElementById('bulk-import-results').innerHTML = '';
+};
+
+window.closeBulkImportModal = function() {
+    document.getElementById('bulk-import-modal').classList.remove('active');
+    document.getElementById('bulk-csv-upload').value = '';
+};
+
+window.downloadSampleCSV = function() {
+    const csvContent = "data:text/csv;charset=utf-8,Name,Category,Brand,Distributor,Barcode/SKU,Cost Price,Selling Price,Stock,Weight/Volume\nSample Apple,Fruits,,Supplier A,1001,40,50,100,1kg\nSample Milk,Dairy,FreshCo,,1002,25,30,50,500ml";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "DailyPick_Bulk_Import_Template.csv");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+};
+
+window.submitBulkImport = async function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('bulk-csv-upload');
+    const btn = document.getElementById('bulk-import-submit-btn');
+    const resultsDiv = document.getElementById('bulk-import-results');
+
+    if (fileInput.files.length === 0) {
+        showToast("Please select a CSV file.");
+        return;
+    }
+
+    const file = fileInput.files[0];
+    if (file.type !== "text/csv" && !file.name.endsWith('.csv')) {
+        showToast("Invalid file format. Please upload a .csv file.");
+        return;
+    }
+
+    btn.innerText = "Processing...";
+    btn.disabled = true;
+    resultsDiv.innerHTML = '<span style="color:#0ea5e9;">Uploading and processing. Do not close this window...</span>';
+
+    try {
+        const formData = new FormData();
+        formData.append('csvFile', file);
+
+        const res = await fetch(`${BACKEND_URL}/api/products/bulk`, {
+            method: 'POST',
+            body: formData // Note: no Content-Type header needed for FormData
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            resultsDiv.innerHTML = `<span style="color:#10b981;">✅ Import Successful! Loaded ${data.count || 'multiple'} items.</span>`;
+            showToast("Bulk import successful.");
+            if (typeof fetchInventory === 'function') fetchInventory(); // Refresh Inventory grid globally
+            fileInput.value = '';
+        } else {
+            resultsDiv.innerHTML = `<span style="color:#ef4444;">❌ Error: ${data.message || 'Data formatting issue.'}</span>`;
+            showToast("Import failed. Check format.");
+        }
+    } catch (e) {
+        console.error(e);
+        resultsDiv.innerHTML = `<span style="color:#ef4444;">❌ Network Error during upload.</span>`;
+        showToast("Network Error.");
+    } finally {
+        btn.innerHTML = `<i data-lucide="upload-cloud" class="icon-sm"></i> Start Import`;
+        btn.disabled = false;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+};
