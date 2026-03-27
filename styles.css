@@ -493,3 +493,97 @@ body.dark-mode .history-item { background: #06090F; border-color: #1F2937; }
 body.dark-mode .pin-btn:active {
     background: #1f2937 !important;
 }
+
+/* =========================================
+   PHASE 1 ENHANCEMENTS: Layout Utilities
+   ========================================= */
+
+/* Sidebar Collapse Logic */
+body.sidebar-collapsed #app-container { padding-left: 80px; transition: padding 0.3s ease; }
+body.sidebar-collapsed .bottom-nav { width: 80px; transition: width 0.3s ease; }
+body.sidebar-collapsed .nav-item { justify-content: center; padding: 18px 0; border-radius: 0; }
+body.sidebar-collapsed .nav-label { display: none; }
+body.sidebar-collapsed .modal-overlay { padding-left: 80px; }
+
+/* Sticky POS Cart for Mobile Efficiency */
+@media (max-width: 767px) {
+    .pos-layout { padding-bottom: 65vh; } /* Space for sticky cart */
+    .pos-right {
+        position: fixed;
+        bottom: 60px; /* Sits directly above the bottom nav */
+        left: 0;
+        width: 100%;
+        max-height: 60vh;
+        z-index: 140; /* Below nav, above feed */
+        border-radius: 28px 28px 0 0;
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.15);
+        margin-bottom: 0;
+        padding-bottom: 24px;
+        transition: transform 0.3s ease;
+    }
+    body.dark-mode .pos-right { box-shadow: 0 -10px 40px rgba(0,0,0,0.6); }
+}
+
+/* Header Global Search Styling */
+.header-search-container { display: none; } /* Hidden on mobile to save space */
+@media (min-width: 768px) {
+    .header-search-container {
+        display: flex;
+        align-items: center;
+        background: var(--bg-color);
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        padding: 8px 16px;
+        margin-right: 16px;
+        width: 280px;
+        transition: border-color 0.2s;
+    }
+    .header-search-container:focus-within { border-color: var(--primary); }
+    body.dark-mode .header-search-container { background: #06090F; border-color: #1F2937; }
+    .header-search-input {
+        border: none;
+        background: transparent;
+        outline: none;
+        width: 100%;
+        font-size: 13px;
+        color: var(--text-main);
+        font-weight: 600;
+        margin-left: 8px;
+    }
+}
+
+/* Drawer Classes for Phase 2 Modals */
+.drawer-overlay { justify-content: flex-end; }
+.drawer-content {
+    height: 100%;
+    width: 100%;
+    max-width: 550px;
+    border-radius: 24px 0 0 24px;
+    margin: 0;
+    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@media (max-width: 767px) {
+    .drawer-overlay { align-items: flex-end; justify-content: center; }
+    .drawer-content {
+        height: 85vh;
+        max-width: 100%;
+        border-radius: 24px 24px 0 0;
+        animation: slideInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+}
+@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes slideInUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+/* CSS Skeleton Loaders (Replaces text empty states) */
+.skeleton {
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 8px;
+    min-height: 20px;
+}
+body.dark-mode .skeleton {
+    background: linear-gradient(90deg, #1F2937 25%, #374151 50%, #1F2937 75%);
+    background-size: 200% 100%;
+}
+@keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
