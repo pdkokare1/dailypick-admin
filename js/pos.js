@@ -35,10 +35,15 @@ window.connectThermalPrinter = async function() {
     }
 };
 
-// --- OPTIMIZATION: Advanced Thermal Receipt Formatting ---
+// --- PHASE 4 OPTIMIZATION: Advanced Thermal Receipt Formatting via Global Settings ---
 async function printThermalReceipt(order) {
     if (!thermalPort) return; 
     try {
+        let storeName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
+        let storeAddress = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.storeAddress) ? globalStoreSettings.storeAddress : "Retail & Supermarket";
+        let storeFooter = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.receiptFooterMessage) ? globalStoreSettings.receiptFooterMessage : "Thank you for shopping!";
+        let gstin = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.gstin) ? `GSTIN: ${globalStoreSettings.gstin}\n` : "";
+
         const writer = thermalPort.writable.getWriter();
         const encoder = new TextEncoder();
         
@@ -51,8 +56,9 @@ async function printThermalReceipt(order) {
         const BOLD_OFF = ESC + 'E' + '\x00';
         const CUT = GS + 'V' + '\x41' + '\x03';
 
-        let receipt = INIT + ALIGN_CENTER + BOLD_ON + "DAILYPICK.\n" + BOLD_OFF;
-        receipt += "Retail & Supermarket\n";
+        let receipt = INIT + ALIGN_CENTER + BOLD_ON + `${storeName}\n` + BOLD_OFF;
+        receipt += `${storeAddress}\n`;
+        if(gstin) receipt += gstin;
         receipt += "--------------------------------\n";
         receipt += ALIGN_LEFT;
         
@@ -87,7 +93,7 @@ async function printThermalReceipt(order) {
         receipt += BOLD_ON + `TOTAL DUE: Rs. ${order.totalAmount.toFixed(2)}\n` + BOLD_OFF;
         receipt += `Paid via: ${order.paymentMethod}\n`;
         receipt += "--------------------------------\n";
-        receipt += ALIGN_CENTER + "Thank you for shopping!\n\n\n\n\n" + CUT;
+        receipt += ALIGN_CENTER + `${storeFooter}\n\n\n\n\n` + CUT;
 
         await writer.write(encoder.encode(receipt));
         writer.releaseLock();
@@ -697,7 +703,6 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
     }
 }
 
-// --- OPTIMIZATION: Robust Offline Sync Validation ---
 let isSyncing = false;
 async function syncOfflinePOS() {
     if (!navigator.onLine || isSyncing) return;
