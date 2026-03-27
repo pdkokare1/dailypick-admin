@@ -355,9 +355,7 @@
                         <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportInventoryCSV()"><i data-lucide="download" class="icon-sm"></i> Export</button>
                         <button class="primary-btn-small" style="background: #14b8a6; color: white; border: none;" onclick="openBulkImportModal()"><i data-lucide="upload" class="icon-sm"></i> Bulk Import</button>
                         <button class="primary-btn-small admin-only" style="background: #f59e0b; color: white; border: none;" onclick="openStockTransferModal()"><i data-lucide="arrow-right-left" class="icon-sm"></i> Transfer Stock</button>
-                        
                         <button class="primary-btn-small admin-only" style="background: #8b5cf6; color: white; border: none;" onclick="openAIForecastModal()"><i data-lucide="brain" class="icon-sm"></i> AI Forecast</button>
-
                         <button class="primary-btn-small" style="background: #ef4444; color: white; border: none;" onclick="openAuditMode()"><i data-lucide="clipboard-check" class="icon-sm"></i> Audit Mode</button>
                         <button class="primary-btn-small" style="background: #dc2626; color: white; border: none; margin-right: 8px;" onclick="openAccountsPayable()"><i data-lucide="wallet" class="icon-sm"></i> Pay Suppliers</button>
                         
@@ -464,6 +462,13 @@
                 </div>
 
                 <div class="section-header" style="margin-top: 40px;">
+                    <h2>Cashier Performance Leaderboard</h2>
+                </div>
+                <div id="leaderboard-feed" class="top-items-list" style="margin-bottom: 40px;">
+                    <p class="empty-state">Loading staff performance data...</p>
+                </div>
+
+                <div class="section-header" style="margin-top: 40px;">
                     <h2>Top Selling Items</h2>
                 </div>
                 <div id="top-items-feed" class="top-items-list">
@@ -491,7 +496,6 @@
                 </div>
                 <div class="scrollable-actions" style="margin-bottom: 32px;">
                     <button class="primary-btn-small" style="background: #2563EB; color: white; border: none;" onclick="exportPnLReport()"><i data-lucide="file-text" class="icon-sm"></i> Export P&L Report</button>
-                    
                     <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportOrdersCSV()"><i data-lucide="package" class="icon-sm"></i> Export Orders</button>
                     <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportCustomersCSV()"><i data-lucide="users" class="icon-sm"></i> Export Customers</button>
                     <button class="primary-btn-small" style="background: #10b981; color: white; border: none;" onclick="exportFinancialsCSV('Daily')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Daily Rev</button>
