@@ -166,7 +166,6 @@
                             <button class="primary-btn-small admin-only" style="background:#8b5cf6; color: white; border: none;" onclick="openStaffModal()"><i data-lucide="users" class="icon-sm"></i> Staff</button>
                             <button class="primary-btn-small admin-only" style="background:#ec4899; color: white; border: none;" onclick="openPromotionsModal()"><i data-lucide="tag" class="icon-sm"></i> Promos</button>
                             <button class="primary-btn-small admin-only" style="background:#3b82f6; color: white; border: none;" onclick="openStoreManagementModal()"><i data-lucide="map" class="icon-sm"></i> Manage Stores</button>
-                            
                             <button class="primary-btn-small admin-only" style="background:#475569; color: white; border: none;" onclick="openSecurityAuditModal()"><i data-lucide="shield" class="icon-sm"></i> Audits</button>
                             <button class="primary-btn-small admin-only" style="background:#0f172a; color: white; border: none;" onclick="openSettingsModal()"><i data-lucide="settings" class="icon-sm"></i> Settings</button>
                         </div>
@@ -355,8 +354,9 @@
                     <div class="scrollable-actions" style="width: 100%;">
                         <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportInventoryCSV()"><i data-lucide="download" class="icon-sm"></i> Export</button>
                         <button class="primary-btn-small" style="background: #14b8a6; color: white; border: none;" onclick="openBulkImportModal()"><i data-lucide="upload" class="icon-sm"></i> Bulk Import</button>
-                        
                         <button class="primary-btn-small admin-only" style="background: #f59e0b; color: white; border: none;" onclick="openStockTransferModal()"><i data-lucide="arrow-right-left" class="icon-sm"></i> Transfer Stock</button>
+                        
+                        <button class="primary-btn-small admin-only" style="background: #8b5cf6; color: white; border: none;" onclick="openAIForecastModal()"><i data-lucide="brain" class="icon-sm"></i> AI Forecast</button>
 
                         <button class="primary-btn-small" style="background: #ef4444; color: white; border: none;" onclick="openAuditMode()"><i data-lucide="clipboard-check" class="icon-sm"></i> Audit Mode</button>
                         <button class="primary-btn-small" style="background: #dc2626; color: white; border: none; margin-right: 8px;" onclick="openAccountsPayable()"><i data-lucide="wallet" class="icon-sm"></i> Pay Suppliers</button>
@@ -490,6 +490,8 @@
                     <h2>Data Export Hub</h2>
                 </div>
                 <div class="scrollable-actions" style="margin-bottom: 32px;">
+                    <button class="primary-btn-small" style="background: #2563EB; color: white; border: none;" onclick="exportPnLReport()"><i data-lucide="file-text" class="icon-sm"></i> Export P&L Report</button>
+                    
                     <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportOrdersCSV()"><i data-lucide="package" class="icon-sm"></i> Export Orders</button>
                     <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportCustomersCSV()"><i data-lucide="users" class="icon-sm"></i> Export Customers</button>
                     <button class="primary-btn-small" style="background: #10b981; color: white; border: none;" onclick="exportFinancialsCSV('Daily')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Daily Rev</button>
@@ -519,6 +521,25 @@
         <div id="print-packing-slip-container"></div>
         <div id="print-barcode-container"></div>
         <div id="print-bulk-labels-container"></div>
+
+        <div id="ai-forecast-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 350;">
+            <div class="form-card drawer-content" style="max-width: 650px; overflow-y: auto;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <h2 style="color: #8b5cf6;">AI Demand Forecast</h2>
+                        <span style="background:#ede9fe; color:#6d28d9; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Gemini 2.5</span>
+                    </div>
+                    <button class="close-btn" onclick="closeAIForecastModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px; font-weight: 600; line-height: 1.5;">The AI is analyzing your live stock levels and predicting the most critical items to restock based on retail velocity.</p>
+                
+                <div id="ai-forecast-container" style="display: flex; flex-direction: column; gap: 16px;">
+                    <div class="skeleton" style="height: 60px;"></div>
+                    <div class="skeleton" style="height: 60px;"></div>
+                    <div class="skeleton" style="height: 60px;"></div>
+                </div>
+            </div>
+        </div>
 
         <div id="manage-stores-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 350;">
             <div class="form-card" style="max-width: 500px; text-align: center;">
@@ -616,7 +637,7 @@
                     <h2>Supplier Sourcing</h2>
                     <button class="close-btn" onclick="closeSourcingModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
                 </div>
-                <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px; font-weight: 600; line-height: 1.5;">Items running low have been grouped by supplier. Click to generate a WhatsApp PO instantly.</p>
+                <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px; font-weight: 600; line-height: 1.5;">Items running low have been grouped by supplier. Click to generate a WhatsApp PO or a professional PDF instantly.</p>
                 <div id="sourcing-list-container" class="sourcing-list">
                     <p class="empty-state">Generating lists...</p>
                 </div>
