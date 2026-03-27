@@ -41,7 +41,6 @@ let realtimeReconnectTimeout = null;
 let wakeLock = null;
 async function requestWakeLock() {
     try {
-        // FIX: Only request Wake Lock if the document is actively visible to prevent NotAllowedError
         if ('wakeLock' in navigator && document.visibilityState === 'visible') {
             wakeLock = await navigator.wakeLock.request('screen');
             wakeLock.addEventListener('release', () => {
@@ -62,7 +61,6 @@ document.addEventListener('visibilitychange', async () => {
 
 // --- NEW FUNCTIONALITY: Prevent Accidental Tab Closure ---
 window.addEventListener('beforeunload', function (e) {
-    // If cart is not empty OR a shift is currently open, warn the user before closing
     if ((typeof posCart !== 'undefined' && posCart.length > 0) || (typeof currentActiveShift !== 'undefined' && currentActiveShift !== null)) {
         e.preventDefault();
         e.returnValue = 'You have an active transaction or open shift. Are you sure you want to leave?';
@@ -91,6 +89,12 @@ window.setupRealtimeConnection = function() {
                 
                 if (data.type === 'PING') {
                     realtimeSocket.send(JSON.stringify({ type: 'PONG' }));
+                    return;
+                }
+                
+                // FIX: Successfully log connection to verify the backend is holding the line open
+                if (data.type === 'CONNECTION_ESTABLISHED') {
+                    console.log('✅ Real-Time Sync Active:', data.message);
                     return;
                 }
                 
@@ -168,7 +172,6 @@ document.addEventListener('keydown', (e) => {
         }
     }
 
-    // Intercept dangerous browser shortcuts fired by rapid USB scanners
     if ((e.ctrlKey || e.metaKey) && ['p', 's', 'j', 'g', 'f', 'o'].includes(e.key.toLowerCase())) {
         e.preventDefault();
         console.warn(`Blocked potentially dangerous scanner shortcut: Ctrl+${e.key}`);
@@ -335,7 +338,6 @@ window.logoutUser = function() {
     }
     if (realtimeReconnectTimeout) clearTimeout(realtimeReconnectTimeout);
     
-    // Release wake lock if held
     if (wakeLock !== null) {
         wakeLock.release().then(() => wakeLock = null);
     }
