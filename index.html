@@ -166,6 +166,9 @@
                             <button class="primary-btn-small admin-only" style="background:#8b5cf6; color: white; border: none;" onclick="openStaffModal()"><i data-lucide="users" class="icon-sm"></i> Staff</button>
                             <button class="primary-btn-small admin-only" style="background:#ec4899; color: white; border: none;" onclick="openPromotionsModal()"><i data-lucide="tag" class="icon-sm"></i> Promos</button>
                             <button class="primary-btn-small admin-only" style="background:#3b82f6; color: white; border: none;" onclick="openStoreManagementModal()"><i data-lucide="map" class="icon-sm"></i> Manage Stores</button>
+                            
+                            <button class="primary-btn-small admin-only" style="background:#475569; color: white; border: none;" onclick="openSecurityAuditModal()"><i data-lucide="shield" class="icon-sm"></i> Audits</button>
+                            <button class="primary-btn-small admin-only" style="background:#0f172a; color: white; border: none;" onclick="openSettingsModal()"><i data-lucide="settings" class="icon-sm"></i> Settings</button>
                         </div>
                     </div>
                 </div>
@@ -352,6 +355,9 @@
                     <div class="scrollable-actions" style="width: 100%;">
                         <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportInventoryCSV()"><i data-lucide="download" class="icon-sm"></i> Export</button>
                         <button class="primary-btn-small" style="background: #14b8a6; color: white; border: none;" onclick="openBulkImportModal()"><i data-lucide="upload" class="icon-sm"></i> Bulk Import</button>
+                        
+                        <button class="primary-btn-small admin-only" style="background: #f59e0b; color: white; border: none;" onclick="openStockTransferModal()"><i data-lucide="arrow-right-left" class="icon-sm"></i> Transfer Stock</button>
+
                         <button class="primary-btn-small" style="background: #ef4444; color: white; border: none;" onclick="openAuditMode()"><i data-lucide="clipboard-check" class="icon-sm"></i> Audit Mode</button>
                         <button class="primary-btn-small" style="background: #dc2626; color: white; border: none; margin-right: 8px;" onclick="openAccountsPayable()"><i data-lucide="wallet" class="icon-sm"></i> Pay Suppliers</button>
                         
@@ -1190,6 +1196,93 @@
                 <div id="bulk-import-results" style="margin-top: 16px; font-size: 13px; font-weight: 600;"></div>
             </div>
         </div>
+
+        <div id="security-audit-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 350;">
+            <div class="form-card drawer-content" style="max-width: 650px; overflow-y: auto;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2>Security & Audit Logs</h2>
+                    <button class="close-btn" onclick="closeSecurityAuditModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                <div id="audit-logs-container" style="display: flex; flex-direction: column; gap: 12px;">
+                    <p class="empty-state">Loading logs...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="global-settings-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 350;">
+            <div class="form-card drawer-content" style="max-width: 550px; overflow-y: auto;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2>Global Store Settings</h2>
+                    <button class="close-btn" onclick="closeSettingsModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                <form onsubmit="submitSettings(event)">
+                    <div class="input-group">
+                        <label>Store Name (Printed on Receipts)</label>
+                        <input type="text" id="settings-store-name" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Store Address / Tagline</label>
+                        <input type="text" id="settings-store-address">
+                    </div>
+                    <div class="input-group">
+                        <label>Contact Phone</label>
+                        <input type="text" id="settings-contact-phone">
+                    </div>
+                    <div class="input-group">
+                        <label>GSTIN / Tax ID</label>
+                        <input type="text" id="settings-gstin">
+                    </div>
+                    <div class="input-group">
+                        <label>Receipt Footer Message</label>
+                        <input type="text" id="settings-receipt-footer">
+                    </div>
+                    <div class="input-group">
+                        <label>Loyalty Conversion (₹X = 1 Point)</label>
+                        <input type="number" id="settings-loyalty-value" min="1" required>
+                    </div>
+                    <button type="submit" class="primary-btn" style="background: #0f172a;">Save Settings</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="stock-transfer-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 350;">
+            <div class="form-card drawer-content" style="max-width: 550px; overflow-y: auto;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2>Multi-Store Stock Transfer</h2>
+                    <button class="close-btn" onclick="closeStockTransferModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                
+                <div class="input-group">
+                    <label>Search Product</label>
+                    <input type="text" id="transfer-search" placeholder="Type name or SKU..." oninput="searchTransferItem()">
+                    <div id="transfer-search-results" style="margin-top: 12px; max-height: 150px; overflow-y: auto; background: #F9FAFB; border-radius: 12px;"></div>
+                </div>
+
+                <div id="transfer-selected-item" class="hidden" style="background: #FFFBEB; padding: 16px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #FEF3C7;">
+                    <p style="font-size: 11px; font-weight: 800; color: #B45309; text-transform: uppercase;">Selected Item</p>
+                    <h4 id="transfer-item-name" style="margin: 6px 0; font-size: 16px; font-weight: 800;">-</h4>
+                    <p id="transfer-item-variant" style="font-size: 14px; color: #92400E; font-weight: 600;">-</p>
+                    <input type="hidden" id="transfer-product-id">
+                    <input type="hidden" id="transfer-variant-id">
+                </div>
+
+                <form id="transfer-form" onsubmit="submitStockTransfer(event)">
+                    <div class="input-group">
+                        <label>From Store</label>
+                        <select id="transfer-from-store" required onchange="validateTransferStores()"></select>
+                    </div>
+                    <div class="input-group">
+                        <label>To Store</label>
+                        <select id="transfer-to-store" required onchange="validateTransferStores()"></select>
+                    </div>
+                    <div class="input-group">
+                        <label>Quantity to Move</label>
+                        <input type="number" id="transfer-qty" required min="1" placeholder="0">
+                    </div>
+                    <button type="submit" id="submit-transfer-btn" class="primary-btn" style="background: #f59e0b;" disabled>Transfer Stock</button>
+                </form>
+            </div>
+        </div>
         
         <div id="command-search-modal" class="modal-overlay hidden-modal" style="align-items: flex-start; padding-top: 10vh; z-index: 300;" onclick="closeCommandSearch()">
             <div class="form-card" style="padding: 0; overflow: hidden; max-width: 650px;" onclick="event.stopPropagation()">
@@ -1221,12 +1314,6 @@
             </button>
         </nav>
     </div>
-
-    <script>
-        function openStoreManagementModal() {
-            document.getElementById('manage-stores-modal').classList.add('active');
-        }
-    </script>
 
     <script src="js/state.js"></script>
     <script src="js/ui.js"></script>
