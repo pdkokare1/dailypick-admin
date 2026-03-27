@@ -37,6 +37,9 @@ let currentPin = '';
 let realtimeSocket = null; 
 let realtimeReconnectTimeout = null;
 
+// --- PHASE 4 GLOBAL STATE ---
+let globalStoreSettings = {};
+
 // --- OPTIMIZED: Kiosk Mode Screen Wake Lock ---
 let wakeLock = null;
 async function requestWakeLock() {
@@ -419,6 +422,7 @@ function applyRoleRestrictions() {
 
 function initializeApp() {
     console.log("Initializing app modules...");
+    if (typeof window.fetchGlobalSettings === 'function') window.fetchGlobalSettings(); 
     if (typeof fetchCategories === 'function') fetchCategories(); 
     if (typeof fetchBrands === 'function') fetchBrands();
     if (typeof fetchDistributors === 'function') fetchDistributors();
@@ -426,7 +430,7 @@ function initializeApp() {
     if (typeof fetchOrders === 'function') fetchOrders();
     
     window.setupRealtimeConnection();
-    requestWakeLock(); // Trigger Kiosk Screen Lock
+    requestWakeLock(); 
 
     if (currentUser && currentUser.role === 'Admin') {
         if (typeof renderOverview === 'function') renderOverview(); 
@@ -451,7 +455,6 @@ if ('serviceWorker' in navigator) {
 // PHASE 3 LOGIC ADDITIONS
 // ==========================================
 
-// --- STAFF MANAGEMENT ---
 window.openStaffModal = async function() {
     document.getElementById('staff-modal').classList.add('active');
     await fetchStaff();
@@ -465,7 +468,7 @@ window.fetchStaff = async function() {
     const container = document.getElementById('staff-list-container');
     container.innerHTML = '<p class="empty-state">Loading staff...</p>';
     try {
-        const res = await fetch(`${BACKEND_URL}/api/users/staff`); // Assuming standard path
+        const res = await fetch(`${BACKEND_URL}/api/users/staff`); 
         if (!res.ok) throw new Error('Failed to load staff');
         const data = await res.json();
         
@@ -525,7 +528,6 @@ window.submitNewStaff = async function(e) {
     }
 };
 
-// --- PROMOTIONS ENGINE ---
 window.openPromotionsModal = async function() {
     document.getElementById('promotions-modal').classList.add('active');
     await fetchPromotionsList();
@@ -591,7 +593,7 @@ window.submitNewPromotion = async function(e) {
             document.getElementById('promo-value').value = '';
             document.getElementById('promo-min-order').value = '';
             await fetchPromotionsList();
-            if (typeof fetchPromotions === 'function') fetchPromotions(); // Refresh globally
+            if (typeof fetchPromotions === 'function') fetchPromotions(); 
         } else {
             showToast(data.message || "Failed to create promo");
         }
@@ -600,7 +602,6 @@ window.submitNewPromotion = async function(e) {
     }
 };
 
-// --- BULK INVENTORY IMPORT ---
 window.openBulkImportModal = function() {
     document.getElementById('bulk-import-modal').classList.add('active');
     document.getElementById('bulk-import-results').innerHTML = '';
@@ -649,14 +650,14 @@ window.submitBulkImport = async function(e) {
 
         const res = await fetch(`${BACKEND_URL}/api/products/bulk`, {
             method: 'POST',
-            body: formData // Note: no Content-Type header needed for FormData
+            body: formData 
         });
 
         const data = await res.json();
         if (data.success) {
             resultsDiv.innerHTML = `<span style="color:#10b981;">✅ Import Successful! Loaded ${data.count || 'multiple'} items.</span>`;
             showToast("Bulk import successful.");
-            if (typeof fetchInventory === 'function') fetchInventory(); // Refresh Inventory grid globally
+            if (typeof fetchInventory === 'function') fetchInventory(); 
             fileInput.value = '';
         } else {
             resultsDiv.innerHTML = `<span style="color:#ef4444;">❌ Error: ${data.message || 'Data formatting issue.'}</span>`;
@@ -670,5 +671,246 @@ window.submitBulkImport = async function(e) {
         btn.innerHTML = `<i data-lucide="upload-cloud" class="icon-sm"></i> Start Import`;
         btn.disabled = false;
         if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+};
+
+// ==========================================
+// PHASE 4 LOGIC ADDITIONS
+// ==========================================
+
+// --- GLOBAL SETTINGS ---
+window.fetchGlobalSettings = async function() {
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/settings`);
+        const data = await res.json();
+        if (data.success && data.data) {
+            globalStoreSettings = data.data;
+        }
+    } catch (e) {
+        console.warn("Could not fetch global settings", e);
+    }
+};
+
+window.openSettingsModal = async function() {
+    document.getElementById('global-settings-modal').classList.add('active');
+    await window.fetchGlobalSettings();
+    document.getElementById('settings-store-name').value = globalStoreSettings.storeName || 'DAILYPICK.';
+    document.getElementById('settings-store-address').value = globalStoreSettings.storeAddress || '';
+    document.getElementById('settings-contact-phone').value = globalStoreSettings.contactPhone || '';
+    document.getElementById('settings-gstin').value = globalStoreSettings.gstin || '';
+    document.getElementById('settings-receipt-footer').value = globalStoreSettings.receiptFooterMessage || 'Thank you for shopping with us!';
+    document.getElementById('settings-loyalty-value').value = globalStoreSettings.loyaltyPointValue || 100;
+};
+
+window.closeSettingsModal = function() {
+    document.getElementById('global-settings-modal').classList.remove('active');
+};
+
+window.submitSettings = async function(e) {
+    e.preventDefault();
+    const payload = {
+        storeName: document.getElementById('settings-store-name').value,
+        storeAddress: document.getElementById('settings-store-address').value,
+        contactPhone: document.getElementById('settings-contact-phone').value,
+        gstin: document.getElementById('settings-gstin').value,
+        receiptFooterMessage: document.getElementById('settings-receipt-footer').value,
+        loyaltyPointValue: Number(document.getElementById('settings-loyalty-value').value) || 100
+    };
+
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            globalStoreSettings = data.data;
+            showToast("Global settings updated!");
+            closeSettingsModal();
+        } else {
+            showToast("Failed to save settings.");
+        }
+    } catch (e) {
+        showToast("Network Error.");
+    }
+};
+
+// --- SECURITY AUDITS ---
+window.openSecurityAuditModal = async function() {
+    document.getElementById('security-audit-modal').classList.add('active');
+    await window.fetchAuditLogs();
+};
+
+window.closeSecurityAuditModal = function() {
+    document.getElementById('security-audit-modal').classList.remove('active');
+};
+
+window.fetchAuditLogs = async function() {
+    const container = document.getElementById('audit-logs-container');
+    container.innerHTML = '<p class="empty-state">Loading logs...</p>';
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/audit?limit=50`);
+        const data = await res.json();
+        if (data.success && data.data.length > 0) {
+            container.innerHTML = '';
+            data.data.forEach(log => {
+                const time = new Date(log.createdAt).toLocaleString();
+                const actionColor = log.action.includes('FAILED') ? '#ef4444' : '#3b82f6';
+                let detailsHtml = '';
+                if (log.details) {
+                    detailsHtml = `<p style="font-size: 10px; color: var(--text-muted); margin-top: 4px; font-family: monospace;">${JSON.stringify(log.details)}</p>`;
+                }
+                container.innerHTML += `
+                    <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; border: 1px solid #E2E8F0; border-left: 3px solid ${actionColor};">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong style="font-size: 13px; color: ${actionColor};">${log.action}</strong>
+                            <span style="font-size: 11px; color: var(--text-muted);">${time}</span>
+                        </div>
+                        <p style="font-size: 12px; font-weight: 600; margin-top: 4px;">User: @${log.username || 'System'}</p>
+                        <p style="font-size: 11px; color: var(--text-main); margin-top: 2px;">Target: ${log.targetType} (${log.targetId})</p>
+                        ${detailsHtml}
+                    </div>
+                `;
+            });
+        } else {
+            container.innerHTML = '<p class="empty-state">No audit logs found.</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p class="empty-state" style="color:#ef4444;">Error loading logs.</p>';
+    }
+};
+
+// --- STOCK TRANSFER ---
+window.openStockTransferModal = async function() {
+    document.getElementById('stock-transfer-modal').classList.add('active');
+    document.getElementById('transfer-selected-item').classList.add('hidden');
+    document.getElementById('submit-transfer-btn').disabled = true;
+    
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/stores`);
+        const data = await res.json();
+        if (data.success) {
+            const fromSelect = document.getElementById('transfer-from-store');
+            const toSelect = document.getElementById('transfer-to-store');
+            let options = '<option value="">Select Store...</option>';
+            data.data.forEach(s => {
+                options += `<option value="${s._id}">${s.name} (${s.location})</option>`;
+            });
+            fromSelect.innerHTML = options;
+            toSelect.innerHTML = options;
+        }
+    } catch (e) {
+        console.error("Failed to load stores for transfer", e);
+    }
+};
+
+window.closeStockTransferModal = function() {
+    document.getElementById('stock-transfer-modal').classList.remove('active');
+    document.getElementById('transfer-search').value = '';
+    document.getElementById('transfer-search-results').innerHTML = '';
+    document.getElementById('transfer-qty').value = '';
+};
+
+window.searchTransferItem = function() {
+    const query = document.getElementById('transfer-search').value.toLowerCase().trim();
+    const resultsDiv = document.getElementById('transfer-search-results');
+    
+    if (query.length < 2) {
+        resultsDiv.innerHTML = '';
+        return;
+    }
+
+    let resultsHTML = '';
+    const matches = currentInventory.filter(p => p.name.toLowerCase().includes(query) || (p.variants && p.variants.some(v => v.sku && v.sku.toLowerCase().includes(query)))).slice(0, 5);
+
+    matches.forEach(p => {
+        if (p.variants) {
+            p.variants.forEach(v => {
+                resultsHTML += `
+                    <div class="restock-result-item" onclick="selectTransferItem('${p._id}', '${v._id}', '${p.name.replace(/'/g, "\\'")}', '${v.weightOrVolume}')">
+                        <strong>${p.name}</strong> <span style="color:var(--text-muted); font-size:12px;">(${v.weightOrVolume})</span>
+                        <div style="font-size:11px; color:#10b981;">Total Stock: ${v.stock}</div>
+                    </div>
+                `;
+            });
+        }
+    });
+
+    resultsDiv.innerHTML = resultsHTML || '<div style="padding:12px; font-size:12px;">No matches found</div>';
+};
+
+window.selectTransferItem = function(pId, vId, pName, vName) {
+    document.getElementById('transfer-product-id').value = pId;
+    document.getElementById('transfer-variant-id').value = vId;
+    document.getElementById('transfer-item-name').innerText = pName;
+    document.getElementById('transfer-item-variant').innerText = vName;
+    
+    document.getElementById('transfer-search-results').innerHTML = '';
+    document.getElementById('transfer-search').value = '';
+    
+    document.getElementById('transfer-selected-item').classList.remove('hidden');
+    window.validateTransferStores();
+};
+
+window.validateTransferStores = function() {
+    const pId = document.getElementById('transfer-product-id').value;
+    const fromS = document.getElementById('transfer-from-store').value;
+    const toS = document.getElementById('transfer-to-store').value;
+    const btn = document.getElementById('submit-transfer-btn');
+    
+    if (pId && fromS && toS && fromS !== toS) {
+        btn.disabled = false;
+    } else {
+        btn.disabled = true;
+    }
+};
+
+window.submitStockTransfer = async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submit-transfer-btn');
+    btn.disabled = true;
+    btn.innerText = 'Transferring...';
+
+    const payload = {
+        productId: document.getElementById('transfer-product-id').value,
+        variantId: document.getElementById('transfer-variant-id').value,
+        fromStoreId: document.getElementById('transfer-from-store').value,
+        toStoreId: document.getElementById('transfer-to-store').value,
+        quantity: Number(document.getElementById('transfer-qty').value)
+    };
+
+    if (payload.fromStoreId === payload.toStoreId) {
+        showToast("Source and destination must be different.");
+        btn.disabled = false;
+        btn.innerText = 'Transfer Stock';
+        return;
+    }
+
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/products/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast("Stock transferred successfully!");
+            closeStockTransferModal();
+            if (typeof fetchInventory === 'function') fetchInventory();
+        } else {
+            showToast(data.message || "Failed to transfer stock.");
+        }
+    } catch (err) {
+        showToast("Network Error.");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'Transfer Stock';
     }
 };
