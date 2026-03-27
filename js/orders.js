@@ -33,7 +33,6 @@ function setOrderTab(tab) {
     fetchOrders();
 }
 
-// --- PHASE 4 OPTIMIZATION: Advanced Web Receipt Formatting via Global Settings ---
 function printReceipt() {
     if (!activeOrder) return;
     const pContainer = document.getElementById('print-receipt-container');
@@ -688,78 +687,5 @@ async function submitPartialRefund() {
         }
     } catch (e) {
         showToast('Network error.');
-    }
-}
-
-// --- PHASE 4 OPTIMIZATION: Advanced Hardware Receipt Formatting via Global Settings ---
-async function printHardwareReceipt() {
-    if (!activeOrder) return showToast("No active order to print.");
-    
-    if (!('serial' in navigator)) {
-        return showToast("Hardware printing requires Chrome or Edge on Desktop.");
-    }
-    
-    try {
-        const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 9600 }); 
-        
-        const writer = port.writable.getWriter();
-        const encoder = new TextEncoder();
-        
-        const init = encoder.encode('\x1B\x40'); 
-        const alignLeft = encoder.encode('\x1B\x61\x00');
-        const cutPaper = encoder.encode('\x1D\x56\x00');
-        
-        let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
-        let sFooter = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.receiptFooterMessage) ? globalStoreSettings.receiptFooterMessage : "Thank you for shopping!";
-        let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
-        
-        const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
-
-        let text = `          ${sName.toUpperCase()}          \n`;
-        text += `Order #${orderDisplayId}\n`;
-        text += `Date: ${new Date(activeOrder.createdAt).toLocaleString()}\n`;
-        text += "--------------------------------\n";
-        
-        activeOrder.items.forEach(i => {
-            text += `${i.qty}x ${i.name.substring(0, 20)}\n`;
-            text += `   Rs. ${(i.price * i.qty).toFixed(2)}\n`;
-        });
-        
-        text += "--------------------------------\n";
-        
-        if (activeOrder.taxAmount !== undefined || activeOrder.discountAmount !== undefined || activeOrder.pointsRedeemed !== undefined) {
-            const tax = activeOrder.taxAmount || 0;
-            const discount = activeOrder.discountAmount || 0;
-            const pts = activeOrder.pointsRedeemed || 0;
-            const subtotal = activeOrder.totalAmount - tax + discount + pts;
-            
-            text += `Subtotal: Rs. ${subtotal.toFixed(2)}\n`;
-            if (discount > 0) text += `Discount: -Rs. ${discount.toFixed(2)}\n`;
-            if (pts > 0) text += `Pts Redeemed: -Rs. ${pts.toFixed(2)}\n`;
-            if (tax > 0) text += `Tax (GST): Rs. ${tax.toFixed(2)}\n`;
-        }
-        
-        text += `GRAND TOTAL: Rs. ${activeOrder.totalAmount.toFixed(2)}\n`;
-        text += `Payment: ${activeOrder.paymentMethod}\n`;
-        text += "--------------------------------\n";
-        
-        const earnedPoints = Math.floor(activeOrder.totalAmount / loyaltyConv);
-        text += `*** You earned ${earnedPoints} Points! ***\n`;
-        text += `     ${sFooter}    \n\n\n\n`;
-        
-        await writer.write(init);
-        await writer.write(alignLeft);
-        await writer.write(encoder.encode(text));
-        await writer.write(cutPaper);
-        
-        writer.releaseLock();
-        await port.close();
-        
-        showToast("Hardware Print Complete! 🖨️");
-        
-    } catch (err) {
-        console.error("Hardware Print Error:", err);
-        showToast("Hardware Print Cancelled or Failed.");
     }
 }
