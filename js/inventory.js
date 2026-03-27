@@ -1,5 +1,11 @@
 /* js/inventory.js */
 
+let searchTimeout;
+let inventoryPage = 1;
+let currentFilters = { search: '', category: 'All', brand: 'All', distributor: 'All', stockStatus: 'All', sort: 'createdAt_desc' };
+let selectedInventory = new Set();
+let html5QrcodeScanner = null;
+
 function getDisplayStock(variant) {
     if (typeof currentStoreId === 'undefined' || !currentStoreId) return variant.stock; 
     if (variant.locationInventory && Array.isArray(variant.locationInventory)) {
@@ -75,10 +81,35 @@ function toggleLowStockFilter() {
     }
 }
 
-async function fetchInventory() {
-    const invFeedEl = document.getElementById('inventory-feed');
-    if (inventoryPage === 1 && invFeedEl) {
-        invFeedEl.innerHTML = '<p class="empty-state">Fetching catalog...</p>';
+function debounceInventorySearch() { 
+    clearTimeout(searchTimeout); 
+    searchTimeout = setTimeout(() => {
+        inventorySearchTerm = document.getElementById('inventory-search-input').value.trim();
+        inventoryPage = 1;
+        fetchInventory();
+    }, 500); 
+}
+
+function applyInventoryFilters() { 
+    inventorySearchTerm = document.getElementById('inventory-search-input').value.trim(); 
+    inventoryCategoryFilter = document.getElementById('inventory-cat-filter').value; 
+    
+    const brandDrop = document.getElementById('inventory-brand-filter');
+    const distDrop = document.getElementById('inventory-dist-filter');
+    inventoryBrandFilter = brandDrop ? brandDrop.value : 'All';
+    inventoryDistributorFilter = distDrop ? distDrop.value : 'All';
+
+    const sortDrop = document.getElementById('inventory-sort');
+    if(sortDrop) currentFilters.sort = sortDrop.value;
+
+    inventoryPage = 1; 
+    fetchInventory(); 
+}
+
+async function fetchInventory(isLoadMore = false) {
+    if (!isLoadMore) {
+        inventoryPage = 1;
+        document.getElementById('inventory-feed').innerHTML = '<p class="empty-state">Fetching catalog...</p>';
     }
     
     const loadBtn = document.getElementById('load-more-btn');
@@ -98,10 +129,7 @@ async function fetchInventory() {
         else if (isLowStockFilterActive) queryUrl += `&stockStatus=low`;
         else if (isDeadStockFilterActive) queryUrl += `&stockStatus=dead`;
 
-        const sortDropdown = document.getElementById('inventory-sort');
-        if (sortDropdown) {
-            queryUrl += `&sort=${sortDropdown.value}`;
-        }
+        if (currentFilters.sort) queryUrl += `&sort=${currentFilters.sort}`;
 
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
         const res = await fetchFn(queryUrl);
@@ -121,8 +149,8 @@ async function fetchInventory() {
             renderInventory(dataToRender.length < 30); 
         }
     } catch (e) { 
-        if (inventoryPage === 1 && invFeedEl) {
-            invFeedEl.innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
+        if (inventoryPage === 1 && document.getElementById('inventory-feed')) {
+            document.getElementById('inventory-feed').innerHTML = '<p class="empty-state">Error loading inventory.</p>'; 
         }
     } finally { 
         if (loadBtn) { 
@@ -130,6 +158,11 @@ async function fetchInventory() {
             loadBtn.disabled = false; 
         } 
     }
+}
+
+function loadMoreInventory() { 
+    inventoryPage++; 
+    fetchInventory(true); 
 }
 
 function renderInventory(isLastPage = true) {
@@ -168,7 +201,7 @@ function renderInventory(isLastPage = true) {
         
         if (p.variants) {
             p.variants.forEach(v => {
-                const dStock = getDisplayStock(v); // MULTI-STORE
+                const dStock = getDisplayStock(v); 
                 totalStock += dStock;
                 if (dStock <= 0) {
                     lowestStockFlag = 'out';
@@ -208,7 +241,7 @@ function renderInventory(isLastPage = true) {
 
             let runwayDays = v.daysOfStock !== undefined ? v.daysOfStock : calculateStockRunway(v);
             let runwayHtml = '';
-            const dStock = getDisplayStock(v); // MULTI-STORE
+            const dStock = getDisplayStock(v);
             
             if (runwayDays !== null && runwayDays !== undefined) {
                 if (dStock > 15 && runwayDays > 30) {
@@ -264,6 +297,12 @@ function renderInventory(isLastPage = true) {
             </div>
         `;
         
+        card.onclick = (e) => {
+            if(e.target.tagName !== 'BUTTON' && !e.target.classList.contains('toggle-switch') && e.target.tagName !== 'INPUT') {
+                openEditProductModal(p._id, e);
+            }
+        };
+
         invFeedEl.appendChild(card);
     });
 
@@ -273,6 +312,94 @@ function renderInventory(isLastPage = true) {
     } else {
         loadBtn.classList.remove('hidden');
     }
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function updateInventoryDashboard() {
+    let outOfStock = 0;
+    let lowStock = 0;
+    let deadStock = 0; 
+    let totalValue = 0;
+
+    currentInventory.forEach(p => {
+        if(p.variants) {
+            p.variants.forEach(v => {
+                const dStock = getDisplayStock(v);
+                if (dStock <= 0) outOfStock++;
+                else if (dStock <= (v.lowStockThreshold || 5)) lowStock++;
+                else if (dStock > 15) deadStock++; 
+
+                totalValue += (dStock * v.price);
+            });
+        }
+    });
+    
+    const outCard = document.getElementById('stat-out-stock').parentElement;
+    if(outOfStock > 0) outCard.classList.add('alert');
+    else outCard.classList.remove('alert');
+
+    document.getElementById('stat-out-stock').innerText = outOfStock;
+    document.getElementById('stat-low-stock').innerText = lowStock;
+    document.getElementById('stat-dead-stock').innerText = deadStock; 
+    document.getElementById('stat-total-value').innerText = `₹${totalValue.toFixed(2)}`;
+    
+    if(document.getElementById('overview-view').classList.contains('active') && typeof renderOverview === 'function') {
+        renderOverview(); 
+    }
+}
+
+async function fetchCategories() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/categories`);
+        const result = await res.json();
+        if (result.success) {
+            const selects = ['new-category', 'inventory-cat-filter', 'bulk-assign-category'];
+            selects.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.innerHTML = id === 'new-category' ? '<option value="">Select Category</option>' : '<option value="All">All Categories</option>';
+                    if (id === 'bulk-assign-category') el.innerHTML = '<option value="">-- No Change --</option>';
+                    result.data.forEach(c => el.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+                }
+            });
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function fetchBrands() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/brands`);
+        const result = await res.json();
+        if (result.success) {
+            const selects = ['new-brand', 'inventory-brand-filter', 'bulk-assign-brand'];
+            selects.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.innerHTML = id === 'new-brand' ? '<option value="">Select Brand</option>' : '<option value="All">All Brands</option>';
+                    if (id === 'bulk-assign-brand') el.innerHTML = '<option value="">-- No Change --</option>';
+                    result.data.forEach(b => el.innerHTML += `<option value="${b.name}">${b.name}</option>`);
+                }
+            });
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function fetchDistributors() {
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/distributors`);
+        const result = await res.json();
+        if (result.success) {
+            const selects = ['new-distributor', 'inventory-dist-filter', 'restock-distributor'];
+            selects.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.innerHTML = id === 'inventory-dist-filter' ? '<option value="All">All Distributors</option>' : '<option value="">Select Distributor</option>';
+                    result.data.forEach(d => el.innerHTML += `<option value="${d.name}">${d.name}</option>`);
+                }
+            });
+        }
+    } catch (e) { console.error(e); }
 }
 
 function openAddCategoryModal() { 
@@ -395,6 +522,310 @@ async function submitNewDistributor(e) {
     } 
 }
 
+function toggleInventorySelection(id, event) {
+    event.stopPropagation();
+    if (selectedInventory.has(id)) {
+        selectedInventory.delete(id);
+    } else {
+        selectedInventory.add(id);
+    }
+    updateInventoryBulkUI();
+}
+
+function updateInventoryBulkUI() {
+    const btn = document.getElementById('inv-bulk-btn');
+    const priceBtn = document.getElementById('inv-bulk-price-btn');
+    const assignBtn = document.getElementById('inv-bulk-assign-btn'); 
+    const printBtn = document.getElementById('inv-bulk-print-btn'); 
+    
+    if (selectedInventory.size > 0) {
+        if(btn) { btn.innerText = `Deactivate Selected (${selectedInventory.size})`; btn.style.display = 'inline-flex'; }
+        if(priceBtn) { priceBtn.innerText = `Edit Prices (${selectedInventory.size})`; priceBtn.style.display = 'inline-flex'; }
+        if(assignBtn) { assignBtn.innerText = `Move (${selectedInventory.size})`; assignBtn.style.display = 'inline-flex'; }
+        if(printBtn) { printBtn.innerText = `🖨️ Labels (${selectedInventory.size})`; printBtn.style.display = 'inline-flex'; }
+    } else { 
+        if(btn) btn.style.display = 'none';
+        if(priceBtn) priceBtn.style.display = 'none';
+        if(assignBtn) assignBtn.style.display = 'none';
+        if(printBtn) printBtn.style.display = 'none';
+    }
+}
+
+// --- PHASE 6: Bulk Shelf Label Generator ---
+window.generateBulkShelfLabels = function() {
+    if (selectedInventory.size === 0) return showToast("Select items to print first.");
+    if (typeof window.jspdf === 'undefined' || typeof JsBarcode === 'undefined') {
+        return showToast("PDF/Barcode Library is still loading...");
+    }
+
+    showToast("Generating A4 Label Sheet...");
+    const { jsPDF } = window.jspdf;
+    
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    
+    const labelWidth = 65; 
+    const labelHeight = 35;
+    const marginX = 5;
+    const marginY = 5;
+    const cols = 3;
+    const rows = 8;
+    
+    let currentCol = 0;
+    let currentRow = 0;
+    let isFirstPage = true;
+
+    const canvas = document.createElement("canvas");
+
+    Array.from(selectedInventory).forEach((id) => {
+        const product = currentInventory.find(p => p._id === id);
+        if (!product || !product.variants || product.variants.length === 0) return;
+        
+        const variant = product.variants[0]; 
+        const barcodeVal = variant.sku || Math.floor(Math.random() * 1000000000000).toString();
+        
+        if (currentCol >= cols) {
+            currentCol = 0;
+            currentRow++;
+        }
+        if (currentRow >= rows) {
+            doc.addPage();
+            currentRow = 0;
+            currentCol = 0;
+            isFirstPage = false;
+        }
+
+        const x = marginX + (currentCol * labelWidth);
+        const y = marginY + (currentRow * labelHeight);
+
+        doc.setDrawColor(200, 200, 200);
+        doc.rect(x, y, labelWidth - 2, labelHeight - 2);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text(product.name.substring(0, 30), x + 2, y + 6);
+        
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text(variant.weightOrVolume, x + 2, y + 10);
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text(`Rs. ${variant.price}`, x + 2, y + 16);
+
+        try {
+            JsBarcode(canvas, barcodeVal, {
+                format: "CODE128",
+                width: 1.5,
+                height: 30,
+                displayValue: true,
+                fontSize: 12,
+                margin: 0
+            });
+            const imgData = canvas.toDataURL("image/jpeg", 1.0);
+            doc.addImage(imgData, 'JPEG', x + 2, y + 20, 50, 12);
+        } catch (e) {
+            console.warn("Barcode generation failed for SKU:", barcodeVal);
+        }
+
+        currentCol++;
+    });
+
+    doc.save(`Shelf_Labels_${new Date().toISOString().split('T')[0]}.pdf`);
+    showToast("Labels Ready for Printing! 🖨️");
+    
+    selectedInventory.clear();
+    updateInventoryBulkUI();
+    renderInventory();
+};
+
+function openBulkAssignModal() {
+    if (selectedInventory.size === 0) return;
+    document.getElementById('bulk-assign-count').innerText = `${selectedInventory.size} items selected`;
+    
+    const catSelect = document.getElementById('bulk-assign-category');
+    const brandSelect = document.getElementById('bulk-assign-brand');
+    
+    if(catSelect && currentCategories) {
+        catSelect.innerHTML = '<option value="">-- No Change --</option>';
+        currentCategories.forEach(cat => {
+            catSelect.innerHTML += `<option value="${cat.name}">${cat.name}</option>`;
+        });
+    }
+
+    if(brandSelect && currentBrands) {
+        brandSelect.innerHTML = '<option value="">-- No Change --</option>';
+        currentBrands.forEach(b => {
+            brandSelect.innerHTML += `<option value="${b.name}">${b.name}</option>`;
+        });
+    }
+
+    document.getElementById('bulk-assign-modal').classList.add('active');
+}
+
+function closeBulkAssignModal() {
+    document.getElementById('bulk-assign-modal').classList.remove('active');
+}
+
+async function applyBulkAssign() {
+    if (selectedInventory.size === 0) return;
+    
+    const newCat = document.getElementById('bulk-assign-category').value;
+    const newBrand = document.getElementById('bulk-assign-brand').value;
+    
+    if (!newCat && !newBrand) return showToast("No changes selected.");
+    
+    closeBulkAssignModal();
+    showToast(`Moving ${selectedInventory.size} products...`);
+    
+    try {
+        const ids = Array.from(selectedInventory);
+        
+        await Promise.all(ids.map(async (id) => {
+            const product = currentInventory.find(p => p._id === id);
+            if(product) {
+                if (newCat) product.category = newCat;
+                if (newBrand) product.brand = newBrand;
+                
+                const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+                await fetchFn(`${BACKEND_URL}/api/products/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(product)
+                });
+            }
+        }));
+        
+        showToast("Items moved successfully! 📦");
+        selectedInventory.clear();
+        fetchInventory(); 
+    } catch (err) {
+        showToast("Error moving items.");
+    }
+}
+
+function openBulkPriceModal() {
+    if (selectedInventory.size === 0) return;
+    document.getElementById('bulk-price-count').innerText = `${selectedInventory.size} items selected`;
+    document.getElementById('bulk-price-modal').classList.add('active');
+}
+
+function closeBulkPriceModal() { 
+    document.getElementById('bulk-price-modal').classList.remove('active'); 
+}
+
+async function applyBulkPriceEdit() {
+    if (selectedInventory.size === 0) return;
+    
+    const type = document.getElementById('bulk-price-type').value;
+    const valueStr = document.getElementById('bulk-price-value').value;
+    const value = parseFloat(valueStr);
+    
+    if (!value || isNaN(value)) return showToast("Enter a valid number");
+    
+    closeBulkPriceModal();
+    showToast(`Updating prices for ${selectedInventory.size} products...`);
+    
+    try {
+        const ids = Array.from(selectedInventory);
+        
+        await Promise.all(ids.map(async (id) => {
+            const product = currentInventory.find(p => p._id === id);
+            if(product && product.variants) {
+                product.variants.forEach(v => {
+                    if (type === 'increase_pct') v.price = v.price + (v.price * (value / 100));
+                    if (type === 'decrease_pct') v.price = v.price - (v.price * (value / 100));
+                    if (type === 'increase_fixed') v.price = v.price + value;
+                    if (type === 'decrease_fixed') v.price = v.price - value;
+                    if (v.price < 0) v.price = 0; 
+                    v.price = Math.round(v.price * 100) / 100; 
+                });
+                
+                const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+                await fetchFn(`${BACKEND_URL}/api/products/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(product)
+                });
+            }
+        }));
+        
+        showToast("Prices Bulk Updated Successfully! 💰");
+        selectedInventory.clear();
+        fetchInventory(); 
+    } catch (err) {
+        showToast("Error updating prices.");
+    }
+}
+
+async function bulkDeactivateInventory() {
+    if (selectedInventory.size === 0) return;
+    
+    const btn = document.getElementById('inv-bulk-btn');
+    btn.innerText = 'Processing...'; 
+    btn.disabled = true;
+    
+    const ids = Array.from(selectedInventory);
+    
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        await Promise.all(ids.map(id => fetchFn(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' })));
+        showToast(`Toggled ${ids.length} products!`);
+        selectedInventory.clear();
+        fetchInventory(); 
+    } catch (err) { 
+        showToast('Error during bulk action.'); 
+    } finally { 
+        btn.disabled = false; 
+        updateInventoryBulkUI(); 
+    }
+}
+
+function toggleVariantView(productId, event) {
+    event.stopPropagation();
+    const el = document.getElementById(`variants-${productId}`);
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+async function toggleProductStatus(id, btnElement, event) {
+    event.stopPropagation();
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' });
+        const result = await res.json();
+        if(result.success) {
+            const product = currentInventory.find(p => p._id === id);
+            if(product) product.isActive = !product.isActive;
+            
+            if(product.isActive) {
+                btnElement.classList.add('active');
+                btnElement.closest('.inventory-card').classList.remove('inactive');
+            } else {
+                btnElement.classList.remove('active');
+                btnElement.closest('.inventory-card').classList.add('inactive');
+            }
+            showToast(`Product ${product.isActive ? 'Activated' : 'Deactivated'}`);
+        }
+    } catch(e) { showToast('Network Error'); }
+}
+
+async function archiveProduct(id, event) {
+    event.stopPropagation();
+    if (!confirm("Are you sure you want to permanently hide this product?")) return;
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/products/${id}/archive`, { method: 'PUT' });
+        const result = await res.json();
+        if (result.success) {
+            showToast("Product Archived.");
+            fetchInventory();
+        }
+    } catch(e) { showToast("Error archiving product."); }
+}
+
 function closeScannerModal() { 
     if (html5QrcodeScanner) { 
         html5QrcodeScanner.stop().then(() => { 
@@ -443,6 +874,389 @@ function startScannerForSku(btnElement) {
         currentSkuInputTarget.value = decodedText; 
         showToast(`SKU Captured: ${decodedText}`); 
     }); 
+}
+
+function printBarcode(btnElement) {
+    const sku = btnElement.parentElement.querySelector('.var-sku').value.trim();
+    if(!sku) return showToast("Enter a SKU first to generate a barcode.");
+    
+    const container = document.getElementById('print-barcode-container');
+    container.innerHTML = '<svg id="barcode-canvas"></svg>';
+    
+    JsBarcode("#barcode-canvas", sku, { format: "CODE128", width: 2, height: 100, displayValue: true });
+    
+    container.classList.add('active-print');
+    window.print();
+    container.classList.remove('active-print');
+}
+
+function openAuditMode() {
+    document.getElementById('audit-scan-input').value = '';
+    document.getElementById('audit-result-area').classList.add('hidden');
+    document.getElementById('audit-modal').classList.add('active');
+    setTimeout(() => document.getElementById('audit-scan-input').focus(), 100);
+}
+
+function closeAuditMode() {
+    document.getElementById('audit-modal').classList.remove('active');
+}
+
+function handleAuditScan(e) {
+    if (e.key === 'Enter') {
+        const sku = document.getElementById('audit-scan-input').value.trim();
+        if(!sku) return;
+        
+        let foundProduct = null; let foundVariant = null;
+        for (const p of currentInventory) {
+            if(!p.variants) continue;
+            for (const v of p.variants) {
+                if (v.sku === sku) { foundProduct = p; foundVariant = v; break; }
+            }
+            if (foundProduct) break;
+        }
+
+        if (foundProduct && foundVariant) {
+            playBeep();
+            document.getElementById('audit-item-name').innerText = `${foundProduct.name} (${foundVariant.weightOrVolume})`;
+            document.getElementById('audit-expected-stock').innerText = getDisplayStock(foundVariant);
+            document.getElementById('audit-actual-stock').value = '';
+            document.getElementById('audit-pid').value = foundProduct._id;
+            document.getElementById('audit-vid').value = foundVariant._id;
+            document.getElementById('audit-result-area').classList.remove('hidden');
+            document.getElementById('audit-actual-stock').focus();
+        } else {
+            showToast(`SKU ${sku} not found in database.`);
+            document.getElementById('audit-scan-input').value = '';
+        }
+    }
+}
+
+async function submitAuditCorrection() {
+    const actual = parseInt(document.getElementById('audit-actual-stock').value);
+    if(isNaN(actual)) return showToast("Enter actual physical count");
+    
+    const pid = document.getElementById('audit-pid').value;
+    const vid = document.getElementById('audit-vid').value;
+    const product = currentInventory.find(p => p._id === pid);
+    const variant = product.variants.find(v => v._id === vid);
+    
+    const currentStock = getDisplayStock(variant);
+
+    if (currentStock === actual) {
+        showToast("Count matches! No correction needed.");
+    } else {
+        const diff = actual - currentStock;
+        try {
+            let endpoint = diff > 0 ? 'restock' : 'rtv'; 
+            let payload = {};
+            
+            if (diff > 0) {
+                payload = {
+                    variantId: vid,
+                    invoiceNumber: 'AUDIT-CORRECTION',
+                    addedQuantity: diff,
+                    purchasingPrice: 0,
+                    newSellingPrice: variant.price,
+                    paymentStatus: 'Paid',
+                    storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null
+                };
+            } else {
+                payload = {
+                    variantId: vid,
+                    distributorName: 'AUDIT-CORRECTION',
+                    returnedQuantity: Math.abs(diff),
+                    refundAmount: 0,
+                    reason: 'Audit Discrepancy (Missing)',
+                    storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null
+                };
+            }
+
+            const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+            const res = await fetchFn(`${BACKEND_URL}/api/products/${pid}/${endpoint}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if (res.ok) {
+                showToast(`Inventory updated. Adjusted by ${diff}.`);
+                fetchInventory();
+            } else {
+                showToast("Failed to update inventory.");
+            }
+        } catch(e) {
+            showToast("Network error.");
+        }
+    }
+    
+    document.getElementById('audit-result-area').classList.add('hidden');
+    document.getElementById('audit-scan-input').value = '';
+    document.getElementById('audit-scan-input').focus();
+}
+
+function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '') {
+    const container = document.getElementById('variants-container');
+    const row = document.createElement('div');
+    row.classList.add('variant-row');
+    row.innerHTML = `
+        <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" required style="min-width: 90px;">
+        <input type="number" placeholder="Price (₹)" class="var-price" value="${price}" required style="width: 70px; flex: none;">
+        <input type="number" placeholder="Stock" class="var-stock" value="${stock}" required style="width: 65px; flex: none;">
+        <input type="number" placeholder="Alert At" class="var-threshold" value="${threshold}" title="Low Stock Alert Threshold" required style="width: 65px; flex: none;">
+        <input type="date" class="var-expiry" value="${expiry ? new Date(expiry).toISOString().split('T')[0] : ''}" title="Expiry Date" style="width: 110px; flex: none;">
+        <input type="text" placeholder="SKU/Barcode" class="var-sku" value="${sku}" style="min-width: 90px;">
+        <button type="button" class="scan-sku-btn" onclick="startScannerForSku(this)" title="Scan Barcode">📷</button>
+        <button type="button" class="scan-sku-btn" onclick="printBarcode(this)" title="Generate & Print Label">🖨️</button>
+        <button type="button" class="remove-variant-btn" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.appendChild(row);
+}
+
+function openAddProductModal() { 
+    if (currentCategories.length === 0) return showToast("Create a category first!");
+    
+    document.getElementById('add-product-form').reset();
+    document.getElementById('edit-product-id').value = '';
+    document.getElementById('modal-form-title').innerText = 'Add New Product';
+    document.getElementById('current-image-text').style.display = 'none';
+    document.getElementById('variants-container').innerHTML = ''; 
+    document.getElementById('drop-zone').classList.remove('dragover');
+    
+    const previewImg = document.getElementById('drop-zone-preview');
+    const dropContent = document.getElementById('drop-zone-content');
+    if (previewImg) previewImg.style.display = 'none';
+    if (dropContent) dropContent.style.display = 'block';
+    
+    addVariantRow(); 
+    document.getElementById('add-product-modal').classList.add('active'); 
+}
+
+function openEditProductModal(id, e) {
+    if (e) e.stopPropagation();
+    const p = currentInventory.find(item => item._id === id);
+    if (!p) return;
+
+    document.getElementById('add-product-form').reset();
+    document.getElementById('edit-product-id').value = p._id;
+    document.getElementById('modal-form-title').innerText = 'Edit Product';
+    
+    document.getElementById('new-name').value = p.name;
+    document.getElementById('new-category').value = p.category;
+    document.getElementById('new-brand').value = p.brand || '';
+    document.getElementById('new-distributor').value = p.distributorName || '';
+    document.getElementById('new-tags').value = p.searchTags || ''; 
+    document.getElementById('current-image-text').style.display = p.imageUrl ? 'block' : 'none';
+
+    const previewImg = document.getElementById('drop-zone-preview');
+    const dropContent = document.getElementById('drop-zone-content');
+    if (p.imageUrl) {
+        if (previewImg) {
+            previewImg.src = p.imageUrl;
+            previewImg.style.display = 'block';
+        }
+        if (dropContent) dropContent.style.display = 'none';
+    } else {
+        if (previewImg) previewImg.style.display = 'none';
+        if (dropContent) dropContent.style.display = 'block';
+    }
+
+    const container = document.getElementById('variants-container');
+    container.innerHTML = '';
+    
+    if (p.variants && p.variants.length > 0) {
+        p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, getDisplayStock(v), v.sku, v.lowStockThreshold || 5, v.expiryDate || ''));
+    } else { 
+        addVariantRow(p.weightOrVolume || '', p.price || '', 0, '', 5, ''); 
+    }
+
+    document.getElementById('add-product-modal').classList.add('active');
+}
+
+function closeAddProductModal() { 
+    document.getElementById('add-product-modal').classList.remove('active'); 
+}
+
+async function autoFillProduct() {
+    const nameInput = document.getElementById('new-name').value.trim();
+    if (!nameInput) return showToast("Please enter a Product Name first!");
+
+    const btn = document.getElementById('btn-autofill');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader" class="icon-sm"></i> Thinking...';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    btn.disabled = true;
+
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/products/autofill`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productName: nameInput })
+        });
+
+        const result = await res.json();
+        
+        if (result.success && result.data) {
+            const { category, brand, searchTags } = result.data;
+
+            if (category) {
+                const catSelect = document.getElementById('new-category');
+                for (let i = 0; i < catSelect.options.length; i++) {
+                    if (catSelect.options[i].value === category) {
+                        catSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (brand) {
+                const brandSelect = document.getElementById('new-brand');
+                let brandFound = false;
+                for (let i = 0; i < brandSelect.options.length; i++) {
+                    if (brandSelect.options[i].value.toLowerCase() === brand.toLowerCase()) {
+                        brandSelect.selectedIndex = i;
+                        brandFound = true;
+                        break;
+                    }
+                }
+                if (!brandFound) {
+                    const newOption = new Option(brand, brand);
+                    brandSelect.add(newOption);
+                    brandSelect.value = brand;
+                }
+            }
+
+            if (searchTags) {
+                document.getElementById('new-tags').value = searchTags;
+            }
+
+            showToast("✨ Auto-Filled via Gemini AI!");
+        } else {
+            showToast(result.message || "Failed to auto-fill.");
+        }
+    } catch (err) {
+        console.error("Auto-Fill Error:", err);
+        showToast("Network error during AI auto-fill.");
+    } finally {
+        btn.innerHTML = originalText;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        btn.disabled = false;
+    }
+}
+
+function compressImage(file, maxWidth = 800, maxHeight = 800) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = event => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height *= maxWidth / width;
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width *= maxHeight / height;
+                        height = maxHeight;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob(blob => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.85);
+            };
+            img.onerror = error => reject(error);
+        };
+        reader.onerror = error => reject(error);
+    });
+}
+
+async function submitNewProduct(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submit-product-btn');
+    btn.innerText = 'Saving...'; 
+    btn.disabled = true;
+
+    try {
+        const editId = document.getElementById('edit-product-id').value;
+        const fileInput = document.getElementById('new-image');
+        let finalImageUrl = undefined; 
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+
+        if (fileInput.files.length > 0) {
+            const compressedFile = await compressImage(fileInput.files[0]);
+            const formData = new FormData();
+            formData.append('file', compressedFile);
+            
+            const uploadRes = await fetchFn(`${BACKEND_URL}/api/products/upload`, { 
+                method: 'POST', 
+                body: formData 
+            });
+            const uploadData = await uploadRes.json();
+            
+            if(!uploadData.success) throw new Error("Image upload failed");
+            finalImageUrl = uploadData.imageUrl; 
+        } else if (!editId) { 
+            finalImageUrl = ''; 
+        }
+
+        const variantRows = document.querySelectorAll('.variant-row');
+        const variants = [];
+        
+        variantRows.forEach(row => {
+            let expiryInput = row.querySelector('.var-expiry').value;
+            let variantObj = { 
+                weightOrVolume: row.querySelector('.var-weight').value, 
+                price: Number(row.querySelector('.var-price').value), 
+                stock: Number(row.querySelector('.var-stock').value),
+                lowStockThreshold: Number(row.querySelector('.var-threshold').value),
+                sku: row.querySelector('.var-sku').value.trim()
+            };
+            if (expiryInput) {
+                variantObj.expiryDate = expiryInput;
+            }
+            variants.push(variantObj);
+        });
+
+        const p = { 
+            name: document.getElementById('new-name').value, 
+            category: document.getElementById('new-category').value, 
+            brand: document.getElementById('new-brand').value,
+            distributorName: document.getElementById('new-distributor').value,
+            searchTags: document.getElementById('new-tags').value.trim(), 
+            variants: variants 
+        };
+        
+        if (finalImageUrl !== undefined) p.imageUrl = finalImageUrl;
+
+        const method = editId ? 'PUT' : 'POST';
+        const url = editId ? `${BACKEND_URL}/api/products/${editId}` : `${BACKEND_URL}/api/products`;
+
+        await fetchFn(url, { 
+            method: method, 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(p) 
+        });
+        
+        closeAddProductModal(); 
+        inventoryPage = 1; 
+        fetchInventory(); 
+        showToast(editId ? 'Product Updated!' : 'Product Added!');
+    } catch (err) { 
+        console.error("Save Product Error:", err); 
+        showToast('Error saving product.'); 
+    } finally { 
+        btn.innerText = 'Save Product'; 
+        btn.disabled = false; 
+    }
 }
 
 function openRestockModal() { 
@@ -875,761 +1689,6 @@ async function saveInlineEdit(productId, variantId, field, element, event) {
         }
     } catch(e) {
         showToast('Error saving inline edit.');
-    }
-}
-
-function updateInventoryDashboard() {
-    let outOfStock = 0;
-    let lowStock = 0;
-    let deadStock = 0; 
-    let totalValue = 0;
-
-    currentInventory.forEach(p => {
-        if(p.variants) {
-            p.variants.forEach(v => {
-                const dStock = getDisplayStock(v); // MULTI-STORE
-                if (dStock <= 0) outOfStock++;
-                else if (dStock <= (v.lowStockThreshold || 5)) lowStock++;
-                else if (dStock > 15) deadStock++; 
-
-                totalValue += (dStock * v.price);
-            });
-        }
-    });
-    
-    const outCard = document.getElementById('stat-out-stock').parentElement;
-    if(outOfStock > 0) outCard.classList.add('alert');
-    else outCard.classList.remove('alert');
-
-    document.getElementById('stat-out-stock').innerText = outOfStock;
-    document.getElementById('stat-low-stock').innerText = lowStock;
-    document.getElementById('stat-dead-stock').innerText = deadStock; 
-    document.getElementById('stat-total-value').innerText = `₹${totalValue.toFixed(2)}`;
-    
-    if(document.getElementById('overview-view').classList.contains('active')) renderOverview(); 
-}
-
-function openSourcingModal() {
-    let reorderData = {};
-    let totalItemsCount = 0;
-
-    currentInventory.forEach(p => {
-        if (p.variants) {
-            p.variants.forEach(v => {
-                const dStock = getDisplayStock(v); 
-                if (dStock <= (v.lowStockThreshold || 5)) {
-                    const dist = p.distributorName || 'Unassigned Distributor';
-                    if (!reorderData[dist]) reorderData[dist] = [];
-                    
-                    let suggestedQty = 20; 
-                    if (v.purchaseHistory && v.purchaseHistory.length >= 2) {
-                        const firstPurchase = new Date(v.purchaseHistory[0].date);
-                        const lastPurchase = new Date(v.purchaseHistory[v.purchaseHistory.length - 1].date);
-                        const daysDiff = Math.max(1, (lastPurchase - firstPurchase) / (1000 * 60 * 60 * 24));
-                        const totalBought = v.purchaseHistory.reduce((sum, h) => sum + h.addedQuantity, 0);
-                        const dailyVelocity = totalBought / daysDiff;
-                        suggestedQty = Math.ceil(dailyVelocity * 14); 
-                        if (suggestedQty < 10) suggestedQty = 10;
-                    }
-
-                    reorderData[dist].push(`- ${p.name} (${v.weightOrVolume}) | Current: ${dStock} | Suggested Order: ${suggestedQty}`);
-                    totalItemsCount++;
-                }
-            });
-        }
-    });
-
-    const container = document.getElementById('sourcing-list-container');
-    container.innerHTML = '';
-
-    if (totalItemsCount === 0) {
-        container.innerHTML = `<p class="empty-state">All stock levels are healthy! No reorder needed.</p>`;
-    } else {
-        for (const [distributor, items] of Object.entries(reorderData)) {
-            const message = `Hi ${distributor},\n\nPlease process the following restock for DailyPick:\n\n${items.join('\n')}\n\nThanks.`;
-            const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-            
-            const safeItemsArray = encodeURIComponent(JSON.stringify(items));
-            
-            container.innerHTML += `
-                <div class="sourcing-item">
-                    <div>
-                        <h4>${distributor}</h4>
-                        <p style="font-size: 12px; color: var(--text-muted);">${items.length} items low</p>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <a href="${waUrl}" target="_blank" class="primary-btn-small" style="background: #25D366; text-decoration: none;">💬 WhatsApp PO</a>
-                        <button class="primary-btn-small" style="background: #ef4444;" onclick="generatePurchaseOrderPDF('${distributor}', '${safeItemsArray}')">📄 PDF</button>
-                    </div>
-                </div>
-            `;
-        }
-    }
-    document.getElementById('sourcing-modal').classList.add('active');
-}
-function closeSourcingModal() { document.getElementById('sourcing-modal').classList.remove('active'); }
-
-function generatePurchaseOrderPDF(distributor, encodedItems) {
-    try {
-        const items = JSON.parse(decodeURIComponent(encodedItems));
-        const doc = new window.jspdf.jsPDF();
-        
-        doc.setFontSize(22);
-        doc.setTextColor(10, 54, 34); 
-        doc.text("DAILYPICK.", 14, 20);
-        
-        doc.setFontSize(12);
-        doc.setTextColor(100);
-        doc.text("PURCHASE ORDER", 14, 28);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(0);
-        doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 40);
-        doc.text(`Supplier: ${distributor}`, 14, 46);
-        doc.text(`PO Number: PO-${Date.now().toString().slice(-6)}`, 14, 52);
-        
-        const tableData = items.map((item, index) => {
-            const parts = item.split('|');
-            const namePart = parts[0].replace('- ', '').trim();
-            const qtyPart = parts[2].replace('Suggested Order:', '').trim();
-            return [index + 1, namePart, qtyPart];
-        });
-        
-        doc.autoTable({
-            startY: 60,
-            head: [['#', 'Item Description', 'Order Qty']],
-            body: tableData,
-            theme: 'grid',
-            headStyles: { fillColor: [10, 54, 34] }
-        });
-        
-        const finalY = doc.lastAutoTable.finalY || 60;
-        doc.text("Authorized Signature: ____________________", 14, finalY + 30);
-        
-        doc.save(`PO_${distributor.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-        showToast("PDF Generated! 📄");
-    } catch(e) {
-        console.error("PDF Error:", e);
-        showToast("Failed to generate PDF. Make sure jsPDF is loaded.");
-    }
-}
-
-function generateReorderList() { openSourcingModal(); }
-
-let searchTimeout;
-
-function debounceInventorySearch() { 
-    clearTimeout(searchTimeout); 
-    searchTimeout = setTimeout(applyInventoryFilters, 500); 
-}
-
-function applyInventoryFilters() { 
-    inventorySearchTerm = document.getElementById('inventory-search-input').value.trim(); 
-    inventoryCategoryFilter = document.getElementById('inventory-cat-filter').value; 
-    
-    const brandDrop = document.getElementById('inventory-brand-filter');
-    const distDrop = document.getElementById('inventory-dist-filter');
-    inventoryBrandFilter = brandDrop ? brandDrop.value : 'All';
-    inventoryDistributorFilter = distDrop ? distDrop.value : 'All';
-
-    inventoryPage = 1; 
-    fetchInventory(); 
-}
-
-function loadMoreInventory() { 
-    inventoryPage++; 
-    fetchInventory(); 
-}
-
-function toggleInventorySelection(id, event) {
-    event.stopPropagation();
-    if (selectedInventory.has(id)) {
-        selectedInventory.delete(id);
-    } else {
-        selectedInventory.add(id);
-    }
-    updateInventoryBulkUI();
-}
-
-function updateInventoryBulkUI() {
-    const btn = document.getElementById('inv-bulk-btn');
-    const priceBtn = document.getElementById('inv-bulk-price-btn');
-    const assignBtn = document.getElementById('inv-bulk-assign-btn'); 
-    const printBtn = document.getElementById('inv-bulk-print-btn'); 
-    
-    if (selectedInventory.size > 0) {
-        btn.innerText = `Deactivate Selected (${selectedInventory.size})`;
-        btn.classList.add('visible');
-        priceBtn.innerText = `Edit Prices (${selectedInventory.size})`;
-        priceBtn.classList.add('visible');
-        if (assignBtn) {
-            assignBtn.innerText = `Move (${selectedInventory.size})`;
-            assignBtn.classList.add('visible');
-        }
-        if (printBtn) {
-            printBtn.innerText = `🖨️ Print Labels (${selectedInventory.size})`;
-            printBtn.classList.add('visible');
-        }
-    } else { 
-        btn.classList.remove('visible'); 
-        priceBtn.classList.remove('visible'); 
-        if (assignBtn) assignBtn.classList.remove('visible');
-        if (printBtn) printBtn.classList.remove('visible');
-    }
-}
-
-function generateBulkShelfLabels() {
-    if (selectedInventory.size === 0) return;
-    
-    const container = document.getElementById('print-bulk-labels-container');
-    container.innerHTML = '';
-    
-    const ids = Array.from(selectedInventory);
-    let labelCount = 0;
-
-    ids.forEach(id => {
-        const product = currentInventory.find(p => p._id === id);
-        if (product && product.variants) {
-            product.variants.forEach(v => {
-                if (v.sku) {
-                    const labelDiv = document.createElement('div');
-                    labelDiv.className = 'shelf-label';
-                    const svgId = `bulk-barcode-${v._id}-${labelCount}`;
-                    
-                    labelDiv.innerHTML = `
-                        <h4>${product.name.substring(0,25)} (${v.weightOrVolume})</h4>
-                        <div class="price">₹${v.price}</div>
-                        <svg id="${svgId}"></svg>
-                        <div style="font-size:8px; color:#666; margin-top:2px;">SKU: ${v.sku}</div>
-                    `;
-                    container.appendChild(labelDiv);
-                    
-                    setTimeout(() => {
-                        try {
-                            JsBarcode(`#${svgId}`, v.sku, { format: "CODE128", width: 1.5, height: 35, displayValue: false, margin: 0 });
-                        } catch(e) {}
-                    }, 50);
-                    labelCount++;
-                }
-            });
-        }
-    });
-
-    if (labelCount === 0) {
-        return showToast("Selected items have no SKUs/Barcodes assigned.");
-    }
-
-    showToast(`Generating ${labelCount} labels...`);
-
-    setTimeout(() => {
-        container.classList.add('active-print');
-        window.print();
-        container.classList.remove('active-print');
-        
-        selectedInventory.clear();
-        updateInventoryBulkUI();
-        fetchInventory(); 
-    }, 800);
-}
-
-function openBulkAssignModal() {
-    if (selectedInventory.size === 0) return;
-    document.getElementById('bulk-assign-count').innerText = `${selectedInventory.size} items selected`;
-    
-    const catSelect = document.getElementById('bulk-assign-category');
-    const brandSelect = document.getElementById('bulk-assign-brand');
-    
-    catSelect.innerHTML = '<option value="">-- No Change --</option>';
-    currentCategories.forEach(cat => {
-        catSelect.innerHTML += `<option value="${cat.name}">${cat.name}</option>`;
-    });
-
-    brandSelect.innerHTML = '<option value="">-- No Change --</option>';
-    currentBrands.forEach(b => {
-        brandSelect.innerHTML += `<option value="${b.name}">${b.name}</option>`;
-    });
-
-    document.getElementById('bulk-assign-modal').classList.add('active');
-}
-
-function closeBulkAssignModal() {
-    document.getElementById('bulk-assign-modal').classList.remove('active');
-}
-
-async function applyBulkAssign() {
-    if (selectedInventory.size === 0) return;
-    
-    const newCat = document.getElementById('bulk-assign-category').value;
-    const newBrand = document.getElementById('bulk-assign-brand').value;
-    
-    if (!newCat && !newBrand) return showToast("No changes selected.");
-    
-    closeBulkAssignModal();
-    showToast(`Moving ${selectedInventory.size} products...`);
-    
-    try {
-        const ids = Array.from(selectedInventory);
-        
-        await Promise.all(ids.map(async (id) => {
-            const product = currentInventory.find(p => p._id === id);
-            if(product) {
-                if (newCat) product.category = newCat;
-                if (newBrand) product.brand = newBrand;
-                
-                const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-                await fetchFn(`${BACKEND_URL}/api/products/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(product)
-                });
-            }
-        }));
-        
-        showToast("Items moved successfully! 📦");
-        selectedInventory.clear();
-        fetchInventory(); 
-    } catch (err) {
-        showToast("Error moving items.");
-    }
-}
-
-function openBulkPriceModal() {
-    if (selectedInventory.size === 0) return;
-    document.getElementById('bulk-price-count').innerText = `${selectedInventory.size} items selected`;
-    document.getElementById('bulk-price-modal').classList.add('active');
-}
-function closeBulkPriceModal() { document.getElementById('bulk-price-modal').classList.remove('active'); }
-
-async function applyBulkPriceEdit() {
-    if (selectedInventory.size === 0) return;
-    
-    const type = document.getElementById('bulk-price-type').value;
-    const valueStr = document.getElementById('bulk-price-value').value;
-    const value = parseFloat(valueStr);
-    
-    if (!value || isNaN(value)) return showToast("Enter a valid number");
-    
-    closeBulkPriceModal();
-    showToast(`Updating prices for ${selectedInventory.size} products...`);
-    
-    try {
-        const ids = Array.from(selectedInventory);
-        
-        await Promise.all(ids.map(async (id) => {
-            const product = currentInventory.find(p => p._id === id);
-            if(product && product.variants) {
-                product.variants.forEach(v => {
-                    if (type === 'increase_pct') v.price = v.price + (v.price * (value / 100));
-                    if (type === 'decrease_pct') v.price = v.price - (v.price * (value / 100));
-                    if (type === 'increase_fixed') v.price = v.price + value;
-                    if (type === 'decrease_fixed') v.price = v.price - value;
-                    if (v.price < 0) v.price = 0; 
-                    v.price = Math.round(v.price * 100) / 100; 
-                });
-                
-                const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-                await fetchFn(`${BACKEND_URL}/api/products/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(product)
-                });
-            }
-        }));
-        
-        showToast("Prices Bulk Updated Successfully! 💰");
-        selectedInventory.clear();
-        fetchInventory(); 
-    } catch (err) {
-        showToast("Error updating prices.");
-    }
-}
-
-async function bulkDeactivateInventory() {
-    if (selectedInventory.size === 0) return;
-    
-    const btn = document.getElementById('inv-bulk-btn');
-    btn.innerText = 'Processing...'; 
-    btn.disabled = true;
-    
-    const ids = Array.from(selectedInventory);
-    
-    try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        await Promise.all(ids.map(id => fetchFn(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' })));
-        showToast(`Toggled ${ids.length} products!`);
-        selectedInventory.clear();
-        fetchInventory(); 
-    } catch (err) { 
-        showToast('Error during bulk action.'); 
-    } finally { 
-        btn.disabled = false; 
-        updateInventoryBulkUI(); 
-    }
-}
-
-function toggleVariantView(productId, event) {
-    event.stopPropagation();
-    const el = document.getElementById(`variants-${productId}`);
-    if (el.style.display === 'none') {
-        el.style.display = 'block';
-    } else {
-        el.style.display = 'none';
-    }
-}
-
-function printBarcode(btnElement) {
-    const sku = btnElement.parentElement.querySelector('.var-sku').value.trim();
-    if(!sku) return showToast("Enter a SKU first to generate a barcode.");
-    
-    const container = document.getElementById('print-barcode-container');
-    container.innerHTML = '<svg id="barcode-canvas"></svg>';
-    
-    JsBarcode("#barcode-canvas", sku, { format: "CODE128", width: 2, height: 100, displayValue: true });
-    
-    container.classList.add('active-print');
-    window.print();
-    container.classList.remove('active-print');
-}
-
-function openAuditMode() {
-    document.getElementById('audit-scan-input').value = '';
-    document.getElementById('audit-result-area').classList.add('hidden');
-    document.getElementById('audit-modal').classList.add('active');
-    setTimeout(() => document.getElementById('audit-scan-input').focus(), 100);
-}
-
-function closeAuditMode() {
-    document.getElementById('audit-modal').classList.remove('active');
-}
-
-function handleAuditScan(e) {
-    if (e.key === 'Enter') {
-        const sku = document.getElementById('audit-scan-input').value.trim();
-        if(!sku) return;
-        
-        let foundProduct = null; let foundVariant = null;
-        for (const p of currentInventory) {
-            if(!p.variants) continue;
-            for (const v of p.variants) {
-                if (v.sku === sku) { foundProduct = p; foundVariant = v; break; }
-            }
-            if (foundProduct) break;
-        }
-
-        if (foundProduct && foundVariant) {
-            playBeep();
-            document.getElementById('audit-item-name').innerText = `${foundProduct.name} (${foundVariant.weightOrVolume})`;
-            document.getElementById('audit-expected-stock').innerText = getDisplayStock(foundVariant);
-            document.getElementById('audit-actual-stock').value = '';
-            document.getElementById('audit-pid').value = foundProduct._id;
-            document.getElementById('audit-vid').value = foundVariant._id;
-            document.getElementById('audit-result-area').classList.remove('hidden');
-            document.getElementById('audit-actual-stock').focus();
-        } else {
-            showToast(`SKU ${sku} not found in database.`);
-            document.getElementById('audit-scan-input').value = '';
-        }
-    }
-}
-
-async function submitAuditCorrection() {
-    const actual = parseInt(document.getElementById('audit-actual-stock').value);
-    if(isNaN(actual)) return showToast("Enter actual physical count");
-    
-    const pid = document.getElementById('audit-pid').value;
-    const vid = document.getElementById('audit-vid').value;
-    const product = currentInventory.find(p => p._id === pid);
-    const variant = product.variants.find(v => v._id === vid);
-    
-    const currentStock = getDisplayStock(variant);
-
-    if (currentStock === actual) {
-        showToast("Count matches! No correction needed.");
-    } else {
-        variant.stock = actual;
-        try {
-            const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-            await fetchFn(`${BACKEND_URL}/api/products/${pid}`, {
-                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product)
-            });
-            showToast('Stock corrected successfully! ✅');
-            updateInventoryDashboard();
-        } catch(e) {
-            showToast('Error syncing correction.');
-        }
-    }
-    
-    document.getElementById('audit-result-area').classList.add('hidden');
-    document.getElementById('audit-scan-input').value = '';
-    document.getElementById('audit-scan-input').focus();
-}
-
-function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '') {
-    const container = document.getElementById('variants-container');
-    const row = document.createElement('div');
-    row.classList.add('variant-row');
-    row.innerHTML = `
-        <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" required style="min-width: 90px;">
-        <input type="number" placeholder="Price (₹)" class="var-price" value="${price}" required style="width: 70px; flex: none;">
-        <input type="number" placeholder="Stock" class="var-stock" value="${stock}" required style="width: 65px; flex: none;">
-        <input type="number" placeholder="Alert At" class="var-threshold" value="${threshold}" title="Low Stock Alert Threshold" required style="width: 65px; flex: none;">
-        <input type="date" class="var-expiry" value="${expiry ? new Date(expiry).toISOString().split('T')[0] : ''}" title="Expiry Date" style="width: 110px; flex: none;">
-        <input type="text" placeholder="SKU/Barcode" class="var-sku" value="${sku}" style="min-width: 90px;">
-        <button type="button" class="scan-sku-btn" onclick="startScannerForSku(this)" title="Scan Barcode">📷</button>
-        <button type="button" class="scan-sku-btn" onclick="printBarcode(this)" title="Generate & Print Label">🖨️</button>
-        <button type="button" class="remove-variant-btn" onclick="this.parentElement.remove()">✕</button>
-    `;
-    container.appendChild(row);
-}
-
-function openAddProductModal() { 
-    if (currentCategories.length === 0) return showToast("Create a category first!");
-    
-    document.getElementById('add-product-form').reset();
-    document.getElementById('edit-product-id').value = '';
-    document.getElementById('modal-form-title').innerText = 'Add New Product';
-    document.getElementById('current-image-text').style.display = 'none';
-    document.getElementById('variants-container').innerHTML = ''; 
-    document.getElementById('drop-zone').classList.remove('dragover');
-    
-    const previewImg = document.getElementById('drop-zone-preview');
-    const dropContent = document.getElementById('drop-zone-content');
-    if (previewImg) previewImg.style.display = 'none';
-    if (dropContent) dropContent.style.display = 'block';
-    
-    addVariantRow(); 
-    document.getElementById('add-product-modal').classList.add('active'); 
-}
-
-function openEditProductModal(id, e) {
-    e.stopPropagation();
-    const p = currentInventory.find(item => item._id === id);
-    if (!p) return;
-
-    document.getElementById('add-product-form').reset();
-    document.getElementById('edit-product-id').value = p._id;
-    document.getElementById('modal-form-title').innerText = 'Edit Product';
-    
-    document.getElementById('new-name').value = p.name;
-    document.getElementById('new-category').value = p.category;
-    document.getElementById('new-brand').value = p.brand || '';
-    document.getElementById('new-distributor').value = p.distributorName || '';
-    document.getElementById('new-tags').value = p.searchTags || ''; 
-    document.getElementById('current-image-text').style.display = p.imageUrl ? 'block' : 'none';
-
-    const previewImg = document.getElementById('drop-zone-preview');
-    const dropContent = document.getElementById('drop-zone-content');
-    if (p.imageUrl) {
-        if (previewImg) {
-            previewImg.src = p.imageUrl;
-            previewImg.style.display = 'block';
-        }
-        if (dropContent) dropContent.style.display = 'none';
-    } else {
-        if (previewImg) previewImg.style.display = 'none';
-        if (dropContent) dropContent.style.display = 'block';
-    }
-
-    const container = document.getElementById('variants-container');
-    container.innerHTML = '';
-    
-    if (p.variants && p.variants.length > 0) {
-        p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, v.stock, v.sku, v.lowStockThreshold || 5, v.expiryDate || ''));
-    } else { 
-        addVariantRow(p.weightOrVolume || '', p.price || '', 0, '', 5, ''); 
-    }
-
-    document.getElementById('add-product-modal').classList.add('active');
-}
-
-function closeAddProductModal() { 
-    document.getElementById('add-product-modal').classList.remove('active'); 
-}
-
-// --- NEW FUNCTIONALITY: Gemini AI Auto-Fill ---
-async function autoFillProduct() {
-    const nameInput = document.getElementById('new-name').value.trim();
-    if (!nameInput) return showToast("Please enter a Product Name first!");
-
-    const btn = document.getElementById('btn-autofill');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i data-lucide="loader" class="icon-sm"></i> Thinking...';
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-    btn.disabled = true;
-
-    try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(`${BACKEND_URL}/api/products/autofill`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ productName: nameInput })
-        });
-
-        const result = await res.json();
-        
-        if (result.success && result.data) {
-            const { category, brand, searchTags } = result.data;
-
-            // Auto-Select Category
-            if (category) {
-                const catSelect = document.getElementById('new-category');
-                for (let i = 0; i < catSelect.options.length; i++) {
-                    if (catSelect.options[i].value === category) {
-                        catSelect.selectedIndex = i;
-                        break;
-                    }
-                }
-            }
-
-            // Auto-Select or Add Brand dynamically
-            if (brand) {
-                const brandSelect = document.getElementById('new-brand');
-                let brandFound = false;
-                for (let i = 0; i < brandSelect.options.length; i++) {
-                    if (brandSelect.options[i].value.toLowerCase() === brand.toLowerCase()) {
-                        brandSelect.selectedIndex = i;
-                        brandFound = true;
-                        break;
-                    }
-                }
-                if (!brandFound) {
-                    const newOption = new Option(brand, brand);
-                    brandSelect.add(newOption);
-                    brandSelect.value = brand;
-                }
-            }
-
-            // Auto-Fill Search Tags
-            if (searchTags) {
-                document.getElementById('new-tags').value = searchTags;
-            }
-
-            showToast("✨ Auto-Filled via Gemini AI!");
-        } else {
-            showToast(result.message || "Failed to auto-fill.");
-        }
-    } catch (err) {
-        console.error("Auto-Fill Error:", err);
-        showToast("Network error during AI auto-fill.");
-    } finally {
-        btn.innerHTML = originalText;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-        btn.disabled = false;
-    }
-}
-
-function compressImage(file, maxWidth = 800, maxHeight = 800) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = event => {
-            const img = new Image();
-            img.src = event.target.result;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-
-                if (width > height) {
-                    if (width > maxWidth) {
-                        height *= maxWidth / width;
-                        width = maxWidth;
-                    }
-                } else {
-                    if (height > maxHeight) {
-                        width *= maxHeight / height;
-                        height = maxHeight;
-                    }
-                }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                canvas.toBlob(blob => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.85);
-            };
-            img.onerror = error => reject(error);
-        };
-        reader.onerror = error => reject(error);
-    });
-}
-
-async function submitNewProduct(e) {
-    e.preventDefault();
-    const btn = document.getElementById('submit-product-btn');
-    btn.innerText = 'Saving...'; 
-    btn.disabled = true;
-
-    try {
-        const editId = document.getElementById('edit-product-id').value;
-        const fileInput = document.getElementById('new-image');
-        let finalImageUrl = undefined; 
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-
-        if (fileInput.files.length > 0) {
-            const compressedFile = await compressImage(fileInput.files[0]);
-            const formData = new FormData();
-            formData.append('file', compressedFile);
-            
-            const uploadRes = await fetchFn(`${BACKEND_URL}/api/products/upload`, { 
-                method: 'POST', 
-                body: formData 
-            });
-            const uploadData = await uploadRes.json();
-            
-            if(!uploadData.success) throw new Error("Image upload failed");
-            finalImageUrl = uploadData.imageUrl; 
-        } else if (!editId) { 
-            finalImageUrl = ''; 
-        }
-
-        const variantRows = document.querySelectorAll('.variant-row');
-        const variants = [];
-        
-        variantRows.forEach(row => {
-            let expiryInput = row.querySelector('.var-expiry').value;
-            let variantObj = { 
-                weightOrVolume: row.querySelector('.var-weight').value, 
-                price: Number(row.querySelector('.var-price').value), 
-                stock: Number(row.querySelector('.var-stock').value),
-                lowStockThreshold: Number(row.querySelector('.var-threshold').value),
-                sku: row.querySelector('.var-sku').value.trim()
-            };
-            if (expiryInput) {
-                variantObj.expiryDate = expiryInput;
-            }
-            variants.push(variantObj);
-        });
-
-        const p = { 
-            name: document.getElementById('new-name').value, 
-            category: document.getElementById('new-category').value, 
-            brand: document.getElementById('new-brand').value,
-            distributorName: document.getElementById('new-distributor').value,
-            searchTags: document.getElementById('new-tags').value.trim(), 
-            variants: variants 
-        };
-        
-        if (finalImageUrl !== undefined) p.imageUrl = finalImageUrl;
-
-        const method = editId ? 'PUT' : 'POST';
-        const url = editId ? `${BACKEND_URL}/api/products/${editId}` : `${BACKEND_URL}/api/products`;
-
-        await fetchFn(url, { 
-            method: method, 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(p) 
-        });
-        
-        closeAddProductModal(); 
-        inventoryPage = 1; 
-        fetchInventory(); 
-        showToast(editId ? 'Product Updated!' : 'Product Added!');
-    } catch (err) { 
-        console.error("Save Product Error:", err); 
-        showToast('Error saving product.'); 
-    } finally { 
-        btn.innerText = 'Save Product'; 
-        btn.disabled = false; 
     }
 }
 
