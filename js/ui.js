@@ -25,7 +25,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const btn = document.getElementById('dark-mode-toggle');
         if (btn) btn.innerText = '☀️';
     }
+
+    // NEW: Initialize Collapsed Sidebar State
+    const isSidebarCollapsed = localStorage.getItem('dailypick_sidebar_collapsed') === 'true';
+    if (isSidebarCollapsed && window.innerWidth >= 768) {
+        document.body.classList.add('sidebar-collapsed');
+    }
 });
+
+// NEW: Sidebar Toggle Logic
+window.toggleSidebar = function() {
+    const body = document.body;
+    body.classList.toggle('sidebar-collapsed');
+    const isCollapsed = body.classList.contains('sidebar-collapsed');
+    localStorage.setItem('dailypick_sidebar_collapsed', isCollapsed);
+};
+
+// NEW: Header Search Focus routing
+window.focusHeaderSearch = function() {
+    openCommandSearch();
+};
 
 function showToast(m) { 
     const t = document.createElement('div'); 
