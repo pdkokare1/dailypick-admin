@@ -36,12 +36,9 @@ let currentUser = null;
 let currentPin = '';
 let realtimeSocket = null; 
 let realtimeReconnectTimeout = null;
-
-// --- PHASE 4 GLOBAL STATE ---
 let globalStoreSettings = {};
-
-// --- OPTIMIZED: Kiosk Mode Screen Wake Lock ---
 let wakeLock = null;
+
 async function requestWakeLock() {
     try {
         if ('wakeLock' in navigator && document.visibilityState === 'visible') {
@@ -49,7 +46,6 @@ async function requestWakeLock() {
             wakeLock.addEventListener('release', () => {
                 console.log('Screen Wake Lock released');
             });
-            console.log('Screen Wake Lock acquired - Kiosk Mode Active');
         }
     } catch (err) {
         console.warn(`Wake Lock Error: ${err.name}, ${err.message}`);
@@ -62,7 +58,6 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
-// --- NEW FUNCTIONALITY: Prevent Accidental Tab Closure ---
 window.addEventListener('beforeunload', function (e) {
     if ((typeof posCart !== 'undefined' && posCart.length > 0) || (typeof currentActiveShift !== 'undefined' && currentActiveShift !== null)) {
         e.preventDefault();
@@ -95,7 +90,6 @@ window.setupRealtimeConnection = function() {
                     return;
                 }
                 
-                // FIX: Successfully log connection to verify the backend is holding the line open
                 if (data.type === 'CONNECTION_ESTABLISHED') {
                     console.log('✅ Real-Time Sync Active:', data.message);
                     return;
@@ -164,7 +158,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
-// --- NEW FUNCTIONALITY: Hardware Scanner Protection ---
 document.addEventListener('keydown', (e) => {
     const loginContainer = document.getElementById('pin-login-container');
     if (loginContainer && loginContainer.style.display !== 'none' && document.activeElement.id !== 'login-username') {
@@ -211,8 +204,6 @@ function updatePinDisplay() {
 }
 
 window.submitPinLogin = async function() {
-    console.log("Submitting PIN to backend...");
-    
     const usernameInput = document.getElementById('login-username');
     const username = usernameInput ? usernameInput.value.trim() : '';
 
@@ -225,7 +216,6 @@ window.submitPinLogin = async function() {
 
     try {
         if (typeof BACKEND_URL === 'undefined') {
-            console.error("BACKEND_URL is not defined! Check state.js");
             if (typeof showToast === 'function') showToast("System Error: Backend URL missing");
             window.clearPinInput();
             return;
@@ -328,7 +318,6 @@ window.finalizeLogin = function() {
 };
 
 window.logoutUser = function() {
-    console.log("Logging out user...");
     localStorage.removeItem('dailypick_user');
     localStorage.removeItem('adminToken');
     localStorage.removeItem('dailypick_storeId');
@@ -345,11 +334,6 @@ window.logoutUser = function() {
         wakeLock.release().then(() => wakeLock = null);
     }
 
-    if (window.adminStreamController) {
-        window.adminStreamController.abort();
-        window.adminStreamController = null;
-    }
-    
     currentUser = null;
     currentStoreId = null;
     currentRegisterId = null;
@@ -366,11 +350,6 @@ window.logoutUser = function() {
     if (locStep) locStep.style.display = 'none';
 
     window.clearPinInput();
-    
-    const display = document.getElementById('current-user-display');
-    if (display) display.style.display = 'none';
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) logoutBtn.style.display = 'none';
 };
 
 function applyRoleRestrictions() {
@@ -400,7 +379,6 @@ function applyRoleRestrictions() {
         if (eodBtn) eodBtn.style.display = 'none';
 
         adminOnlyElements.forEach(el => el.style.display = 'none');
-        
         if (typeof switchView === 'function') switchView('pos'); 
     } else {
         const navOverview = document.getElementById('nav-overview');
@@ -421,7 +399,6 @@ function applyRoleRestrictions() {
 }
 
 function initializeApp() {
-    console.log("Initializing app modules...");
     if (typeof window.fetchGlobalSettings === 'function') window.fetchGlobalSettings(); 
     if (typeof fetchCategories === 'function') fetchCategories(); 
     if (typeof fetchBrands === 'function') fetchBrands();
@@ -452,7 +429,7 @@ if ('serviceWorker' in navigator) {
 }
 
 // ==========================================
-// PHASE 3 LOGIC ADDITIONS
+// PHASE 3 LOGIC (Staff, Promos, Bulk Import)
 // ==========================================
 
 window.openStaffModal = async function() {
@@ -675,10 +652,9 @@ window.submitBulkImport = async function(e) {
 };
 
 // ==========================================
-// PHASE 4 LOGIC ADDITIONS
+// PHASE 4 LOGIC (Settings, Audits, Transfers)
 // ==========================================
 
-// --- GLOBAL SETTINGS ---
 window.fetchGlobalSettings = async function() {
     try {
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
@@ -738,7 +714,6 @@ window.submitSettings = async function(e) {
     }
 };
 
-// --- SECURITY AUDITS ---
 window.openSecurityAuditModal = async function() {
     document.getElementById('security-audit-modal').classList.add('active');
     await window.fetchAuditLogs();
@@ -784,7 +759,6 @@ window.fetchAuditLogs = async function() {
     }
 };
 
-// --- STOCK TRANSFER ---
 window.openStockTransferModal = async function() {
     document.getElementById('stock-transfer-modal').classList.add('active');
     document.getElementById('transfer-selected-item').classList.add('hidden');
@@ -912,5 +886,239 @@ window.submitStockTransfer = async function(e) {
     } finally {
         btn.disabled = false;
         btn.innerText = 'Transfer Stock';
+    }
+};
+
+
+// ==========================================
+// PHASE 5 LOGIC (AI Forecast, PDF POs, P&L)
+// ==========================================
+
+// --- AI Demand Forecasting ---
+window.openAIForecastModal = async function() {
+    document.getElementById('ai-forecast-modal').classList.add('active');
+    await window.generateAIForecast();
+};
+
+window.closeAIForecastModal = function() {
+    document.getElementById('ai-forecast-modal').classList.remove('active');
+};
+
+window.generateAIForecast = async function() {
+    const container = document.getElementById('ai-forecast-container');
+    
+    // Reset to loading state
+    container.innerHTML = `
+        <div class="skeleton" style="height: 60px;"></div>
+        <div class="skeleton" style="height: 60px;"></div>
+        <div class="skeleton" style="height: 60px;"></div>
+    `;
+
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/analytics/forecast`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (data.success && data.data && data.data.recommendations) {
+            container.innerHTML = '';
+            
+            if (data.data.recommendations.length === 0) {
+                container.innerHTML = `<p class="empty-state" style="color: #10b981;">${data.data.message || 'Inventory is healthy. No critical action needed.'}</p>`;
+                return;
+            }
+
+            data.data.recommendations.forEach(rec => {
+                let badgeColor = rec.priority === 'CRITICAL' ? '#ef4444' : (rec.priority === 'HIGH' ? '#f59e0b' : '#3b82f6');
+                
+                container.innerHTML += `
+                    <div style="background: white; padding: 16px; border-radius: 12px; border: 1px solid #E5E7EB; border-left: 4px solid ${badgeColor};">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                            <strong style="font-size:15px; color:var(--text-main);">${rec.itemName}</strong>
+                            <span style="background:${badgeColor}20; color:${badgeColor}; font-size:10px; font-weight:800; padding:2px 8px; border-radius:6px;">${rec.priority}</span>
+                        </div>
+                        <p style="font-size:13px; font-weight:700; color:var(--primary); margin-bottom:4px;"><i data-lucide="zap" class="icon-sm"></i> Action: ${rec.suggestedAction}</p>
+                        <p style="font-size:12px; color:var(--text-muted); line-height:1.4;">${rec.reasoning}</p>
+                    </div>
+                `;
+            });
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        } else {
+            container.innerHTML = `<p class="empty-state" style="color:#ef4444;">${data.message || 'Could not generate forecast.'}</p>`;
+        }
+    } catch (e) {
+        container.innerHTML = `<p class="empty-state" style="color:#ef4444;">Network Error while contacting AI Engine.</p>`;
+    }
+};
+
+// --- PDF Purchase Orders (B2B Sourcing Override) ---
+// Overriding the existing openSourcingModal to inject the PDF generator button
+window.openSourcingModal = function() {
+    const listContainer = document.getElementById('sourcing-list-container');
+    listContainer.innerHTML = '';
+    
+    let supplierMap = {};
+    
+    currentInventory.forEach(p => {
+        if(p.variants) {
+            p.variants.forEach(v => {
+                if(v.stock <= (v.lowStockThreshold || 5)) {
+                    let dist = p.distributorName || 'Unassigned Supplier';
+                    if(!supplierMap[dist]) supplierMap[dist] = [];
+                    supplierMap[dist].push(`${p.name} (${v.weightOrVolume}) - Current Stock: ${v.stock}`);
+                }
+            });
+        }
+    });
+    
+    if(Object.keys(supplierMap).length === 0) {
+        listContainer.innerHTML = '<p class="empty-state">Inventory is healthy. No items require sourcing.</p>';
+    } else {
+        Object.keys(supplierMap).forEach(dist => {
+            const items = supplierMap[dist];
+            const safeItemsJson = JSON.stringify(items).replace(/"/g, '&quot;');
+            
+            const msg = `Hi ${dist},%0AWe need to restock the following items for our supermarket:%0A%0A` + items.map(i => `- ${i}`).join('%0A') + `%0A%0APlease arrange delivery ASAP.`;
+            
+            listContainer.innerHTML += `
+                <div class="sourcing-item">
+                    <div>
+                        <h4 style="font-size:14px; margin-bottom:4px;">${dist}</h4>
+                        <p style="font-size: 12px; color: var(--text-muted);">${items.length} items to order</p>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="primary-btn-small" style="background:#ef4444; color:white; border:none;" onclick="generatePDFPO('${dist}', ${safeItemsJson})" title="Download PDF PO"><i data-lucide="file-text" class="icon-sm" style="margin:0;"></i></button>
+                        <a href="https://wa.me/?text=${msg}" target="_blank" class="whatsapp-btn" style="margin:0;"><i data-lucide="message-circle" class="icon-sm"></i> WhatsApp</a>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    document.getElementById('sourcing-modal').classList.add('active');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+};
+
+window.generatePDFPO = function(distributorName, itemsList) {
+    if (typeof window.jspdf === 'undefined') {
+        return showToast("PDF Library is still loading...");
+    }
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    let storeName = (globalStoreSettings && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
+    let storeAddress = (globalStoreSettings && globalStoreSettings.storeAddress) ? globalStoreSettings.storeAddress : "Retail Supermarket";
+    let gstin = (globalStoreSettings && globalStoreSettings.gstin) ? globalStoreSettings.gstin : "N/A";
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text("PURCHASE ORDER", 105, 20, null, null, "center");
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Buyer: ${storeName}`, 14, 35);
+    doc.text(`Address: ${storeAddress}`, 14, 40);
+    doc.text(`GSTIN: ${gstin}`, 14, 45);
+    
+    doc.setFont("helvetica", "bold");
+    doc.text(`Supplier: ${distributorName}`, 140, 35);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 140, 40);
+    doc.text(`PO Ref: PO-${Date.now().toString().slice(-6)}`, 140, 45);
+    
+    const tableData = itemsList.map((itemStr, index) => {
+        // Parse the string "Product Name (Variant) - Current Stock: X"
+        const parts = itemStr.split(' - Current Stock: ');
+        return [
+            index + 1,
+            parts[0] || itemStr,
+            "10 (Suggested)", // Default suggestion for PO
+            "__________" // Blank line for supplier to fill price
+        ];
+    });
+
+    doc.autoTable({
+        startY: 55,
+        head: [['#', 'Item Description', 'Requested Qty', 'Unit Price']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [6, 44, 30] }, // Match UI Primary Color
+        styles: { fontSize: 10 }
+    });
+    
+    const finalY = doc.lastAutoTable.finalY || 60;
+    doc.text("Authorized Signature: _______________________", 14, finalY + 30);
+    
+    doc.save(`PO_${distributorName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+    showToast(`PDF Generated for ${distributorName}`);
+};
+
+// --- Advanced Financials P&L Export ---
+window.exportPnLReport = async function() {
+    if (typeof window.jspdf === 'undefined') return showToast("PDF Library loading...");
+    
+    showToast("Calculating Financials...");
+    
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        // Fetch 30-day P&L
+        const d = new Date();
+        const endDate = d.toISOString();
+        d.setDate(d.getDate() - 30);
+        const startDate = d.toISOString();
+        
+        const res = await fetchFn(`${BACKEND_URL}/api/analytics/pnl?startDate=${startDate}&endDate=${endDate}`);
+        const data = await res.json();
+        
+        if (!data.success || !data.data) {
+            return showToast("Failed to fetch financial data.");
+        }
+        
+        const metrics = data.data;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        let storeName = (globalStoreSettings && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(18);
+        doc.text(`${storeName} - Financial Report (P&L)`, 105, 20, null, null, "center");
+        
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Report Period: Last 30 Days (${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()})`, 105, 28, null, null, "center");
+        doc.text(`Generated On: ${new Date().toLocaleString()}`, 105, 33, null, null, "center");
+
+        const tableData = [
+            ['Gross Revenue (Sales)', `Rs. ${metrics.totalRevenue.toFixed(2)}`],
+            ['Cost of Goods Sold (COGS)', `- Rs. ${metrics.totalCOGS.toFixed(2)}`],
+            ['Taxes Collected (GST)', `- Rs. ${metrics.totalTax.toFixed(2)}`],
+            ['Discounts Provided', `- Rs. ${metrics.totalDiscounts.toFixed(2)}`],
+            ['Gross Profit', `Rs. ${metrics.grossProfit.toFixed(2)}`],
+            ['Operational Expenses', `- Rs. ${metrics.totalExpenses.toFixed(2)}`],
+            ['Net Profit / Loss', `Rs. ${metrics.netProfit.toFixed(2)}`]
+        ];
+
+        doc.autoTable({
+            startY: 45,
+            head: [['Financial Metric', 'Value (INR)']],
+            body: tableData,
+            theme: 'striped',
+            headStyles: { fillColor: [37, 99, 235] }, 
+            styles: { fontSize: 11, cellPadding: 6 },
+            didParseCell: function(data) {
+                if (data.row.index === 4 || data.row.index === 6) { // Bold Profit Rows
+                    data.cell.styles.fontStyle = 'bold';
+                    if (data.row.index === 6) {
+                        data.cell.styles.textColor = metrics.netProfit >= 0 ? [16, 185, 129] : [239, 68, 68];
+                    }
+                }
+            }
+        });
+        
+        doc.save(`${storeName.replace(/\s+/g, '_')}_PnL_Report.pdf`);
+        showToast("P&L Report Downloaded!");
+
+    } catch (e) {
+        showToast("Error generating P&L.");
     }
 };
