@@ -125,6 +125,7 @@
     </div>
 
     <div id="app-container" style="display: none;">
+        <div id="offline-banner" class="offline-banner hidden"><i data-lucide="wifi-off" class="icon-sm"></i> You are currently offline. Working locally.</div>
         
         <header class="admin-header">
             <div style="display: flex; align-items: center; gap: 12px;">
@@ -596,6 +597,9 @@
                         Opened at: <span id="shift-open-time" style="color: var(--text-main); font-weight: 700;">-</span><br>
                         Started with: <span style="color: var(--text-main); font-weight: 700;">₹<span id="shift-display-float">0</span></span>
                     </div>
+                    
+                    <button class="primary-btn-small" style="background: #3b82f6; margin-bottom:16px; width:100%; color: white; border: none;" onclick="printXReport()"><i data-lucide="printer" class="icon-sm"></i> Print X-Report (Mid-Shift)</button>
+
                     <div class="input-group" style="text-align: left;">
                         <label>Counted Cash in Drawer (₹)</label>
                         <input type="number" id="shift-actual-cash" placeholder="Enter total physical cash..." required min="0">
@@ -882,7 +886,10 @@
                     <p><strong><i data-lucide="map-pin" class="icon-sm"></i> Route:</strong> <span id="modal-customer-address">...</span></p>
                 </div>
                 <div class="packing-list-container">
-                    <h3 style="font-weight: 800; margin-bottom: 16px;">Packing List</h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+                        <h3 style="font-weight: 800; margin: 0;">Packing List</h3>
+                        <button class="primary-btn-small" style="background:#f3f4f6; color:#062c1e;" onclick="showToast('Pack-by-scan scanner integrated here in phase 2')"><i data-lucide="scan" class="icon-sm"></i> Scan to Pack</button>
+                    </div>
                     <ul id="modal-packing-list" class="packing-list" style="list-style: none;"></ul>
                 </div>
                 <div class="order-summary" style="background:#F9FAFB; padding:20px; border-radius:16px; border: 1px solid #E5E7EB;">
@@ -1112,6 +1119,13 @@
                     <label>Cash Amount (₹)</label>
                     <input type="number" id="split-cash-input" placeholder="0" step="0.01" oninput="calculateSplit()" style="font-weight: 700; font-size: 16px;">
                 </div>
+
+                <div class="quick-cash-grid">
+                    <button type="button" class="quick-cash-btn" onclick="addQuickCash(100)">+₹100</button>
+                    <button type="button" class="quick-cash-btn" onclick="addQuickCash(500)">+₹500</button>
+                    <button type="button" class="quick-cash-btn" onclick="addQuickCash(2000)">+₹2000</button>
+                    <button type="button" class="quick-cash-btn" style="background:#10b981; color:white; border:none;" onclick="setExactCash()">Exact</button>
+                </div>
                 
                 <div class="input-group" style="text-align: left;">
                     <label>UPI Amount (₹)</label>
@@ -1311,7 +1325,7 @@
         
         <div id="command-search-modal" class="modal-overlay hidden-modal" style="align-items: flex-start; padding-top: 10vh; z-index: 300;" onclick="closeCommandSearch()">
             <div class="form-card" style="padding: 0; overflow: hidden; max-width: 650px;" onclick="event.stopPropagation()">
-                <input type="text" id="command-input" class="command-input" placeholder="Search orders, products, customers..." oninput="handleCommandSearch(this.value)">
+                <input type="text" id="command-input" class="command-input" placeholder="Search orders, products, customers... (> for commands)" oninput="handleCommandSearch(this.value)">
                 <div id="command-results" class="command-results"></div>
             </div>
         </div>
