@@ -31,6 +31,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isSidebarCollapsed && window.innerWidth >= 768) {
         document.body.classList.add('sidebar-collapsed');
     }
+    
+    // NEW: Offline/Online listeners for banner
+    window.addEventListener('offline', () => { 
+        const banner = document.getElementById('offline-banner');
+        if(banner) banner.classList.remove('hidden'); 
+    });
+    window.addEventListener('online', () => { 
+        const banner = document.getElementById('offline-banner');
+        if(banner) banner.classList.add('hidden'); 
+    });
 });
 
 // NEW: Sidebar Toggle Logic
@@ -207,6 +217,22 @@ function closeCommandSearch() {
 function handleCommandSearch(query) {
     const resultsContainer = document.getElementById('command-results');
     query = query.toLowerCase().trim();
+    
+    // NEW: Action Palette
+    if (query.startsWith('>')) {
+        const cmd = query.substring(1).trim();
+        let resultsHTML = '';
+        if ('open shift'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); openShiftModal();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: Open Register / Shift</p></div>`;
+        if ('add product'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); switchView('inventory'); openAddProductModal();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: Add New Product</p></div>`;
+        if ('end of day eod report'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); openEodReport();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: End of Day Report</p></div>`;
+        if ('settings'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); openSettingsModal();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: Global Settings</p></div>`;
+
+        if (resultsHTML === '') resultsHTML = '<p style="padding: 16px; font-size: 12px; color: var(--text-muted);">No matching actions found.</p>';
+        resultsContainer.innerHTML = resultsHTML;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+
     if (query.length < 2) {
         resultsContainer.innerHTML = '';
         return;
