@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DailyPick | Customer Display</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #06090F;
+            --surface: #0D121C;
+            --primary: #10B981;
+            --text-main: #F9FAFB;
+            --text-muted: #9CA3AF;
+            --border: #1F2937;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background-color: var(--bg); color: var(--text-main); height: 100vh; display: flex; overflow: hidden; }
+        
+        .left-panel { flex: 1.5; padding: 40px; display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+        .right-panel { flex: 1; background-color: var(--surface); padding: 40px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        
+        h1 { font-size: 28px; font-weight: 800; color: var(--primary); margin-bottom: 24px; letter-spacing: -0.5px; }
+        
+        .cart-list { flex: 1; overflow-y: auto; margin-bottom: 24px; padding-right: 16px; }
+        .cart-item { display: flex; justify-content: space-between; padding: 20px 0; border-bottom: 1px solid var(--border); font-size: 20px; }
+        .cart-item-name { font-weight: 600; }
+        .cart-item-price { font-weight: 800; color: var(--primary); }
+        
+        .totals-box { background: var(--surface); padding: 24px; border-radius: 24px; border: 1px solid var(--border); }
+        .total-row { display: flex; justify-content: space-between; font-size: 18px; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
+        .grand-total { display: flex; justify-content: space-between; font-size: 36px; font-weight: 800; color: var(--text-main); margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border); }
+        
+        .qr-container { background: white; padding: 16px; border-radius: 24px; margin-bottom: 24px; display: flex; justify-content: center; align-items: center; width: 280px; height: 280px; }
+        .qr-placeholder { color: #64748B; font-size: 16px; font-weight: 600; text-align: center; }
+        
+        .status-msg { font-size: 20px; font-weight: 600; color: var(--text-muted); text-align: center; }
+        .idle-state { text-align: center; margin-top: 40%; color: var(--text-muted); font-size: 24px; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <div class="left-panel">
+        <h1>DAILYPICK.</h1>
+        <div id="cart-container" class="cart-list">
+            <div class="idle-state">Welcome! Preparing your cart...</div>
+        </div>
+        
+        <div class="totals-box">
+            <div class="total-row"><span>Subtotal</span><span id="display-subtotal">₹0.00</span></div>
+            <div class="total-row" style="color: var(--primary);"><span>Discount</span><span id="display-discount">-₹0.00</span></div>
+            <div class="total-row"><span>Tax</span><span id="display-tax">₹0.00</span></div>
+            <div class="grand-total"><span>Total Due</span><span id="display-total" style="color: var(--primary);">₹0.00</span></div>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div class="qr-container" id="qr-container">
+            <div class="qr-placeholder">Scan items to generate UPI QR</div>
+        </div>
+        <p class="status-msg" id="status-message">Scan to Pay using any UPI App</p>
+        <p style="font-size: 14px; color: var(--text-muted); margin-top: 16px; text-align: center;">GPay • PhonePe • Paytm</p>
+    </div>
+
+    <script src="js/state.js"></script>
+    <script>
+        let displaySocket = null;
+        const upiId = "your-store-upi@okaxis"; // Replace with your actual merchant UPI ID
+        const storeName = "DailyPick Retail";
+
+        function connectDisplaySocket() {
+            // Requires an active admin session on the device launching the display, 
+            // or a dedicated display token. For simplicity, we use the local admin token.
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                document.getElementById('status-message').innerText = "Authorization Error. Please login to main terminal first.";
+                return;
+            }
+
+            const wsUrl = BACKEND_URL.replace(/^http/, 'ws') + `/api/ws/pos?token=${token}`;
+            displaySocket = new WebSocket(wsUrl);
+
+            displaySocket.onopen = () => {
+                console.log("Customer Display Connected to Server");
+                document.getElementById('status-message').innerText = "Connected. Awaiting items...";
+            };
+
+            displaySocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'PING') {
+                        displaySocket.send(JSON.stringify({ type: 'PONG' }));
+                        return;
+                    }
+
+                    // Listen for the custom CFD broadcast we will add to pos.js in Step 2
+                    if (data.type === 'CFD_STATE_UPDATE') {
+                        updateDisplay(data.payload);
+                    }
+                    
+                    if (data.type === 'NEW_ORDER' || data.type === 'ORDER_STATUS_UPDATED') {
+                        // Optional: Show "Payment Successful!" trigger
+                        if (data.message && data.message.includes('Complete')) {
+                            document.getElementById('status-message').innerText = "Payment Successful! Thank you.";
+                            document.getElementById('status-message').style.color = "var(--primary)";
+                        }
+                    }
+                } catch (e) { console.warn(e); }
+            };
+
+            displaySocket.onclose = () => {
+                console.log("Display Disconnected. Reconnecting in 3s...");
+                document.getElementById('status-message').innerText = "Reconnecting to terminal...";
+                setTimeout(connectDisplaySocket, 3000);
+            };
+        }
+
+        function updateDisplay(payload) {
+            const { cart, subtotal, discount, tax, total } = payload;
+            
+            const cartContainer = document.getElementById('cart-container');
+            const qrContainer = document.getElementById('qr-container');
+            const statusMsg = document.getElementById('status-message');
+
+            document.getElementById('status-message').style.color = "var(--text-muted)";
+            statusMsg.innerText = "Scan to Pay using any UPI App";
+
+            if (!cart || cart.length === 0) {
+                cartContainer.innerHTML = '<div class="idle-state">Welcome! Preparing your cart...</div>';
+                document.getElementById('display-subtotal').innerText = '₹0.00';
+                document.getElementById('display-discount').innerText = '-₹0.00';
+                document.getElementById('display-tax').innerText = '₹0.00';
+                document.getElementById('display-total').innerText = '₹0.00';
+                qrContainer.innerHTML = '<div class="qr-placeholder">Scan items to generate UPI QR</div>';
+                return;
+            }
+
+            // Render Items
+            cartContainer.innerHTML = '';
+            cart.forEach(item => {
+                const itemTotal = item.qty * item.price;
+                cartContainer.innerHTML += `
+                    <div class="cart-item">
+                        <div style="display:flex; align-items:center; gap:16px;">
+                            <span style="background: #1F2937; padding: 4px 12px; border-radius: 8px; font-size: 16px;">${item.qty}</span>
+                            <span class="cart-item-name">${item.name} <span style="font-size:14px; color:var(--text-muted); font-weight:normal;">(${item.selectedVariant})</span></span>
+                        </div>
+                        <span class="cart-item-price">₹${itemTotal.toFixed(2)}</span>
+                    </div>
+                `;
+            });
+
+            // Render Totals
+            document.getElementById('display-subtotal').innerText = `₹${subtotal.toFixed(2)}`;
+            document.getElementById('display-discount').innerText = `-₹${discount.toFixed(2)}`;
+            document.getElementById('display-tax').innerText = `₹${tax.toFixed(2)}`;
+            document.getElementById('display-total').innerText = `₹${total.toFixed(2)}`;
+
+            // Render Dynamic UPI QR using Google Charts API
+            if (total > 0) {
+                const upiString = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(storeName)}&am=${total.toFixed(2)}&cu=INR`;
+                const qrUrl = `https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl=${encodeURIComponent(upiString)}`;
+                qrContainer.innerHTML = `<img src="${qrUrl}" alt="UPI QR" style="width: 100%; height: 100%; border-radius: 16px;">`;
+            } else {
+                qrContainer.innerHTML = '<div class="qr-placeholder">Scan items to generate UPI QR</div>';
+            }
+            
+            // Auto-scroll cart to bottom
+            cartContainer.scrollTop = cartContainer.scrollHeight;
+        }
+
+        document.addEventListener("DOMContentLoaded", connectDisplaySocket);
+    </script>
+</body>
+</html>
