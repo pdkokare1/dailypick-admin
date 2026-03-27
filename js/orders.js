@@ -33,10 +33,16 @@ function setOrderTab(tab) {
     fetchOrders();
 }
 
+// --- PHASE 4 OPTIMIZATION: Advanced Web Receipt Formatting via Global Settings ---
 function printReceipt() {
     if (!activeOrder) return;
     const pContainer = document.getElementById('print-receipt-container');
     
+    let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
+    let sAddress = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeAddress) ? globalStoreSettings.storeAddress : "";
+    let sGstin = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.gstin) ? `<p style="margin:0; font-size:10px;">GSTIN: ${globalStoreSettings.gstin}</p>` : "";
+    let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
+
     const itemsHtml = activeOrder.items.map(i => `
         <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
             <span>${i.qty}x ${i.name.substring(0, 15)}</span>
@@ -59,14 +65,16 @@ function printReceipt() {
         extraTotalsHtml += `<hr style="border: 0; border-top: 1px dashed black; margin: 4px 0;">`;
     }
 
-    const earnedPoints = Math.floor(activeOrder.totalAmount / 100);
+    const earnedPoints = Math.floor(activeOrder.totalAmount / loyaltyConv);
     const pointsHtml = `<div style="text-align: center; font-size: 13px; font-weight: bold; color: #16a34a; margin-top: 12px; padding-top: 8px; border-top: 1px dashed black;">⭐ You earned ${earnedPoints} Points on this order!</div>`;
 
     const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
 
     pContainer.innerHTML = `
         <div style="text-align: center; border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
-            <h2 style="margin:0; font-size:18px;">DAILYPICK</h2>
+            <h2 style="margin:0; font-size:18px;">${sName}</h2>
+            ${sAddress ? `<p style="margin:0; font-size:12px;">${sAddress}</p>` : ''}
+            ${sGstin}
             <p style="margin:0;">Order #${orderDisplayId}</p>
             <p style="margin:0;">Date: ${new Date(activeOrder.createdAt).toLocaleString()}</p>
         </div>
@@ -99,13 +107,17 @@ function sendWhatsAppReceipt() {
         return showToast("No valid phone number for this order.");
     }
 
-    const earnedPoints = Math.floor(activeOrder.totalAmount / 100);
+    let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DailyPick";
+    let sFooter = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.receiptFooterMessage) ? globalStoreSettings.receiptFooterMessage : "Thank you for shopping with us!";
+    let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
+
+    const earnedPoints = Math.floor(activeOrder.totalAmount / loyaltyConv);
     const ptsText = (activeOrder.pointsRedeemed && activeOrder.pointsRedeemed > 0) ? `%0A*Pts Redeemed: -₹${activeOrder.pointsRedeemed.toFixed(2)}*` : '';
     
     const itemsText = activeOrder.items.map(i => `${i.qty}x ${i.name} - ₹${(i.price * i.qty).toFixed(2)}`).join('%0A');
     const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
     
-    const text = `*DailyPick Receipt*%0AOrder ID: #${orderDisplayId}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: ₹${activeOrder.totalAmount.toFixed(2)}*${ptsText}%0APayment: ${activeOrder.paymentMethod}%0A%0A⭐ You earned ${earnedPoints} Points!%0A%0AThank you for shopping with us!`;
+    const text = `*${sName} Receipt*%0AOrder ID: #${orderDisplayId}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: ₹${activeOrder.totalAmount.toFixed(2)}*${ptsText}%0APayment: ${activeOrder.paymentMethod}%0A%0A⭐ You earned ${earnedPoints} Points!%0A%0A${sFooter}`;
 
     window.open(`https://wa.me/91${phone}?text=${text}`, '_blank');
 }
@@ -154,7 +166,6 @@ async function cancelOrder() {
     }
 }
 
-// --- NEW: AbortController to prevent overlapping API calls & race conditions ---
 let ordersAbortController = null;
 
 async function fetchOrders() {
@@ -166,7 +177,6 @@ async function fetchOrders() {
     const loadBtn = document.getElementById('load-more-orders-btn');
     if (loadBtn) { loadBtn.innerText = 'Loading...'; loadBtn.disabled = true; }
 
-    // Cancel any previous pending request if tabs are clicked rapidly
     if (ordersAbortController) {
         ordersAbortController.abort();
     }
@@ -203,7 +213,7 @@ async function fetchOrders() {
     } catch (e) { 
         if (e.name === 'AbortError') {
             console.log('Previous order fetch aborted successfully to prevent UI glitches.');
-            return; // Exit silently
+            return; 
         }
         console.error("Order Fetch Error:", e); 
     } finally {
@@ -681,6 +691,7 @@ async function submitPartialRefund() {
     }
 }
 
+// --- PHASE 4 OPTIMIZATION: Advanced Hardware Receipt Formatting via Global Settings ---
 async function printHardwareReceipt() {
     if (!activeOrder) return showToast("No active order to print.");
     
@@ -699,9 +710,13 @@ async function printHardwareReceipt() {
         const alignLeft = encoder.encode('\x1B\x61\x00');
         const cutPaper = encoder.encode('\x1D\x56\x00');
         
+        let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
+        let sFooter = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.receiptFooterMessage) ? globalStoreSettings.receiptFooterMessage : "Thank you for shopping!";
+        let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
+        
         const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
 
-        let text = "          DAILYPICK          \n";
+        let text = `          ${sName.toUpperCase()}          \n`;
         text += `Order #${orderDisplayId}\n`;
         text += `Date: ${new Date(activeOrder.createdAt).toLocaleString()}\n`;
         text += "--------------------------------\n";
@@ -729,9 +744,9 @@ async function printHardwareReceipt() {
         text += `Payment: ${activeOrder.paymentMethod}\n`;
         text += "--------------------------------\n";
         
-        const earnedPoints = Math.floor(activeOrder.totalAmount / 100);
+        const earnedPoints = Math.floor(activeOrder.totalAmount / loyaltyConv);
         text += `*** You earned ${earnedPoints} Points! ***\n`;
-        text += "     Thank you for shopping!    \n\n\n\n";
+        text += `     ${sFooter}    \n\n\n\n`;
         
         await writer.write(init);
         await writer.write(alignLeft);
