@@ -64,46 +64,30 @@ function initDB() {
 
 const dbPromise = initDB().catch(console.error);
 
-async function saveToIDB(order) {
+// NEW: Abstracted Transaction Wrapper
+async function executeIDBTransaction(mode, action) {
     if (!db) db = await dbPromise;
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, "readwrite");
+        const tx = db.transaction(storeName, mode);
         const store = tx.objectStore(storeName);
-        const request = store.add(order);
+        const request = action(store);
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
+}
+
+async function saveToIDB(order) {
+    return executeIDBTransaction("readwrite", store => store.add(order));
 }
 
 async function getAllFromIDB() {
-    if (!db) db = await dbPromise;
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, "readonly");
-        const store = tx.objectStore(storeName);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
+    return executeIDBTransaction("readonly", store => store.getAll());
 }
 
 async function deleteFromIDB(id) {
-    if (!db) db = await dbPromise;
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, "readwrite");
-        const store = tx.objectStore(storeName);
-        const request = store.delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-    });
+    return executeIDBTransaction("readwrite", store => store.delete(id));
 }
 
 async function getOfflineCount() {
-    if (!db) db = await dbPromise;
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, "readonly");
-        const store = tx.objectStore(storeName);
-        const request = store.count();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
+    return executeIDBTransaction("readonly", store => store.count());
 }
