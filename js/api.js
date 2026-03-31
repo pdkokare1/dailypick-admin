@@ -6,7 +6,6 @@ async function adminFetchWithAuth(url, options = {}) {
     let token = localStorage.getItem('adminToken');
     
     options.headers = options.headers || {};
-    // --- PHASE 3: Seamless Integration with Phase 1 Secure Refresh Cookies ---
     options.credentials = 'include';
     
     if (token) {
@@ -15,39 +14,29 @@ async function adminFetchWithAuth(url, options = {}) {
     
     let response = await fetch(url, options);
     
-    // --- NEW FUNCTIONALITY: Silent Session Refresh ---
     if (response.status === 401) {
         try {
             const refreshRes = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
                 method: 'POST',
-                credentials: 'include' // Ensures the secure HTTP-only cookie is sent
+                credentials: 'include' 
             });
             const refreshData = await refreshRes.json();
             
             if (refreshData.success && refreshData.token) {
-                // Save new token and retry original request
                 localStorage.setItem('adminToken', refreshData.token);
                 options.headers['Authorization'] = `Bearer ${refreshData.token}`;
                 response = await fetch(url, options); 
             } else {
-                // Original fallback logic
                 console.warn('Authentication failed for:', url);
-                if (typeof showToast === 'function') {
-                    showToast('Session Expired or Access Denied. Please log in again.');
-                }
+                if (typeof showToast === 'function') showToast('Session Expired or Access Denied. Please log in again.');
             }
         } catch (e) {
-            // Original fallback logic on network error
             console.warn('Authentication failed for:', url);
-            if (typeof showToast === 'function') {
-                showToast('Session Expired or Access Denied. Please log in again.');
-            }
+            if (typeof showToast === 'function') showToast('Session Expired or Access Denied. Please log in again.');
         }
     } else if (response.status === 403) {
         console.warn('Authentication failed for:', url);
-        if (typeof showToast === 'function') {
-            showToast('Session Expired or Access Denied. Please log in again.');
-        }
+        if (typeof showToast === 'function') showToast('Session Expired or Access Denied. Please log in again.');
     }
 
     if (response.status === 429) {
@@ -57,7 +46,6 @@ async function adminFetchWithAuth(url, options = {}) {
     return response;
 }
 
-// --- OPTIMIZATION: Exponential Backoff for SSE Reconnection ---
 let sseRetryCount = 0;
 
 async function connectAdminLiveStream() {
@@ -71,7 +59,7 @@ async function connectAdminLiveStream() {
     try {
         const response = await fetch(`${BACKEND_URL}/api/orders/stream/admin`, {
             headers: { 'Authorization': `Bearer ${token}` },
-            credentials: 'include', // --- PHASE 3: Allow secure stream auth ---
+            credentials: 'include',
             signal: window.adminStreamController.signal
         });
 
@@ -107,7 +95,6 @@ async function connectAdminLiveStream() {
                             if (typeof playNewOrderAudio === 'function') playNewOrderAudio(); 
                             if (typeof showToast === 'function') showToast('🚨 New Order Arrived!');
                         } else if (data.type === 'EXPIRY_WARNING') {
-                            // --- NEW PHASE 3: Listen for Expiry Warnings from Cron ---
                             if (typeof showToast === 'function') showToast(data.message);
                         }
                     } catch (e) {
@@ -144,85 +131,60 @@ function populateDropdowns(data, selectConfigs) {
     });
 }
 
-async function fetchCategories() {
+// NEW: Abstracted Data Fetcher
+async function fetchDropdownData(endpoint, errorMessage, successCallback) {
     try {
-        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/categories`);
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/${endpoint}`);
         const result = await res.json();
-        
-        if (result.success) { 
-            currentCategories = result.data;
-            populateDropdowns(currentCategories, [
-                { id: 'new-category', emptyHTML: '<option value="" disabled selected>No Categories Created</option>' },
-                { id: 'inventory-cat-filter', defaultHTML: '<option value="All">All Categories</option>' }
-            ]);
+        if (result.success) {
+            successCallback(result.data);
         }
-    } catch (e) { 
-        console.error("Error loading categories", e); 
-        if (typeof showToast === 'function') showToast("Error loading categories from server");
+    } catch (e) {
+        console.error(errorMessage, e);
+        if (typeof showToast === 'function') showToast(errorMessage);
     }
+}
+
+async function fetchCategories() {
+    await fetchDropdownData('categories', 'Error loading categories from server', (data) => {
+        currentCategories = data;
+        populateDropdowns(currentCategories, [
+            { id: 'new-category', emptyHTML: '<option value="" disabled selected>No Categories Created</option>' },
+            { id: 'inventory-cat-filter', defaultHTML: '<option value="All">All Categories</option>' }
+        ]);
+    });
 }
 
 async function fetchBrands() {
-    try {
-        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/brands`);
-        const result = await res.json();
-        
-        if (result.success) {
-            currentBrands = result.data;
-            populateDropdowns(currentBrands, [
-                { id: 'new-brand', defaultHTML: '<option value="">Select Brand (Optional)</option>' },
-                { id: 'inventory-brand-filter', defaultHTML: '<option value="All">All Brands</option>' }
-            ]);
-        }
-    } catch (e) { 
-        console.error("Error loading brands", e); 
-        if (typeof showToast === 'function') showToast("Error loading brands from server");
-    }
+    await fetchDropdownData('brands', 'Error loading brands from server', (data) => {
+        currentBrands = data;
+        populateDropdowns(currentBrands, [
+            { id: 'new-brand', defaultHTML: '<option value="">Select Brand (Optional)</option>' },
+            { id: 'inventory-brand-filter', defaultHTML: '<option value="All">All Brands</option>' }
+        ]);
+    });
 }
 
 async function fetchDistributors() {
-    try {
-        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/distributors`);
-        const result = await res.json();
-        
-        if (result.success) {
-            currentDistributors = result.data;
-            populateDropdowns(currentDistributors, [
-                { id: 'new-distributor', defaultHTML: '<option value="">Select Distributor (Optional)</option>' },
-                { id: 'restock-distributor', defaultHTML: '<option value="">Select a Distributor</option>' },
-                { id: 'inventory-dist-filter', defaultHTML: '<option value="All">All Distributors</option>' }
-            ]);
-        }
-    } catch (e) { 
-        console.error("Error loading distributors", e); 
-        if (typeof showToast === 'function') showToast("Error loading distributors from server");
-    }
+    await fetchDropdownData('distributors', 'Error loading distributors from server', (data) => {
+        currentDistributors = data;
+        populateDropdowns(currentDistributors, [
+            { id: 'new-distributor', defaultHTML: '<option value="">Select Distributor (Optional)</option>' },
+            { id: 'restock-distributor', defaultHTML: '<option value="">Select a Distributor</option>' },
+            { id: 'inventory-dist-filter', defaultHTML: '<option value="All">All Distributors</option>' }
+        ]);
+    });
 }
 
 async function fetchPromotions() {
-    try {
-        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/promotions?all=false`);
-        const result = await res.json();
-        if (result.success) {
-            currentPromotions = result.data;
-        }
-    } catch (e) {
-        console.error("Error loading promotions", e);
-        if (typeof showToast === 'function') showToast("Error loading promotions from server");
-    }
+    await fetchDropdownData('promotions?all=false', 'Error loading promotions from server', (data) => {
+        currentPromotions = data;
+    });
 }
 
-function exportOrdersCSV() {
-    window.open(`${BACKEND_URL}/api/orders/export`, '_blank');
-}
-
-function exportCustomersCSV() {
-    window.open(`${BACKEND_URL}/api/customers/export`, '_blank');
-}
-
-function exportInventoryCSV() {
-    window.open(`${BACKEND_URL}/api/products/export`, '_blank');
-}
+function exportOrdersCSV() { window.open(`${BACKEND_URL}/api/orders/export`, '_blank'); }
+function exportCustomersCSV() { window.open(`${BACKEND_URL}/api/customers/export`, '_blank'); }
+function exportInventoryCSV() { window.open(`${BACKEND_URL}/api/products/export`, '_blank'); }
 
 async function archiveProduct(id, event) {
     if(event) event.stopPropagation();
