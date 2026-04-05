@@ -3,8 +3,6 @@
 var categoryChartInstance = null; 
 var hourlyChartInstance = null;
 var revenueChartInstance = null;
-var allHistoricalOrders = [];
-var allHistoricalExpenses = [];
 
 async function fetchAnalytics() {
     try {
