@@ -17,8 +17,8 @@ const ASSETS_TO_CACHE = [
     './js/crm.js',
     './js/analytics.js',
     './manifest.json',
-    '[https://unpkg.com/html5-qrcode](https://unpkg.com/html5-qrcode)',
-    '[https://cdn.jsdelivr.net/npm/chart.js](https://cdn.jsdelivr.net/npm/chart.js)'
+    'https://unpkg.com/html5-qrcode',
+    'https://cdn.jsdelivr.net/npm/chart.js'
 ];
 
 function openDB() {
