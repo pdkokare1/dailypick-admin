@@ -1,10 +1,10 @@
 /* js/analytics.js */
 
-let categoryChartInstance = null; 
-let hourlyChartInstance = null;
-let revenueChartInstance = null;
-let allHistoricalOrders = [];
-let allHistoricalExpenses = [];
+var categoryChartInstance = null; 
+var hourlyChartInstance = null;
+var revenueChartInstance = null;
+var allHistoricalOrders = [];
+var allHistoricalExpenses = [];
 
 async function fetchAnalytics() {
     try {
