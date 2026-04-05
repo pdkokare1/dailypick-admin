@@ -1,5 +1,79 @@
 /* js/pos.js */
 
+// ==========================================
+// --- USB BARCODE SCANNER INTEGRATION ---
+// ==========================================
+let posBarcodeBuffer = '';
+let posBarcodeTimeout = null;
+
+document.addEventListener('keydown', (e) => {
+    // Only intercept if we are actively on the POS view
+    const activeView = document.querySelector('.view-section.active');
+    if (activeView && activeView.id === 'pos-view') {
+        
+        // When the scanner sends the final 'Enter' key
+        if (e.key === 'Enter' && posBarcodeBuffer.length > 3) {
+            // If the cursor was in an input field, clean up the scanned text so it doesn't mess up the field
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+                document.activeElement.value = document.activeElement.value.replace(posBarcodeBuffer, '');
+                document.activeElement.blur();
+            }
+            
+            handlePosScan(posBarcodeBuffer);
+            posBarcodeBuffer = '';
+            clearTimeout(posBarcodeTimeout);
+            return;
+        }
+
+        // Hardware scanners type extremely fast (usually < 20ms per character). 
+        // We capture keystrokes that happen rapidly.
+        if (e.key.length === 1) {
+            posBarcodeBuffer += e.key;
+            clearTimeout(posBarcodeTimeout);
+            posBarcodeTimeout = setTimeout(() => {
+                posBarcodeBuffer = ''; // Clear buffer if typing is slow (human typing)
+            }, 30); 
+        }
+    }
+});
+
+function handlePosScan(sku) {
+    let foundProduct = null;
+    let foundVariant = null;
+
+    for (const p of currentInventory) {
+        if (p.variants) {
+            for (const v of p.variants) {
+                if (v.sku === sku) {
+                    foundProduct = p;
+                    foundVariant = v;
+                    break;
+                }
+            }
+        }
+        if (foundProduct) break;
+    }
+
+    if (foundProduct && foundVariant) {
+        if (typeof playBeep === 'function') playBeep();
+        addToPosCart(foundProduct, foundVariant);
+    } else {
+        if (typeof playBeep === 'function') playBeep();
+        const addNow = confirm(`Barcode ${sku} is not in your inventory. Do you want to add it as a new product?`);
+        if (addNow) {
+            if (typeof openAddProductModal === 'function') {
+                openAddProductModal(sku); // Pass the SKU to auto-fill the form
+            } else {
+                showToast('Add product functionality not found.');
+            }
+        }
+    }
+}
+
+// ==========================================
+// --- EXISTING POS LOGIC ---
+// ==========================================
+
 function getDisplayStock(variant) {
     if (typeof currentStoreId === 'undefined' || !currentStoreId) return variant.stock; 
     if (variant.locationInventory && Array.isArray(variant.locationInventory)) {
