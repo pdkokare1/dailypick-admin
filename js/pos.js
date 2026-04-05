@@ -1,42 +1,5 @@
 /* js/pos.js */
 
-// ==========================================
-// --- USB BARCODE SCANNER INTEGRATION ---
-// ==========================================
-let posBarcodeBuffer = '';
-let posBarcodeTimeout = null;
-
-document.addEventListener('keydown', (e) => {
-    // Only intercept if we are actively on the POS view
-    const activeView = document.querySelector('.view-section.active');
-    if (activeView && activeView.id === 'pos-view') {
-        
-        // When the scanner sends the final 'Enter' key
-        if (e.key === 'Enter' && posBarcodeBuffer.length > 3) {
-            // If the cursor was in an input field, clean up the scanned text so it doesn't mess up the field
-            if (document.activeElement && document.activeElement.tagName === 'INPUT') {
-                document.activeElement.value = document.activeElement.value.replace(posBarcodeBuffer, '');
-                document.activeElement.blur();
-            }
-            
-            handlePosScan(posBarcodeBuffer);
-            posBarcodeBuffer = '';
-            clearTimeout(posBarcodeTimeout);
-            return;
-        }
-
-        // Hardware scanners type extremely fast (usually < 20ms per character). 
-        // We capture keystrokes that happen rapidly.
-        if (e.key.length === 1) {
-            posBarcodeBuffer += e.key;
-            clearTimeout(posBarcodeTimeout);
-            posBarcodeTimeout = setTimeout(() => {
-                posBarcodeBuffer = ''; // Clear buffer if typing is slow (human typing)
-            }, 30); 
-        }
-    }
-});
-
 function handlePosScan(sku) {
     let foundProduct = null;
     let foundVariant = null;
@@ -62,7 +25,7 @@ function handlePosScan(sku) {
         const addNow = confirm(`Barcode ${sku} is not in your inventory. Do you want to add it as a new product?`);
         if (addNow) {
             if (typeof openAddProductModal === 'function') {
-                openAddProductModal(sku); // Pass the SKU to auto-fill the form
+                openAddProductModal(sku); 
             } else {
                 showToast('Add product functionality not found.');
             }
