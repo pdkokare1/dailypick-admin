@@ -587,7 +587,10 @@ function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold
     container.appendChild(row);
 }
 
-function openAddProductModal() { 
+// ==============================================================
+// ADD PRODUCT MODAL LOGIC - UPDATED FOR BARCODE SCANNER PRE-FILL
+// ==============================================================
+function openAddProductModal(prefillSku = '') { 
     if (typeof currentCategories !== 'undefined' && currentCategories.length === 0) return showToast("Create a category first!");
     
     document.getElementById('add-product-form').reset();
@@ -602,7 +605,12 @@ function openAddProductModal() {
     if (previewImg) previewImg.style.display = 'none';
     if (dropContent) dropContent.style.display = 'block';
     
-    addVariantRow(); 
+    // Automatically inject the scanned SKU into the first variant row
+    addVariantRow('', '', '0', prefillSku, '5', ''); 
+    
+    // Switch to the inventory view if the user triggered this from the POS view
+    switchView('inventory');
+    
     document.getElementById('add-product-modal').classList.add('active'); 
 }
 
