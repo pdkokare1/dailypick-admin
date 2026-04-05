@@ -1,8 +1,6 @@
 /* js/hardware.js */
 
 let thermalPort = null;
-let posContinuousScanner = null;
-let posScanCooldown = false;
 
 window.connectThermalPrinter = async function() {
     try {
