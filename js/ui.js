@@ -26,13 +26,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btn) btn.innerText = '☀️';
     }
 
-    // NEW: Initialize Collapsed Sidebar State
     const isSidebarCollapsed = localStorage.getItem('dailypick_sidebar_collapsed') === 'true';
     if (isSidebarCollapsed && window.innerWidth >= 768) {
         document.body.classList.add('sidebar-collapsed');
     }
     
-    // NEW: Offline/Online listeners for banner
     window.addEventListener('offline', () => { 
         const banner = document.getElementById('offline-banner');
         if(banner) banner.classList.remove('hidden'); 
@@ -43,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// NEW: Sidebar Toggle Logic
 window.toggleSidebar = function() {
     const body = document.body;
     body.classList.toggle('sidebar-collapsed');
@@ -51,7 +48,6 @@ window.toggleSidebar = function() {
     localStorage.setItem('dailypick_sidebar_collapsed', isCollapsed);
 };
 
-// NEW: Header Search Focus routing
 window.focusHeaderSearch = function() {
     openCommandSearch();
 };
@@ -164,43 +160,110 @@ function jumpToInventoryWithFilter(type) {
     }
 }
 
+// ==========================================
+// --- OMNIPOTENT GLOBAL BARCODE ROUTER ---
+// ==========================================
 let globalBarcodeBuffer = '';
 let globalBarcodeTimeout = null;
 
 document.addEventListener('keydown', (e) => {
     const posView = document.getElementById('pos-view');
-    if (posView && posView.classList.contains('active')) {
+    const isPosActive = posView && posView.classList.contains('active');
+    
+    const commandModal = document.getElementById('command-search-modal');
+    const isCommandActive = commandModal && commandModal.classList.contains('active');
+    
+    const addProductModal = document.getElementById('add-product-modal');
+    const isAddProductActive = addProductModal && addProductModal.classList.contains('active');
+
+    // 1. Handle POS Function Keys
+    if (isPosActive) {
         if(e.key === 'F1') { e.preventDefault(); processPosCheckout('Cash'); return; }
         if(e.key === 'F2') { e.preventDefault(); processPosCheckout('UPI'); return; }
         if(e.key === 'F4') { e.preventDefault(); clearPosCart(); return; }
     }
 
+    // 2. Command Search Hotkey (Ctrl+K)
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         openCommandSearch();
         return;
     }
 
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-
+    // 3. Process Scanner Payload on 'Enter'
     if (e.key === 'Enter' && globalBarcodeBuffer.length > 3) {
-        if (posView && posView.classList.contains('active')) {
-            handlePosScan(globalBarcodeBuffer);
-        } else {
-            openCommandSearch();
-            document.getElementById('command-input').value = globalBarcodeBuffer;
-            handleCommandSearch(globalBarcodeBuffer);
+        e.preventDefault(); // Stop form submissions
+        const sku = globalBarcodeBuffer;
+        
+        // Cleanup: If the scanner typed into a focused input, remove the barcode text
+        if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+            document.activeElement.value = document.activeElement.value.replace(sku, '');
+            document.activeElement.blur();
         }
+
         globalBarcodeBuffer = '';
+        clearTimeout(globalBarcodeTimeout);
+
+        // ROUTE THE BARCODE BASED ON ACTIVE VIEW
+        if (isPosActive) {
+            // Send to POS Cart
+            if (typeof handlePosScan === 'function') handlePosScan(sku);
+            
+        } else if (isAddProductActive) {
+            // Auto-fill SKU fields in the Add Product Modal
+            const skuInputs = Array.from(document.querySelectorAll('.var-sku'));
+            const emptySkuInput = skuInputs.find(input => !input.value.trim());
+            
+            if (emptySkuInput) {
+                emptySkuInput.value = sku;
+                showToast(`SKU Captured: ${sku}`);
+                if (typeof playBeep === 'function') playBeep();
+            } else {
+                // All current rows are full, generate a new variant row!
+                if (typeof addVariantRow === 'function') {
+                    addVariantRow('', '', '0', sku, '5', '');
+                    showToast(`New size added with SKU: ${sku}`);
+                    if (typeof playBeep === 'function') playBeep();
+                }
+            }
+            
+        } else {
+            // Global Search Fallback (Overview, Inventory, Orders)
+            if (!isCommandActive) openCommandSearch();
+            document.getElementById('command-input').value = sku;
+            handleCommandSearch(sku);
+            
+            // Wait slightly for DOM to render search results
+            setTimeout(() => {
+                const results = document.querySelectorAll('#command-results .cmd-result-item');
+                if (results.length === 1) {
+                    // Exactly one match found - click it automatically
+                    results[0].click();
+                } else if (results.length === 0) {
+                    // Nothing found - Prompt to add to database
+                    if (typeof playBeep === 'function') playBeep();
+                    const addNow = confirm(`Barcode ${sku} not found. Do you want to add it to your catalog?`);
+                    if (addNow) {
+                        closeCommandSearch();
+                        if (typeof openAddProductModal === 'function') openAddProductModal(sku);
+                    }
+                }
+            }, 100);
+        }
         return;
     }
 
+    // 4. Buffer rapid keystrokes (Hardware scanners type extremely fast, <30ms delay)
+    // Normal human typing is too slow to trigger the globalBarcodeBuffer
     if (e.key.length === 1) {
         globalBarcodeBuffer += e.key;
         clearTimeout(globalBarcodeTimeout);
-        globalBarcodeTimeout = setTimeout(() => { globalBarcodeBuffer = ''; }, 50);
+        globalBarcodeTimeout = setTimeout(() => { 
+            globalBarcodeBuffer = ''; 
+        }, 30);
     }
 });
+// ==========================================
 
 function openCommandSearch() {
     const modal = document.getElementById('command-search-modal');
@@ -218,7 +281,6 @@ function handleCommandSearch(query) {
     const resultsContainer = document.getElementById('command-results');
     query = query.toLowerCase().trim();
     
-    // NEW: Action Palette
     if (query.startsWith('>')) {
         const cmd = query.substring(1).trim();
         let resultsHTML = '';
@@ -328,7 +390,6 @@ async function renderOverview() {
         actionFeed.innerHTML = '';
         let criticalTasks = [];
 
-        // --- NEW: Offline Conflict Resolution UI Injection ---
         let failedSyncs = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
         failedSyncs.forEach((failItem, index) => {
             criticalTasks.push({
@@ -340,7 +401,7 @@ async function renderOverview() {
                         let currentFails = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
                         currentFails.splice(index, 1);
                         localStorage.setItem('dailypick_failed_syncs', JSON.stringify(currentFails));
-                        renderOverview(); // Refresh the list
+                        renderOverview();
                     }
                 }
             });
