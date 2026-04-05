@@ -1,10 +1,10 @@
 /* js/inventory.js */
 
-let searchTimeout;
-let inventoryPage = 1;
-let currentFilters = { search: '', category: 'All', brand: 'All', distributor: 'All', stockStatus: 'All', sort: 'createdAt_desc' };
-let selectedInventory = new Set();
-let html5QrcodeScanner = null;
+var searchTimeout;
+var inventoryPage = 1;
+var currentFilters = { search: '', category: 'All', brand: 'All', distributor: 'All', stockStatus: 'All', sort: 'createdAt_desc' };
+var selectedInventory = new Set();
+var html5QrcodeScanner = null;
 
 function getDisplayStock(variant) {
     if (typeof currentStoreId === 'undefined' || !currentStoreId) return variant.stock; 
