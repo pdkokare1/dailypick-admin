@@ -154,6 +154,9 @@ function renderPosQuickTap() {
         return;
     }
 
+    // OPTIMIZED: Fragment batching for quick tap grid rendering
+    const fragment = document.createDocumentFragment();
+
     quickItems.forEach(item => {
         const thumbHtml = item.product.imageUrl 
             ? `<img src="${item.product.imageUrl}" alt="${item.product.name}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px; margin-bottom: 6px;">`
@@ -167,8 +170,10 @@ function renderPosQuickTap() {
             <span>₹${item.variant.price}</span>
         `;
         card.onclick = () => { playBeep(); addToPosCart(item.product, item.variant); };
-        grid.appendChild(card);
+        fragment.appendChild(card);
     });
+
+    grid.appendChild(fragment);
 }
 
 function addToPosCart(product, variant) {
@@ -257,6 +262,9 @@ function renderPosCart() {
     let totalTax = 0;
     let totalDiscount = 0;
 
+    // OPTIMIZED: Fragment batching for cart items to ensure POS remains completely lag-free during fast scanning
+    const fragment = document.createDocumentFragment();
+
     posCart.forEach((item, index) => {
         const itemTotal = item.qty * item.price;
         subtotal += itemTotal;
@@ -287,8 +295,10 @@ function renderPosCart() {
             </div>
             <div style="font-weight: 800; font-size: 14px; min-width: 60px; text-align: right;">₹${itemTotal.toFixed(2)}</div>
         `;
-        container.appendChild(div);
+        fragment.appendChild(div);
     });
+
+    container.appendChild(fragment);
 
     if (typeof currentPromotions !== 'undefined') {
         const now = new Date();
