@@ -34,11 +34,34 @@ let selectedInventory = new Set();
 const CLOUDINARY_CLOUD_NAME = 'dz2q2tq30'; 
 const CLOUDINARY_UPLOAD_PRESET = 'dailypick_preset'; 
 
-// --- NEW: Multi-Store State Variables ---
+// --- Multi-Store State Variables ---
 let currentStoreId = localStorage.getItem('dailypick_storeId') || null;
 let currentRegisterId = localStorage.getItem('dailypick_registerId') || null;
 let availableStores = [];
 let availableRegisters = [];
+
+// --- OPTIMIZED: Global Garbage Collector for SPA Memory Leaks ---
+function flushTransientMemory() {
+    // Release active order lock if modal is closed to free up object references
+    activeOrder = null;
+    
+    // Clear out unused DOM buffers
+    if (globalBarcodeBuffer) globalBarcodeBuffer = '';
+    
+    // Clear potentially orphaned selection sets if not on their respective views
+    const isOrdersView = document.getElementById('orders-view')?.classList.contains('active');
+    const isInventoryView = document.getElementById('inventory-view')?.classList.contains('active');
+    
+    if (!isOrdersView && typeof selectedOrders !== 'undefined' && selectedOrders instanceof Set) {
+        selectedOrders.clear();
+        if(typeof updateBulkDispatchUI === 'function') updateBulkDispatchUI();
+    }
+    
+    if (!isInventoryView && typeof selectedInventory !== 'undefined' && selectedInventory instanceof Set) {
+        selectedInventory.clear();
+        if(typeof updateInventoryBulkUI === 'function') updateInventoryBulkUI();
+    }
+}
 
 // --- OPTIMIZATION: IndexedDB Offline Queue Logic (Singleton Connection) ---
 const dbName = "DailyPickDB";
@@ -64,7 +87,7 @@ function initDB() {
 
 const dbPromise = initDB().catch(console.error);
 
-// NEW: Abstracted Transaction Wrapper
+// Abstracted Transaction Wrapper
 async function executeIDBTransaction(mode, action) {
     if (!db) db = await dbPromise;
     return new Promise((resolve, reject) => {
