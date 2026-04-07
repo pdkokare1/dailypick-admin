@@ -233,39 +233,13 @@ function clearPosCart() {
     broadcastCFDUpdate(0); 
 }
 
-function renderPosCart() {
-    const container = document.getElementById('pos-cart-items-container');
-    const totalEl = document.getElementById('pos-cart-total');
-    
-    const subtotalEl = document.getElementById('pos-cart-subtotal');
-    const discountEl = document.getElementById('pos-cart-discount');
-    const taxEl = document.getElementById('pos-cart-tax');
-
-    container.innerHTML = '';
-    
-    if (posCart.length === 0) {
-        container.innerHTML = '<p class="empty-state" style="margin-top: 40px;">Cart is empty.<br><span style="font-size: 12px;">Scan or tap an item to begin.</span></p>';
-        totalEl.innerText = '₹0.00';
-        if(subtotalEl) subtotalEl.innerText = '₹0.00';
-        if(discountEl) discountEl.innerText = '-₹0.00';
-        if(taxEl) taxEl.innerText = '₹0.00';
-        
-        let loyaltyLine = document.getElementById('pos-loyalty-line');
-        if(loyaltyLine) loyaltyLine.style.display = 'none';
-
-        currentCalculatedTax = 0; currentCalculatedDiscount = 0; currentGrandTotal = 0;
-        broadcastCFDUpdate(0);
-        return;
-    }
-
+// OPTIMIZED: Pure math function decoupled from DOM rendering.
+function calculateCartTotals() {
     let subtotal = 0;
     let totalTax = 0;
     let totalDiscount = 0;
 
-    // OPTIMIZED: Fragment batching for cart items to ensure POS remains completely lag-free during fast scanning
-    const fragment = document.createDocumentFragment();
-
-    posCart.forEach((item, index) => {
+    posCart.forEach((item) => {
         const itemTotal = item.qty * item.price;
         subtotal += itemTotal;
         
@@ -277,28 +251,7 @@ function renderPosCart() {
                 totalTax += itemTotal - (itemTotal / (1 + (tRate / 100)));
             }
         }
-        
-        const div = document.createElement('div');
-        div.className = 'pos-cart-item';
-        div.innerHTML = `
-            <div style="flex: 1;">
-                <div style="display:flex; align-items:center; gap:6px;">
-                    <h4 style="font-size: 13px;">${item.name}</h4>
-                    ${item.productId && !item.productId.startsWith('CUSTOM') ? `<button style="background:none; border:none; cursor:pointer;" onclick="openPosQuickView('${item.productId}')">ℹ️</button>` : ''}
-                </div>
-                <p style="font-size: 11px; color: var(--text-muted);">${item.selectedVariant} • ₹${item.price} ${tRate > 0 ? `<span style="color:#10b981; font-size:9px;">(GST ${tRate}%)</span>` : ''}</p>
-            </div>
-            <div class="pos-qty-controls">
-                <button class="pos-qty-btn" onclick="updatePosCartItemQty(${index}, -1)">-</button>
-                <span style="font-size: 13px; font-weight: bold; min-width: 20px; text-align: center;">${item.qty}</span>
-                <button class="pos-qty-btn" onclick="updatePosCartItemQty(${index}, 1)">+</button>
-            </div>
-            <div style="font-weight: 800; font-size: 14px; min-width: 60px; text-align: right;">₹${itemTotal.toFixed(2)}</div>
-        `;
-        fragment.appendChild(div);
     });
-
-    container.appendChild(fragment);
 
     if (typeof currentPromotions !== 'undefined') {
         const now = new Date();
@@ -306,7 +259,6 @@ function renderPosCart() {
 
         currentPromotions.forEach(promo => {
             if (promo.isActive) {
-                
                 if (promo.startDate && new Date(promo.startDate) > now) return;
                 if (promo.endDate && new Date(promo.endDate) < now) return;
                 if (promo.startTime && promo.endTime) {
@@ -378,13 +330,74 @@ function renderPosCart() {
     currentCalculatedDiscount = totalDiscount;
     currentGrandTotal = grandTotal;
 
-    if(subtotalEl) subtotalEl.innerText = `₹${subtotal.toFixed(2)}`;
+    return { subtotal, totalTax, totalDiscount, grandTotal, tierDiscountAmount, tierName };
+}
+
+function renderPosCart() {
+    const container = document.getElementById('pos-cart-items-container');
+    const totalEl = document.getElementById('pos-cart-total');
+    
+    const subtotalEl = document.getElementById('pos-cart-subtotal');
+    const discountEl = document.getElementById('pos-cart-discount');
+    const taxEl = document.getElementById('pos-cart-tax');
+
+    container.innerHTML = '';
+    
+    if (posCart.length === 0) {
+        container.innerHTML = '<p class="empty-state" style="margin-top: 40px;">Cart is empty.<br><span style="font-size: 12px;">Scan or tap an item to begin.</span></p>';
+        totalEl.innerText = '₹0.00';
+        if(subtotalEl) subtotalEl.innerText = '₹0.00';
+        if(discountEl) discountEl.innerText = '-₹0.00';
+        if(taxEl) taxEl.innerText = '₹0.00';
+        
+        let loyaltyLine = document.getElementById('pos-loyalty-line');
+        if(loyaltyLine) loyaltyLine.style.display = 'none';
+
+        currentCalculatedTax = 0; currentCalculatedDiscount = 0; currentGrandTotal = 0;
+        broadcastCFDUpdate(0);
+        return;
+    }
+
+    // Call the abstracted math layer
+    const totals = calculateCartTotals();
+
+    // OPTIMIZED: Fragment batching for cart items to ensure POS remains completely lag-free during fast scanning
+    const fragment = document.createDocumentFragment();
+
+    posCart.forEach((item, index) => {
+        const itemTotal = item.qty * item.price;
+        let tRate = item.taxRate || 0;
+        
+        const div = document.createElement('div');
+        div.className = 'pos-cart-item';
+        div.innerHTML = `
+            <div style="flex: 1;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <h4 style="font-size: 13px;">${item.name}</h4>
+                    ${item.productId && !item.productId.startsWith('CUSTOM') ? `<button style="background:none; border:none; cursor:pointer;" onclick="openPosQuickView('${item.productId}')">ℹ️</button>` : ''}
+                </div>
+                <p style="font-size: 11px; color: var(--text-muted);">${item.selectedVariant} • ₹${item.price} ${tRate > 0 ? `<span style="color:#10b981; font-size:9px;">(GST ${tRate}%)</span>` : ''}</p>
+            </div>
+            <div class="pos-qty-controls">
+                <button class="pos-qty-btn" onclick="updatePosCartItemQty(${index}, -1)">-</button>
+                <span style="font-size: 13px; font-weight: bold; min-width: 20px; text-align: center;">${item.qty}</span>
+                <button class="pos-qty-btn" onclick="updatePosCartItemQty(${index}, 1)">+</button>
+            </div>
+            <div style="font-weight: 800; font-size: 14px; min-width: 60px; text-align: right;">₹${itemTotal.toFixed(2)}</div>
+        `;
+        fragment.appendChild(div);
+    });
+
+    container.appendChild(fragment);
+
+    // Render calculated values
+    if(subtotalEl) subtotalEl.innerText = `₹${totals.subtotal.toFixed(2)}`;
     
     if(discountEl) {
-        discountEl.innerHTML = `-₹${totalDiscount.toFixed(2)} ${tierDiscountAmount > 0 ? `<br><span style="font-size:10px; color:#8b5cf6; font-weight:800;">(Incl. ${tierName})</span>` : ''}`;
+        discountEl.innerHTML = `-₹${totals.totalDiscount.toFixed(2)} ${totals.tierDiscountAmount > 0 ? `<br><span style="font-size:10px; color:#8b5cf6; font-weight:800;">(Incl. ${totals.tierName})</span>` : ''}`;
     }
     
-    if(taxEl) taxEl.innerText = `₹${totalTax.toFixed(2)}`;
+    if(taxEl) taxEl.innerText = `₹${totals.totalTax.toFixed(2)}`;
 
     let loyaltyLine = document.getElementById('pos-loyalty-line');
     if (!loyaltyLine && taxEl) {
@@ -409,9 +422,9 @@ function renderPosCart() {
         }
     }
 
-    totalEl.innerText = `₹${grandTotal.toFixed(2)}`;
+    totalEl.innerText = `₹${totals.grandTotal.toFixed(2)}`;
     
-    broadcastCFDUpdate(subtotal);
+    broadcastCFDUpdate(totals.subtotal);
 }
 
 function addCustomPosItem() {
