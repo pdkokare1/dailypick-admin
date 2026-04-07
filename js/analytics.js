@@ -192,18 +192,20 @@ function updateAnalyticsRange(daysLimit) {
 
     const feed = document.getElementById('top-items-feed');
     if (feed) {
-        feed.innerHTML = '';
         if (topItems.length === 0) {
             feed.innerHTML = `<p class="empty-state">No sales data for the selected timeframe.</p>`;
         } else {
+            // OPTIMIZED: Batch String building rather than recalculating the DOM 8 times
+            let htmlStr = '';
             topItems.forEach(item => {
-                feed.innerHTML += `
+                htmlStr += `
                     <div class="top-item-card">
                         <span class="top-item-name">${item.name}</span>
                         <span class="top-item-stats">${item.qty} units • ₹${item.revenue}</span>
                     </div>
                 `;
             });
+            feed.innerHTML = htmlStr;
         }
     }
 
@@ -221,18 +223,20 @@ function updateAnalyticsRange(daysLimit) {
             .sort((a,b) => b.revenue - a.revenue)
             .slice(0, 5);
         
-        vipFeed.innerHTML = '';
         if (topCustomers.length === 0) {
             vipFeed.innerHTML = `<p class="empty-state">No customer data for this period.</p>`;
         } else {
+            // OPTIMIZED: Batch String building rather than recalculating the DOM 5 times
+            let htmlStr = '';
             topCustomers.forEach(c => {
-                vipFeed.innerHTML += `
+                htmlStr += `
                     <div class="top-item-card" style="border-left: 4px solid #D4AF37;">
                         <span class="top-item-name">${c.name} <span style="font-size:11px; color:#94A3B8; font-weight:normal; margin-left:8px;">${c.phone}</span></span>
                         <span class="top-item-stats">${c.orders} Orders • ₹${c.revenue.toFixed(2)}</span>
                     </div>
                 `;
             });
+            vipFeed.innerHTML = htmlStr;
         }
     }
 
@@ -286,7 +290,6 @@ function updateAnalyticsRange(daysLimit) {
 
         const wastageFeed = document.getElementById('wastage-returns-feed');
         if (wastageFeed) {
-            wastageFeed.innerHTML = '';
             if (rtvList.length === 0 && expiredList.length === 0) {
                 wastageFeed.innerHTML = '<p class="empty-state">No wastage or returns recorded.</p>';
             } else {
@@ -306,6 +309,7 @@ function updateAnalyticsRange(daysLimit) {
                         <span class="top-item-stats">${i.qty} units • ₹${i.loss.toFixed(2)}</span>
                     </div>
                 `));
+                // OPTIMIZED: Native join is faster than repetitive DOM reassignment
                 wastageFeed.innerHTML = combinedOffenders.join('');
             }
         }
@@ -439,7 +443,8 @@ async function fetchLeaderboard() {
         const result = await res.json();
 
         if (result.success && result.data && result.data.length > 0) {
-            feed.innerHTML = '';
+            // OPTIMIZED: Batch string assignment to prevent layout thrashing inside loop
+            let htmlStr = '';
             result.data.forEach((staff, index) => {
                 const isTop = index === 0;
                 
@@ -453,7 +458,7 @@ async function fetchLeaderboard() {
                     accuracyText = 'Minor Discrepancies';
                 }
 
-                feed.innerHTML += `
+                htmlStr += `
                     <div class="top-item-card" style="${isTop ? 'border: 2px solid #8b5cf6;' : ''}">
                         <div style="display:flex; align-items:center; gap:16px; flex: 1;">
                             ${isTop ? `<div style="background:#ede9fe; color:#6d28d9; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">👑</div>` : `<div style="background:#F3F4F6; color:var(--text-muted); width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">#${index+1}</div>`}
@@ -469,6 +474,7 @@ async function fetchLeaderboard() {
                     </div>
                 `;
             });
+            feed.innerHTML = htmlStr;
         } else {
             feed.innerHTML = '<p class="empty-state">No shift data available for leaderboard.</p>';
         }
