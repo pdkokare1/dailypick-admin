@@ -180,6 +180,10 @@ function renderInventory(isLastPage = true) {
         ? currentInventory 
         : currentInventory.slice((inventoryPage - 1) * 30);
 
+    // OPTIMIZED: Batch DOM injection using DocumentFragment. 
+    // Prevents browser freezing and layout thrashing on heavy catalog loads.
+    const fragment = document.createDocumentFragment();
+
     itemsToRender.forEach(p => {
         const card = document.createElement('div'); 
         card.classList.add('inventory-card');
@@ -300,8 +304,10 @@ function renderInventory(isLastPage = true) {
             }
         };
 
-        invFeedEl.appendChild(card);
+        fragment.appendChild(card);
     });
+
+    invFeedEl.appendChild(fragment);
 
     const loadBtn = document.getElementById('load-more-btn');
     if (isLastPage || isLowStockFilterActive || isOutStockFilterActive || isDeadStockFilterActive) {
