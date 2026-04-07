@@ -23,6 +23,9 @@ async function fetchCustomers() {
 
             const today = new Date();
 
+            // OPTIMIZED: Batch string assignment prevents layout thrashing and freezing for large CRM lists
+            let htmlStr = '';
+
             result.data.forEach(c => {
                 const wLink = `https://wa.me/91${c.phone}?text=Hi%20${c.name.split(' ')[0]},%20here%20is%20a%20special%20offer%20from%20DailyPick!`;
                 
@@ -36,7 +39,7 @@ async function fetchCustomers() {
                     badges += `<span class="badge-churn">⚠️ Churn Risk</span>`;
                 }
 
-                feed.innerHTML += `
+                htmlStr += `
                     <div class="customer-card" onclick="openCustomerModal('${c.phone}', '${c.name.replace(/'/g, "\\'")}')">
                         <h3>${c.name} ${badges}</h3>
                         <p>📞 ${c.phone}</p>
@@ -51,6 +54,8 @@ async function fetchCustomers() {
                     </div>
                 `;
             });
+
+            feed.innerHTML = htmlStr;
         }
     } catch (e) {
         feed.innerHTML = '<p class="empty-state">Error loading CRM.</p>';
@@ -70,21 +75,27 @@ async function openCustomerModal(phone, name) {
     if (customerOrders.length === 0) {
         container.innerHTML = '<p class="empty-state">No orders found.</p>';
     } else {
+        // OPTIMIZED: Fragment batching for quick history rendering
+        const fragment = document.createDocumentFragment();
+
         customerOrders.forEach(o => {
             const dateStr = new Date(o.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             const itemPreview = o.items.map(i => `${i.qty}x ${i.name}`).join(', ').substring(0, 40) + '...';
             
-            container.innerHTML += `
-                <div class="history-order-card">
-                    <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-                        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">${dateStr}</span>
-                        <span style="font-size: 11px; font-weight: 800; color: var(--primary);">₹${o.totalAmount}</span>
-                    </div>
-                    <p style="font-size: 12px; color: var(--text-main); font-weight: 600; margin-bottom: 4px;">${o.deliveryType} Delivery</p>
-                    <p style="font-size: 11px; color: var(--text-muted);">${itemPreview}</p>
+            const div = document.createElement('div');
+            div.className = 'history-order-card';
+            div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                    <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">${dateStr}</span>
+                    <span style="font-size: 11px; font-weight: 800; color: var(--primary);">₹${o.totalAmount}</span>
                 </div>
+                <p style="font-size: 12px; color: var(--text-main); font-weight: 600; margin-bottom: 4px;">${o.deliveryType} Delivery</p>
+                <p style="font-size: 11px; color: var(--text-muted);">${itemPreview}</p>
             `;
+            fragment.appendChild(div);
         });
+
+        container.appendChild(fragment);
     }
 
     await fetchCustomerCreditProfile(phone);
@@ -254,12 +265,13 @@ async function openKhataReminders() {
                 return;
             }
 
-            container.innerHTML = '';
+            // OPTIMIZED: String builder for faster bulk renders
+            let htmlStr = '';
             debtors.forEach(c => {
                 const message = `Hi ${c.name.split(' ')[0]}, a gentle reminder from DailyPick that your pending Khata balance is ₹${c.creditUsed}. Please settle it at your earliest convenience. Thank you!`;
                 const wLink = `https://wa.me/91${c.phone}?text=${encodeURIComponent(message)}`;
                 
-                container.innerHTML += `
+                htmlStr += `
                     <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; border: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <div>
                             <h4 style="margin: 0; font-size: 14px; color: var(--text-main);">${c.name}</h4>
@@ -269,6 +281,7 @@ async function openKhataReminders() {
                     </div>
                 `;
             });
+            container.innerHTML = htmlStr;
         } else {
             container.innerHTML = '<p class="empty-state">Failed to load Khata debtors.</p>';
         }
@@ -280,4 +293,3 @@ async function openKhataReminders() {
 function closeKhataReminders() {
     document.getElementById('khata-reminders-modal').classList.remove('active');
 }
-// ------------------------------------------
