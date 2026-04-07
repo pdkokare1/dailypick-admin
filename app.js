@@ -39,6 +39,18 @@ let realtimeReconnectTimeout = null;
 let globalStoreSettings = {};
 let wakeLock = null;
 
+// OPTIMIZED: Centralized modal utility to reduce DOM manipulation boilerplate.
+window.toggleModal = function(modalId, forceState) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        if (forceState !== undefined) {
+            forceState ? modal.classList.add('active') : modal.classList.remove('active');
+        } else {
+            modal.classList.toggle('active');
+        }
+    }
+};
+
 async function requestWakeLock() {
     try {
         if ('wakeLock' in navigator && document.visibilityState === 'visible') {
@@ -433,12 +445,12 @@ if ('serviceWorker' in navigator) {
 // ==========================================
 
 window.openStaffModal = async function() {
-    document.getElementById('staff-modal').classList.add('active');
+    window.toggleModal('staff-modal', true);
     await fetchStaff();
 };
 
 window.closeStaffModal = function() {
-    document.getElementById('staff-modal').classList.remove('active');
+    window.toggleModal('staff-modal', false);
 };
 
 window.fetchStaff = async function() {
@@ -506,12 +518,12 @@ window.submitNewStaff = async function(e) {
 };
 
 window.openPromotionsModal = async function() {
-    document.getElementById('promotions-modal').classList.add('active');
+    window.toggleModal('promotions-modal', true);
     await fetchPromotionsList();
 };
 
 window.closePromotionsModal = function() {
-    document.getElementById('promotions-modal').classList.remove('active');
+    window.toggleModal('promotions-modal', false);
 };
 
 window.fetchPromotionsList = async function() {
@@ -580,12 +592,12 @@ window.submitNewPromotion = async function(e) {
 };
 
 window.openBulkImportModal = function() {
-    document.getElementById('bulk-import-modal').classList.add('active');
+    window.toggleModal('bulk-import-modal', true);
     document.getElementById('bulk-import-results').innerHTML = '';
 };
 
 window.closeBulkImportModal = function() {
-    document.getElementById('bulk-import-modal').classList.remove('active');
+    window.toggleModal('bulk-import-modal', false);
     document.getElementById('bulk-csv-upload').value = '';
 };
 
@@ -669,7 +681,7 @@ window.fetchGlobalSettings = async function() {
 };
 
 window.openSettingsModal = async function() {
-    document.getElementById('global-settings-modal').classList.add('active');
+    window.toggleModal('global-settings-modal', true);
     await window.fetchGlobalSettings();
     document.getElementById('settings-store-name').value = globalStoreSettings.storeName || 'DAILYPICK.';
     document.getElementById('settings-store-address').value = globalStoreSettings.storeAddress || '';
@@ -680,7 +692,7 @@ window.openSettingsModal = async function() {
 };
 
 window.closeSettingsModal = function() {
-    document.getElementById('global-settings-modal').classList.remove('active');
+    window.toggleModal('global-settings-modal', false);
 };
 
 window.submitSettings = async function(e) {
@@ -715,12 +727,12 @@ window.submitSettings = async function(e) {
 };
 
 window.openSecurityAuditModal = async function() {
-    document.getElementById('security-audit-modal').classList.add('active');
+    window.toggleModal('security-audit-modal', true);
     await window.fetchAuditLogs();
 };
 
 window.closeSecurityAuditModal = function() {
-    document.getElementById('security-audit-modal').classList.remove('active');
+    window.toggleModal('security-audit-modal', false);
 };
 
 window.fetchAuditLogs = async function() {
@@ -760,7 +772,7 @@ window.fetchAuditLogs = async function() {
 };
 
 window.openStockTransferModal = async function() {
-    document.getElementById('stock-transfer-modal').classList.add('active');
+    window.toggleModal('stock-transfer-modal', true);
     document.getElementById('transfer-selected-item').classList.add('hidden');
     document.getElementById('submit-transfer-btn').disabled = true;
     
@@ -784,7 +796,7 @@ window.openStockTransferModal = async function() {
 };
 
 window.closeStockTransferModal = function() {
-    document.getElementById('stock-transfer-modal').classList.remove('active');
+    window.toggleModal('stock-transfer-modal', false);
     document.getElementById('transfer-search').value = '';
     document.getElementById('transfer-search-results').innerHTML = '';
     document.getElementById('transfer-qty').value = '';
@@ -896,12 +908,12 @@ window.submitStockTransfer = async function(e) {
 
 // --- AI Demand Forecasting ---
 window.openAIForecastModal = async function() {
-    document.getElementById('ai-forecast-modal').classList.add('active');
+    window.toggleModal('ai-forecast-modal', true);
     await window.generateAIForecast();
 };
 
 window.closeAIForecastModal = function() {
-    document.getElementById('ai-forecast-modal').classList.remove('active');
+    window.toggleModal('ai-forecast-modal', false);
 };
 
 window.generateAIForecast = async function() {
@@ -994,7 +1006,7 @@ window.openSourcingModal = function() {
         });
     }
     
-    document.getElementById('sourcing-modal').classList.add('active');
+    window.toggleModal('sourcing-modal', true);
     if (typeof lucide !== 'undefined') lucide.createIcons();
 };
 
