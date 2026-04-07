@@ -379,6 +379,9 @@ function renderListView(orders) {
         return; 
     }
     
+    // OPTIMIZED: Fragment batching to prevent DOM layout thrashing
+    const fragment = document.createDocumentFragment();
+
     orders.forEach(order => {
         const isRoutine = order.deliveryType === 'Routine';
         const isPacking = order.status === 'Packing';
@@ -411,8 +414,10 @@ function renderListView(orders) {
         
         cardWrapper.appendChild(checkbox); 
         cardWrapper.appendChild(card);
-        ordersFeed.appendChild(cardWrapper);
+        fragment.appendChild(cardWrapper);
     });
+
+    ordersFeed.appendChild(fragment);
 }
 
 function renderKanbanView(orders) {
@@ -427,6 +432,11 @@ function renderKanbanView(orders) {
 
     const today = new Date();
     today.setHours(0,0,0,0);
+
+    // OPTIMIZED: Using fragments for each Kanban column to improve rendering speed
+    const fragNew = document.createDocumentFragment();
+    const fragPack = document.createDocumentFragment();
+    const fragDisp = document.createDocumentFragment();
 
     orders.forEach(order => {
         if(order.status === 'Dispatched' && new Date(order.createdAt) < today) return; 
@@ -461,10 +471,14 @@ function renderKanbanView(orders) {
             ${actionHtml}
         `;
 
-        if (order.status === 'Order Placed') colNew.appendChild(card);
-        else if (order.status === 'Packing') colPack.appendChild(card);
-        else if (order.status === 'Dispatched') colDisp.appendChild(card);
+        if (order.status === 'Order Placed') fragNew.appendChild(card);
+        else if (order.status === 'Packing') fragPack.appendChild(card);
+        else if (order.status === 'Dispatched') fragDisp.appendChild(card);
     });
+
+    colNew.appendChild(fragNew);
+    colPack.appendChild(fragPack);
+    colDisp.appendChild(fragDisp);
 
     document.getElementById('kb-count-new').innerText = countNew;
     document.getElementById('kb-count-pack').innerText = countPack;
@@ -506,6 +520,8 @@ function openOrderModal(order) {
     const listEl = document.getElementById('modal-packing-list'); 
     listEl.innerHTML = '';
     
+    const fragment = document.createDocumentFragment();
+
     order.items.forEach((i, index) => {
         const variantText = i.selectedVariant ? ` (${i.selectedVariant})` : '';
         const li = document.createElement('li'); 
@@ -530,8 +546,11 @@ function openOrderModal(order) {
                 ${removeBtnHtml}
             </div>
         `;
-        listEl.appendChild(li);
+        fragment.appendChild(li);
     });
+
+    listEl.appendChild(fragment);
+
     if (typeof lucide !== 'undefined') lucide.createIcons();
     
     const orderModalOverlay = document.getElementById('order-modal-overlay');
