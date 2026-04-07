@@ -2,6 +2,12 @@
 
 let currentPromotions = []; 
 
+// OPTIMIZED: Centralized authentication failure handler
+function handleAuthFailure(url) {
+    console.warn('Authentication failed for:', url);
+    if (typeof showToast === 'function') showToast('Session Expired or Access Denied. Please log in again.');
+}
+
 async function adminFetchWithAuth(url, options = {}) {
     let token = localStorage.getItem('adminToken');
     
@@ -27,16 +33,13 @@ async function adminFetchWithAuth(url, options = {}) {
                 options.headers['Authorization'] = `Bearer ${refreshData.token}`;
                 response = await fetch(url, options); 
             } else {
-                console.warn('Authentication failed for:', url);
-                if (typeof showToast === 'function') showToast('Session Expired or Access Denied. Please log in again.');
+                handleAuthFailure(url);
             }
         } catch (e) {
-            console.warn('Authentication failed for:', url);
-            if (typeof showToast === 'function') showToast('Session Expired or Access Denied. Please log in again.');
+            handleAuthFailure(url);
         }
     } else if (response.status === 403) {
-        console.warn('Authentication failed for:', url);
-        if (typeof showToast === 'function') showToast('Session Expired or Access Denied. Please log in again.');
+        handleAuthFailure(url);
     }
 
     if (response.status === 429) {
@@ -182,9 +185,11 @@ async function fetchPromotions() {
     });
 }
 
-function exportOrdersCSV() { window.open(`${BACKEND_URL}/api/orders/export`, '_blank'); }
-function exportCustomersCSV() { window.open(`${BACKEND_URL}/api/customers/export`, '_blank'); }
-function exportInventoryCSV() { window.open(`${BACKEND_URL}/api/products/export`, '_blank'); }
+// OPTIMIZED: Abstracted CSV downloads
+function downloadCSV(endpoint) { window.open(`${BACKEND_URL}/api/${endpoint}`, '_blank'); }
+function exportOrdersCSV() { downloadCSV('orders/export'); }
+function exportCustomersCSV() { downloadCSV('customers/export'); }
+function exportInventoryCSV() { downloadCSV('products/export'); }
 
 async function archiveProduct(id, event) {
     if(event) event.stopPropagation();
