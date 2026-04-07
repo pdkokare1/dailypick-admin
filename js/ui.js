@@ -57,7 +57,10 @@ function showToast(m) {
     t.classList.add('toast'); 
     t.innerText = m; 
     document.getElementById('toast-container').appendChild(t); 
-    setTimeout(() => t.remove(), 3000); 
+    // OPTIMIZED: Ensure elements are strictly removed from DOM to prevent leak
+    setTimeout(() => {
+        if(t.parentNode) t.parentNode.removeChild(t);
+    }, 3000); 
 }
 
 function playBeep() { 
@@ -103,6 +106,9 @@ function toggleDarkMode() {
 }
 
 function switchView(viewName) {
+    // OPTIMIZED: Fire the SPA garbage collector before switching contexts
+    if (typeof flushTransientMemory === 'function') flushTransientMemory();
+
     const titles = {
         overview: 'Store Overview', 
         pos: 'In-Store Register', 
@@ -116,6 +122,9 @@ function switchView(viewName) {
     if (subtitleEl) subtitleEl.innerText = titles[viewName] || '';
     
     if (!views || !views.overview) return;
+    
+    // Close any floating modals safely to unbind their listeners
+    document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
     
     Object.keys(views).forEach(key => {
         if (views[key]) {
