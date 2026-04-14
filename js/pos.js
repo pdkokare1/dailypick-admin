@@ -694,6 +694,17 @@ async function syncOfflinePOS() {
 }
 setInterval(syncOfflinePOS, 30000);
 
+// OPTIMIZATION: Instantly trigger offline queue sync the moment the device reconnects to Wi-Fi/Cellular
+window.addEventListener('online', () => {
+    if (!isSyncing) {
+        if (typeof showToast === 'function') showToast('Network restored. Flushing offline queue...');
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage('trigger-sync');
+        }
+        syncOfflinePOS();
+    }
+});
+
 function openSplitPaymentModal() {
     if (posCart.length === 0) return showToast('Cart is empty.');
     document.getElementById('split-total-display').innerText = `₹${currentGrandTotal.toFixed(2)}`;
