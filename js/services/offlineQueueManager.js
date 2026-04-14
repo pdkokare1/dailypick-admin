@@ -1,58 +1,61 @@
 /* js/services/offlineQueueManager.js */
-import { CONFIG } from '../core/config.js';
 
-let db;
+let isSyncing = false;
 
-export function initDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(CONFIG.DB_NAME, 1);
-        request.onupgradeneeded = (e) => {
-            let database = e.target.result;
-            if (!database.objectStoreNames.contains(CONFIG.STORE_NAME)) {
-                database.createObjectStore(CONFIG.STORE_NAME, { keyPath: "id", autoIncrement: true });
-            }
-        };
-        request.onsuccess = (e) => {
-            db = e.target.result;
-            resolve(db);
-        };
-        request.onerror = (e) => reject(e.target.error);
-    });
+async function syncOfflinePOS() {
+    if (!navigator.onLine || isSyncing) return;
+    if (typeof getAllFromIDB !== 'function') return;
+
+    isSyncing = true;
+    try {
+        const offlineQueue = await getAllFromIDB();
+        if (offlineQueue.length === 0) return;
+
+        const itemToSync = offlineQueue[0]; 
+        const { id, ...payloadToSync } = itemToSync;
+
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/orders/pos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadToSync)
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            await deleteFromIDB(id); 
+            showToast('Offline POS transaction synced! ✅');
+            if (typeof renderOverview === 'function') renderOverview(); 
+        } else {
+            await deleteFromIDB(id); 
+            
+            let failedQueue = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
+            failedQueue.push({
+                ...itemToSync,
+                failReason: result.message || 'Unknown backend rejection',
+                failedAt: new Date().toISOString()
+            });
+            localStorage.setItem('dailypick_failed_syncs', JSON.stringify(failedQueue));
+            
+            showToast(`Offline Sync Failed: ${result.message}`);
+            if (typeof renderOverview === 'function') renderOverview(); 
+        }
+    } catch (e) {
+        console.log('Sync attempted, still offline or server unreachable.');
+    } finally {
+        isSyncing = false;
+    }
 }
 
-const dbPromise = initDB().catch(console.error);
+setInterval(syncOfflinePOS, 30000);
 
-export async function executeIDBTransaction(mode, action) {
-    if (!db) db = await dbPromise;
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(CONFIG.STORE_NAME, mode);
-        const store = tx.objectStore(CONFIG.STORE_NAME);
-        const request = action(store);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-export async function saveToIDB(order) {
-    return executeIDBTransaction("readwrite", store => store.add(order));
-}
-
-export async function getAllFromIDB() {
-    return executeIDBTransaction("readonly", store => store.getAll());
-}
-
-export async function deleteFromIDB(id) {
-    return executeIDBTransaction("readwrite", store => store.delete(id));
-}
-
-export async function getOfflineCount() {
-    return executeIDBTransaction("readonly", store => store.count());
-}
-
-// BRIDGE: Exposing to window to ensure POS checkout logic does not break during transition
-window.initDB = initDB;
-window.executeIDBTransaction = executeIDBTransaction;
-window.saveToIDB = saveToIDB;
-window.getAllFromIDB = getAllFromIDB;
-window.deleteFromIDB = deleteFromIDB;
-window.getOfflineCount = getOfflineCount;
+// OPTIMIZATION: Instantly trigger offline queue sync the moment the device reconnects to Wi-Fi/Cellular
+window.addEventListener('online', () => {
+    if (!isSyncing) {
+        if (typeof showToast === 'function') showToast('Network restored. Flushing offline queue...');
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage('trigger-sync');
+        }
+        syncOfflinePOS();
+    }
+});
