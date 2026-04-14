@@ -52,62 +52,8 @@ window.focusHeaderSearch = function() {
     openCommandSearch();
 };
 
-function showToast(m) { 
-    const t = document.createElement('div'); 
-    t.classList.add('toast'); 
-    t.innerText = m; 
-    document.getElementById('toast-container').appendChild(t); 
-    // OPTIMIZED: Ensure elements are strictly removed from DOM to prevent leak
-    setTimeout(() => {
-        if(t.parentNode) t.parentNode.removeChild(t);
-    }, 3000); 
-}
-
-function playBeep() { 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)(); 
-    const oscillator = audioCtx.createOscillator(); 
-    const gainNode = audioCtx.createGain(); 
-    oscillator.connect(gainNode); 
-    gainNode.connect(audioCtx.destination); 
-    oscillator.type = 'sine'; 
-    oscillator.frequency.value = 800; 
-    gainNode.gain.setValueAtTime(1, audioCtx.currentTime); 
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1); 
-    oscillator.start(audioCtx.currentTime); 
-    oscillator.stop(audioCtx.currentTime + 0.1); 
-}
-
-function playNewOrderAudio() {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const playNote = (freq, startTime, duration) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime + startTime);
-        gain.gain.setValueAtTime(1, audioCtx.currentTime + startTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTime + duration);
-        osc.start(audioCtx.currentTime + startTime);
-        osc.stop(audioCtx.currentTime + startTime + duration);
-    };
-    playNote(600, 0, 0.15);
-    playNote(800, 0.2, 0.15);
-}
-
-function toggleDarkMode() {
-    const body = document.body;
-    body.classList.toggle('dark-mode');
-    const isDark = body.classList.contains('dark-mode');
-    localStorage.setItem('dailypick_dark_mode', isDark);
-    
-    const btn = document.getElementById('dark-mode-toggle');
-    if (btn) btn.innerText = isDark ? '☀️' : '🌙';
-}
-
-function switchView(viewName) {
-    // OPTIMIZED: Fire the SPA garbage collector before switching contexts
-    if (typeof flushTransientMemory === 'function') flushTransientMemory();
+window.switchView = function(viewName) {
+    if (typeof window.flushTransientMemory === 'function') window.flushTransientMemory();
 
     const titles = {
         overview: 'Store Overview', 
@@ -123,7 +69,6 @@ function switchView(viewName) {
     
     if (!views || !views.overview) return;
     
-    // Close any floating modals safely to unbind their listeners
     document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
     
     Object.keys(views).forEach(key => {
@@ -141,7 +86,7 @@ function switchView(viewName) {
     });
 
     if (viewName === 'pos') {
-        if (currentInventory.length === 0) {
+        if (typeof currentInventory !== 'undefined' && currentInventory.length === 0) {
             if (typeof fetchInventory === 'function') {
                 fetchInventory().then(() => { 
                     if (typeof renderPosQuickTap === 'function') renderPosQuickTap(); 
@@ -156,147 +101,42 @@ function switchView(viewName) {
         if (typeof stopPosScanner === 'function') stopPosScanner();
     }
     
-    if (viewName === 'inventory' && currentInventory.length === 0 && typeof fetchInventory === 'function') fetchInventory();
+    if (viewName === 'inventory' && typeof currentInventory !== 'undefined' && currentInventory.length === 0 && typeof fetchInventory === 'function') fetchInventory();
     if (viewName === 'analytics' && typeof fetchAnalytics === 'function') fetchAnalytics();
     if (viewName === 'customers' && typeof fetchCustomers === 'function') fetchCustomers();
-    if (viewName === 'overview' && typeof renderOverview === 'function') renderOverview(); 
-}
+    if (viewName === 'overview' && typeof window.renderOverview === 'function') window.renderOverview(); 
+};
 
-function jumpToInventoryWithFilter(type) {
-    switchView('inventory');
+window.jumpToInventoryWithFilter = function(type) {
+    window.switchView('inventory');
     if (typeof toggleSpecialFilter === 'function') {
         toggleSpecialFilter(type);
     }
-}
+};
 
-// ==========================================
-// --- OMNIPOTENT GLOBAL BARCODE ROUTER ---
-// ==========================================
-let globalBarcodeBuffer = '';
-let globalBarcodeTimeout = null;
-
-document.addEventListener('keydown', (e) => {
-    const posView = document.getElementById('pos-view');
-    const isPosActive = posView && posView.classList.contains('active');
-    
-    const commandModal = document.getElementById('command-search-modal');
-    const isCommandActive = commandModal && commandModal.classList.contains('active');
-    
-    const addProductModal = document.getElementById('add-product-modal');
-    const isAddProductActive = addProductModal && addProductModal.classList.contains('active');
-
-    // 1. Handle POS Function Keys
-    if (isPosActive) {
-        if(e.key === 'F1') { e.preventDefault(); processPosCheckout('Cash'); return; }
-        if(e.key === 'F2') { e.preventDefault(); processPosCheckout('UPI'); return; }
-        if(e.key === 'F4') { e.preventDefault(); clearPosCart(); return; }
-    }
-
-    // 2. Command Search Hotkey (Ctrl+K)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        openCommandSearch();
-        return;
-    }
-
-    // 3. Process Scanner Payload on 'Enter'
-    if (e.key === 'Enter' && globalBarcodeBuffer.length > 3) {
-        e.preventDefault(); // Stop form submissions
-        const sku = globalBarcodeBuffer;
-        
-        // Cleanup: If the scanner typed into a focused input, remove the barcode text
-        if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-            document.activeElement.value = document.activeElement.value.replace(sku, '');
-            document.activeElement.blur();
-        }
-
-        globalBarcodeBuffer = '';
-        clearTimeout(globalBarcodeTimeout);
-
-        // ROUTE THE BARCODE BASED ON ACTIVE VIEW
-        if (isPosActive) {
-            // Send to POS Cart
-            if (typeof handlePosScan === 'function') handlePosScan(sku);
-            
-        } else if (isAddProductActive) {
-            // Auto-fill SKU fields in the Add Product Modal
-            const skuInputs = Array.from(document.querySelectorAll('.var-sku'));
-            const emptySkuInput = skuInputs.find(input => !input.value.trim());
-            
-            if (emptySkuInput) {
-                emptySkuInput.value = sku;
-                showToast(`SKU Captured: ${sku}`);
-                if (typeof playBeep === 'function') playBeep();
-            } else {
-                // All current rows are full, generate a new variant row!
-                if (typeof addVariantRow === 'function') {
-                    addVariantRow('', '', '0', sku, '5', '');
-                    showToast(`New size added with SKU: ${sku}`);
-                    if (typeof playBeep === 'function') playBeep();
-                }
-            }
-            
-        } else {
-            // Global Search Fallback (Overview, Inventory, Orders)
-            if (!isCommandActive) openCommandSearch();
-            document.getElementById('command-input').value = sku;
-            handleCommandSearch(sku);
-            
-            // Wait slightly for DOM to render search results
-            setTimeout(() => {
-                const results = document.querySelectorAll('#command-results .cmd-result-item');
-                if (results.length === 1) {
-                    // Exactly one match found - click it automatically
-                    results[0].click();
-                } else if (results.length === 0) {
-                    // Nothing found - Prompt to add to database
-                    if (typeof playBeep === 'function') playBeep();
-                    const addNow = confirm(`Barcode ${sku} not found. Do you want to add it to your catalog?`);
-                    if (addNow) {
-                        closeCommandSearch();
-                        if (typeof openAddProductModal === 'function') openAddProductModal(sku);
-                    }
-                }
-            }, 100);
-        }
-        return;
-    }
-
-    // 4. Buffer rapid keystrokes (Hardware scanners type extremely fast, <30ms delay)
-    // Normal human typing is too slow to trigger the globalBarcodeBuffer
-    if (e.key.length === 1) {
-        globalBarcodeBuffer += e.key;
-        clearTimeout(globalBarcodeTimeout);
-        globalBarcodeTimeout = setTimeout(() => { 
-            globalBarcodeBuffer = ''; 
-        }, 30);
-    }
-});
-// ==========================================
-
-function openCommandSearch() {
+window.openCommandSearch = function() {
     const modal = document.getElementById('command-search-modal');
     modal.classList.add('active');
     document.getElementById('command-input').focus();
     document.getElementById('command-results').innerHTML = '<p style="padding: 16px; font-size: 12px; color: var(--text-muted);">Start typing to find products, orders, or customers...</p>';
-}
+};
 
-function closeCommandSearch() {
+window.closeCommandSearch = function() {
     document.getElementById('command-search-modal').classList.remove('active');
     document.getElementById('command-input').value = '';
-}
+};
 
-function handleCommandSearch(query) {
+window.handleCommandSearch = function(query) {
     const resultsContainer = document.getElementById('command-results');
     query = query.toLowerCase().trim();
     
     if (query.startsWith('>')) {
         const cmd = query.substring(1).trim();
         let resultsHTML = '';
-        if ('open shift'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); openShiftModal();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: Open Register / Shift</p></div>`;
-        if ('add product'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); switchView('inventory'); openAddProductModal();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: Add New Product</p></div>`;
-        if ('end of day eod report'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); openEodReport();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: End of Day Report</p></div>`;
-        if ('settings'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); openSettingsModal();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: Global Settings</p></div>`;
+        if ('open shift'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="window.closeCommandSearch(); openShiftModal();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: Open Register / Shift</p></div>`;
+        if ('add product'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="window.closeCommandSearch(); window.switchView('inventory'); openAddProductModal();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: Add New Product</p></div>`;
+        if ('end of day eod report'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="window.closeCommandSearch(); openEodReport();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: End of Day Report</p></div>`;
+        if ('settings'.includes(cmd) || cmd === '') resultsHTML += `<div class="cmd-result-item" onclick="window.closeCommandSearch(); window.openSettingsModal();"><p style="font-weight:800; color:var(--primary);"><i data-lucide="zap" class="icon-sm"></i> Action: Global Settings</p></div>`;
 
         if (resultsHTML === '') resultsHTML = '<p style="padding: 16px; font-size: 12px; color: var(--text-muted);">No matching actions found.</p>';
         resultsContainer.innerHTML = resultsHTML;
@@ -311,41 +151,48 @@ function handleCommandSearch(query) {
 
     let resultsHTML = '';
 
-    const orderMatches = currentOrders.filter(o => o._id.toLowerCase().includes(query) || (o.customerPhone && o.customerPhone.includes(query))).slice(0, 3);
-    orderMatches.forEach(o => {
-        resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); openOrderModalById('${o._id}')">
-            <div>
-                <p style="font-weight:700; font-size:13px;">Order #${o._id.slice(-4).toUpperCase()}</p>
-                <p style="font-size:11px; color:var(--text-muted);">${o.customerName || 'Guest'} • ₹${o.totalAmount}</p>
-            </div>
-            <span style="font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:4px;">Order</span>
-        </div>`;
-    });
+    if (typeof currentOrders !== 'undefined') {
+        const orderMatches = currentOrders.filter(o => o._id.toLowerCase().includes(query) || (o.customerPhone && o.customerPhone.includes(query))).slice(0, 3);
+        orderMatches.forEach(o => {
+            resultsHTML += `<div class="cmd-result-item" onclick="window.closeCommandSearch(); window.openOrderModalById('${o._id}')">
+                <div>
+                    <p style="font-weight:700; font-size:13px;">Order #${o._id.slice(-4).toUpperCase()}</p>
+                    <p style="font-size:11px; color:var(--text-muted);">${o.customerName || 'Guest'} • ₹${o.totalAmount}</p>
+                </div>
+                <span style="font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:4px;">Order</span>
+            </div>`;
+        });
+    }
 
-    const productMatches = currentInventory.filter(p => p.name.toLowerCase().includes(query) || (p.variants && p.variants.some(v => v.sku.toLowerCase().includes(query)))).slice(0, 5);
-    productMatches.forEach(p => {
-        resultsHTML += `<div class="cmd-result-item" onclick="closeCommandSearch(); switchView('inventory'); openEditProductModal('${p._id}', event)">
-            <div>
-                <p style="font-weight:700; font-size:13px;">${p.name}</p>
-                <p style="font-size:11px; color:var(--text-muted);">${p.category} • ${p.variants ? p.variants.length : 0} Variants</p>
-            </div>
-            <span style="font-size:10px; background:#dcfce7; color:#16a34a; padding:2px 6px; border-radius:4px;">Product</span>
-        </div>`;
-    });
+    if (typeof currentInventory !== 'undefined') {
+        const productMatches = currentInventory.filter(p => p.name.toLowerCase().includes(query) || (p.variants && p.variants.some(v => v.sku.toLowerCase().includes(query)))).slice(0, 5);
+        productMatches.forEach(p => {
+            resultsHTML += `<div class="cmd-result-item" onclick="window.closeCommandSearch(); window.switchView('inventory'); openEditProductModal('${p._id}', event)">
+                <div>
+                    <p style="font-weight:700; font-size:13px;">${p.name}</p>
+                    <p style="font-size:11px; color:var(--text-muted);">${p.category} • ${p.variants ? p.variants.length : 0} Variants</p>
+                </div>
+                <span style="font-size:10px; background:#dcfce7; color:#16a34a; padding:2px 6px; border-radius:4px;">Product</span>
+            </div>`;
+        });
+    }
 
     if (resultsHTML === '') resultsHTML = '<p style="padding: 16px; font-size: 12px; color: var(--text-muted);">No matching results found.</p>';
     resultsContainer.innerHTML = resultsHTML;
-}
+};
 
-function openOrderModalById(id) {
+window.openOrderModalById = function(id) {
+    if (typeof currentOrders === 'undefined') return;
     const order = currentOrders.find(o => o._id === id);
     if(order) {
-        switchView('orders');
+        window.switchView('orders');
         openOrderModal(order);
     }
-}
+};
 
-async function renderOverview() {
+window.renderOverview = async function() {
+    if (typeof currentOrders === 'undefined' || typeof currentInventory === 'undefined') return;
+    
     const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
     document.getElementById('ov-pending-count').innerText = trulyPending.length;
 
@@ -410,7 +257,7 @@ async function renderOverview() {
                         let currentFails = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
                         currentFails.splice(index, 1);
                         localStorage.setItem('dailypick_failed_syncs', JSON.stringify(currentFails));
-                        renderOverview();
+                        window.renderOverview();
                     }
                 }
             });
@@ -424,7 +271,7 @@ async function renderOverview() {
                             type: 'error',
                             title: `Out of Stock: ${p.name}`,
                             msg: `Variant (${v.weightOrVolume}) is empty. Customer orders for this item will fail.`,
-                            action: () => jumpToInventoryWithFilter('out')
+                            action: () => window.jumpToInventoryWithFilter('out')
                         });
                     }
                     else if (v.stock <= (v.lowStockThreshold || 5)) {
@@ -458,9 +305,9 @@ async function renderOverview() {
             actionFeed.innerHTML = '<p class="empty-state">✅ Your store is healthy. No critical actions required today.</p>';
         }
     }
-}
+};
 
-async function openExpenseModal() {
+window.openExpenseModal = async function() {
     const formGroup = document.querySelector('#expense-modal .form-card form .input-group');
     if (formGroup && !document.getElementById('expense-receipt-upload')) {
         const uploadWrapper = document.createElement('div');
@@ -477,14 +324,14 @@ async function openExpenseModal() {
     
     document.getElementById('expense-modal').classList.add('active');
     document.getElementById('expense-list-container').innerHTML = '<p class="empty-state">Loading cloud expenses...</p>';
-    await renderExpenseList();
-}
+    if (typeof window.renderExpenseList === 'function') await window.renderExpenseList();
+};
 
-function closeExpenseModal() {
+window.closeExpenseModal = function() {
     document.getElementById('expense-modal').classList.remove('active');
-}
+};
 
-async function submitExpense(e) {
+window.submitExpense = async function(e) {
     e.preventDefault();
     const desc = document.getElementById('expense-desc').value.trim();
     const amt = parseFloat(document.getElementById('expense-amount').value);
@@ -499,11 +346,11 @@ async function submitExpense(e) {
         const fileInput = document.getElementById('expense-receipt-upload');
         
         if (fileInput && fileInput.files.length > 0) {
-            showToast('Uploading receipt image...');
+            if (typeof window.showToast === 'function') window.showToast('Uploading receipt image...');
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
 
-            const uploadRes = await fetch(`${BACKEND_URL}/api/expenses/upload`, {
+            const uploadRes = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/expenses/upload`, {
                 method: 'POST',
                 body: formData 
             });
@@ -512,7 +359,7 @@ async function submitExpense(e) {
             if (uploadData.success) {
                 receiptUrl = uploadData.receiptUrl;
             } else {
-                showToast('Warning: Image upload failed. Saving text only.');
+                if (typeof window.showToast === 'function') window.showToast('Warning: Image upload failed. Saving text only.');
             }
         }
 
@@ -524,7 +371,7 @@ async function submitExpense(e) {
             receiptUrl: receiptUrl
         };
 
-        const res = await fetch(`${BACKEND_URL}/api/expenses`, {
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/expenses`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -536,25 +383,25 @@ async function submitExpense(e) {
             document.getElementById('expense-desc').value = '';
             document.getElementById('expense-amount').value = '';
             if (fileInput) fileInput.value = '';
-            await renderExpenseList();
-            showToast('Expense logged to cloud! ☁️💸');
+            if (typeof window.renderExpenseList === 'function') await window.renderExpenseList();
+            if (typeof window.showToast === 'function') window.showToast('Expense logged to cloud! ☁️💸');
         } else {
-            showToast('Failed to log expense.');
+            if (typeof window.showToast === 'function') window.showToast('Failed to log expense.');
         }
     } catch(err) {
-        showToast('Network error.');
+        if (typeof window.showToast === 'function') window.showToast('Network error.');
     } finally {
         btn.innerText = 'Add'; 
         btn.disabled = false;
     }
-}
+};
 
-async function renderExpenseList() {
+window.renderExpenseList = async function() {
     const container = document.getElementById('expense-list-container');
     const todayStr = new Date().toDateString();
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/expenses?dateStr=${todayStr}`);
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/expenses?dateStr=${todayStr}`);
         const result = await res.json();
         
         container.innerHTML = '';
@@ -580,9 +427,9 @@ async function renderExpenseList() {
     } catch(e) {
         container.innerHTML = '<p class="empty-state" style="color:red;">Error loading expenses.</p>';
     }
-}
+};
 
-async function openEodReport() {
+window.openEodReport = async function() {
     document.getElementById('eod-expected-cash').innerText = '...';
     document.getElementById('eod-expected-upi').innerText = '...';
     document.getElementById('eod-expected-paylater').innerText = '...';
@@ -599,21 +446,23 @@ async function openEodReport() {
     const todayStr = new Date().toDateString();
     let cash = 0, upi = 0, payLater = 0;
     
-    currentOrders.filter(o => new Date(o.createdAt).toDateString() === todayStr && o.status !== 'Cancelled').forEach(o => {
-        if (o.paymentMethod === 'Cash') cash += o.totalAmount;
-        else if (o.paymentMethod === 'UPI') upi += o.totalAmount;
-        else if (o.paymentMethod === 'Pay Later') payLater += o.totalAmount;
-        else if (o.paymentMethod === 'Split' && o.splitDetails) {
-            cash += (o.splitDetails.cash || 0);
-            upi += (o.splitDetails.upi || 0);
-        }
-    });
+    if (typeof currentOrders !== 'undefined') {
+        currentOrders.filter(o => new Date(o.createdAt).toDateString() === todayStr && o.status !== 'Cancelled').forEach(o => {
+            if (o.paymentMethod === 'Cash') cash += o.totalAmount;
+            else if (o.paymentMethod === 'UPI') upi += o.totalAmount;
+            else if (o.paymentMethod === 'Pay Later') payLater += o.totalAmount;
+            else if (o.paymentMethod === 'Split' && o.splitDetails) {
+                cash += (o.splitDetails.cash || 0);
+                upi += (o.splitDetails.upi || 0);
+            }
+        });
+    }
     
     const totalRev = cash + upi + payLater;
     
     let totalExp = 0;
     try {
-        const res = await fetch(`${BACKEND_URL}/api/expenses?dateStr=${todayStr}`);
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/expenses?dateStr=${todayStr}`);
         const result = await res.json();
         if(result.success) {
             totalExp = result.data.reduce((sum, ex) => sum + ex.amount, 0);
@@ -631,13 +480,13 @@ async function openEodReport() {
     
     if(expEl) expEl.innerText = totalExp.toFixed(2);
     if(netEl) netEl.innerText = netProfit.toFixed(2);
-}
+};
 
-function closeEodReport() { 
+window.closeEodReport = function() { 
     document.getElementById('eod-modal').classList.remove('active'); 
-}
+};
 
-function calculateEodDiscrepancy() {
+window.calculateEodDiscrepancy = function() {
     const expectedCash = parseFloat(document.getElementById('eod-expected-cash').innerText);
     const actualCash = parseFloat(document.getElementById('eod-actual-cash').value);
     const resultDiv = document.getElementById('eod-discrepancy-result');
@@ -655,9 +504,9 @@ function calculateEodDiscrepancy() {
     } else {
         resultDiv.innerHTML = `<span style="color: #f59e0b; font-weight: bold;">Overage Note: You are over by ₹${Math.abs(diff).toFixed(2)} 📈</span>`;
     }
-}
+};
 
-async function openStoreManagementModal() {
+window.openStoreManagementModal = async function() {
     const modal = document.getElementById('manage-stores-modal');
     modal.classList.add('active');
     
@@ -699,15 +548,15 @@ async function openStoreManagementModal() {
     `;
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    await renderStoreManagementList();
-}
+    await window.renderStoreManagementList();
+};
 
-async function renderStoreManagementList() {
+window.renderStoreManagementList = async function() {
     try {
         const listEl = document.getElementById('store-management-list');
         const selectEl = document.getElementById('new-register-store');
         
-        const res = await fetch(`${BACKEND_URL}/api/stores`);
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/stores`);
         const storeData = await res.json();
         
         if (storeData.success && storeData.data.length > 0) {
@@ -718,7 +567,7 @@ async function renderStoreManagementList() {
                 selectEl.innerHTML += `<option value="${store._id}">${store.name}</option>`;
                 
                 let registersHtml = '<span style="font-size:11px; color:var(--text-muted);">No terminals yet.</span>';
-                const regRes = await fetch(`${BACKEND_URL}/api/stores/${store._id}/registers`);
+                const regRes = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/stores/${store._id}/registers`);
                 const regData = await regRes.json();
                 
                 if (regData.success && regData.data.length > 0) {
@@ -738,49 +587,55 @@ async function renderStoreManagementList() {
     } catch (e) {
         console.error("Error loading stores", e);
     }
-}
+};
 
-async function submitNewStore() {
+window.submitNewStore = async function() {
     const name = document.getElementById('new-store-name').value.trim();
     const location = document.getElementById('new-store-location').value.trim();
-    if (!name || !location) return showToast("Name and Location required.");
+    if (!name || !location) {
+        if (typeof showToast === 'function') showToast("Name and Location required.");
+        return;
+    }
     
     try {
-        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/stores`, {
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/stores`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, location })
         });
         const data = await res.json();
         if (data.success) {
-            showToast("Store created successfully!");
+            if (typeof showToast === 'function') showToast("Store created successfully!");
             document.getElementById('new-store-name').value = '';
             document.getElementById('new-store-location').value = '';
-            await renderStoreManagementList();
+            await window.renderStoreManagementList();
         } else {
-            showToast(data.message || "Error creating store");
+            if (typeof showToast === 'function') showToast(data.message || "Error creating store");
         }
-    } catch (e) { showToast("Network error"); }
-}
+    } catch (e) { if (typeof showToast === 'function') showToast("Network error"); }
+};
 
-async function submitNewRegister() {
+window.submitNewRegister = async function() {
     const storeId = document.getElementById('new-register-store').value;
     const name = document.getElementById('new-register-name').value.trim();
-    if (!storeId || !name) return showToast("Store and Terminal Name required.");
+    if (!storeId || !name) {
+        if (typeof showToast === 'function') showToast("Store and Terminal Name required.");
+        return;
+    }
     
     try {
-        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/registers`, {
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/registers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, storeId })
         });
         const data = await res.json();
         if (data.success) {
-            showToast("Terminal created successfully!");
+            if (typeof showToast === 'function') showToast("Terminal created successfully!");
             document.getElementById('new-register-name').value = '';
-            await renderStoreManagementList();
+            await window.renderStoreManagementList();
         } else {
-            showToast(data.message || "Error creating terminal");
+            if (typeof showToast === 'function') showToast(data.message || "Error creating terminal");
         }
-    } catch (e) { showToast("Network error"); }
-}
+    } catch (e) { if (typeof showToast === 'function') showToast("Network error"); }
+};
