@@ -132,6 +132,13 @@ self.addEventListener('sync', (event) => {
     }
 });
 
+// OPTIMIZATION: Cross-communication port to allow the UI to forcefully trigger SW outbox flushing
+self.addEventListener('message', (event) => {
+    if (event.data === 'trigger-sync') {
+        processEnterpriseOutbox();
+    }
+});
+
 self.addEventListener('fetch', (event) => {
     const requestUrl = new URL(event.request.url);
 
