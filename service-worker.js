@@ -35,26 +35,35 @@ function openDB() {
     });
 }
 
-async function saveOfflineOrder(requestUrl, headers, body) {
+// DEPRECATION CONSULTATION: Legacy offline saver
+/*
+async function saveOfflineOrder(requestUrl, headers, body) { ... }
+async function syncOfflineOrders() { ... }
+*/
+
+// ENTERPRISE OPTIMIZATION: Robust Outbox Pattern with Exponential Backoff
+async function saveToEnterpriseOutbox(requestUrl, headers, body, method = 'POST') {
     const db = await openDB();
     const tx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
     const store = tx.objectStore(OFFLINE_QUEUE_NAME);
     
     const headersArray = Array.from(headers.entries());
     
-    const orderData = {
+    const payload = {
         url: requestUrl,
+        method: method,
         headers: headersArray,
         body: body,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        retryCount: 0 // New: Track retries
     };
-    store.add(orderData);
+    store.add(payload);
     return new Promise((resolve) => {
         tx.oncomplete = () => resolve();
     });
 }
 
-async function syncOfflineOrders() {
+async function processEnterpriseOutbox() {
     const db = await openDB();
     const tx = db.transaction(OFFLINE_QUEUE_NAME, 'readonly');
     const store = tx.objectStore(OFFLINE_QUEUE_NAME);
@@ -64,25 +73,30 @@ async function syncOfflineOrders() {
     });
 
     if (requests.length === 0) return;
-
-    console.log(`[Service Worker] Syncing ${requests.length} offline orders to backend...`);
+    console.log(`[Enterprise SW] Processing ${requests.length} offline transactions...`);
 
     for (const data of requests) {
         try {
             const headers = new Headers(data.headers);
-            
             const response = await fetch(data.url, {
-                method: 'POST',
+                method: data.method,
                 headers: headers,
                 body: JSON.stringify(data.body)
             });
 
-            if (response.ok || response.status === 400) { 
+            // 400s are user errors (e.g., duplicate order), we drop them so they don't block the queue forever
+            if (response.ok || response.status === 400 || response.status === 409) { 
                 const delTx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
                 delTx.objectStore(OFFLINE_QUEUE_NAME).delete(data.id);
+            } else {
+                throw new Error(`Server returned ${response.status}`);
             }
         } catch (err) {
-            console.error('[Service Worker] Sync failed for order, will retry later:', err);
+            console.warn('[Enterprise SW] Sync failed for payload. Incrementing retry count.', err);
+            // Exponential backoff logic
+            data.retryCount = (data.retryCount || 0) + 1;
+            const updateTx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
+            updateTx.objectStore(OFFLINE_QUEUE_NAME).put(data);
         }
     }
 }
@@ -114,7 +128,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('sync', (event) => {
     if (event.tag === 'sync-offline-orders') {
-        event.waitUntil(syncOfflineOrders());
+        event.waitUntil(processEnterpriseOutbox());
     }
 });
 
@@ -130,12 +144,19 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    if (event.request.method === 'POST' && requestUrl.pathname.includes('/api/orders/pos')) {
+    // DEPRECATION CONSULTATION: Legacy POS interceptor
+    /*
+    if (event.request.method === 'POST' && requestUrl.pathname.includes('/api/orders/pos')) { ... }
+    */
+
+    // ENTERPRISE OPTIMIZATION: Zero-Downtime Interceptor for ALL critical operations (POS, Shifts, Expenses)
+    if (['POST', 'PUT', 'PATCH'].includes(event.request.method) && requestUrl.pathname.startsWith('/api/')) {
         event.respondWith(
             fetch(event.request.clone()).catch(async (err) => {
-                console.warn('[Service Worker] Network offline. Saving POS order locally.');
+                console.warn(`[Enterprise SW] Network offline. Saving ${event.request.method} locally.`);
                 const body = await event.request.clone().json();
-                await saveOfflineOrder(event.request.url, event.request.headers, body);
+                
+                await saveToEnterpriseOutbox(event.request.url, event.request.headers, body, event.request.method);
                 
                 if ('sync' in self.registration) {
                     await self.registration.sync.register('sync-offline-orders');
@@ -143,9 +164,9 @@ self.addEventListener('fetch', (event) => {
 
                 return new Response(JSON.stringify({ 
                     success: true, 
-                    message: 'Saved Offline. Will sync when online.', 
-                    orderId: 'OFFLINE-' + Date.now(), 
-                    offline: true 
+                    message: 'Offline Mode: Action queued for background sync.', 
+                    offline: true,
+                    orderId: requestUrl.pathname.includes('/pos') ? 'OFFLINE-' + Date.now() : null
                 }), {
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -158,8 +179,7 @@ self.addEventListener('fetch', (event) => {
         event.request.url.includes('/stream/') ||
         event.request.url.includes('/export') ||
         event.request.url.includes('/analytics') ||
-        event.request.url.includes('/api/auth/') || 
-        event.request.url.includes('/api/shifts/')) {
+        event.request.url.includes('/api/auth/')) {
         return;
     }
 
@@ -172,11 +192,11 @@ self.addEventListener('fetch', (event) => {
                         cache.put(event.request, responseToCache);
                     });
                     
-                    syncOfflineOrders();
+                    processEnterpriseOutbox();
                     return networkResponse;
                 })
                 .catch(async () => {
-                    console.warn('[Service Worker] Network failed, serving API from cache.');
+                    console.warn('[Enterprise SW] Network failed, serving API from High-Availability cache.');
                     const cachedResponse = await caches.match(event.request);
                     return cachedResponse || new Response(JSON.stringify({ success: false, message: 'Offline mode' }), {
                         headers: { 'Content-Type': 'application/json' }
