@@ -2,9 +2,11 @@
 
 async function fetchCategories() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/categories`);
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/categories`);
         const result = await res.json();
         if (result.success) {
+            window.currentCategories = result.data;
             const selects = ['new-category', 'inventory-cat-filter', 'bulk-assign-category'];
             selects.forEach(id => {
                 const el = document.getElementById(id);
@@ -20,9 +22,11 @@ async function fetchCategories() {
 
 async function fetchBrands() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/brands`);
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/brands`);
         const result = await res.json();
         if (result.success) {
+            window.currentBrands = result.data;
             const selects = ['new-brand', 'inventory-brand-filter', 'bulk-assign-brand'];
             selects.forEach(id => {
                 const el = document.getElementById(id);
@@ -38,9 +42,11 @@ async function fetchBrands() {
 
 async function fetchDistributors() {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/distributors`);
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/distributors`);
         const result = await res.json();
         if (result.success) {
+            window.currentDistributors = result.data;
             const selects = ['new-distributor', 'inventory-dist-filter', 'restock-distributor'];
             selects.forEach(id => {
                 const el = document.getElementById(id);
@@ -51,15 +57,6 @@ async function fetchDistributors() {
             });
         }
     } catch (e) { console.error(e); }
-}
-
-function openAddCategoryModal() { 
-    document.getElementById('add-category-form').reset(); 
-    document.getElementById('add-category-modal').classList.add('active'); 
-}
-
-function closeAddCategoryModal() { 
-    document.getElementById('add-category-modal').classList.remove('active'); 
 }
 
 async function submitNewCategory(e) { 
@@ -79,27 +76,18 @@ async function submitNewCategory(e) {
         const result = await res.json(); 
         
         if (result.success) { 
-            closeAddCategoryModal(); 
+            if (typeof closeAddCategoryModal === 'function') closeAddCategoryModal(); 
             fetchCategories(); 
-            showToast('Category Added!'); 
+            if (typeof showToast === 'function') showToast('Category Added!'); 
         } else { 
-            showToast(result.message); 
+            if (typeof showToast === 'function') showToast(result.message); 
         } 
     } catch (err) { 
-        showToast('Error saving category.'); 
+        if (typeof showToast === 'function') showToast('Error saving category.'); 
     } finally { 
         btn.innerText = 'Save Category'; 
         btn.disabled = false; 
     } 
-}
-
-function openAddBrandModal() { 
-    document.getElementById('new-brand-name').value = ''; 
-    document.getElementById('add-brand-modal').classList.add('active'); 
-}
-
-function closeAddBrandModal() { 
-    document.getElementById('add-brand-modal').classList.remove('active'); 
 }
 
 async function submitNewBrand(e) { 
@@ -119,27 +107,18 @@ async function submitNewBrand(e) {
         const result = await res.json(); 
         
         if (result.success) { 
-            closeAddBrandModal(); 
+            if (typeof closeAddBrandModal === 'function') closeAddBrandModal(); 
             fetchBrands(); 
-            showToast('Brand Added!'); 
+            if (typeof showToast === 'function') showToast('Brand Added!'); 
         } else { 
-            showToast(result.message); 
+            if (typeof showToast === 'function') showToast(result.message); 
         } 
     } catch (err) { 
-        showToast('Error saving brand.'); 
+        if (typeof showToast === 'function') showToast('Error saving brand.'); 
     } finally { 
         btn.innerText = 'Save Brand'; 
         btn.disabled = false; 
     } 
-}
-
-function openAddDistributorModal() { 
-    document.getElementById('new-dist-name').value = ''; 
-    document.getElementById('add-distributor-modal').classList.add('active'); 
-}
-
-function closeAddDistributorModal() { 
-    document.getElementById('add-distributor-modal').classList.remove('active'); 
 }
 
 async function submitNewDistributor(e) { 
@@ -159,144 +138,33 @@ async function submitNewDistributor(e) {
         const result = await res.json(); 
         
         if (result.success) { 
-            closeAddDistributorModal(); 
+            if (typeof closeAddDistributorModal === 'function') closeAddDistributorModal(); 
             fetchDistributors(); 
-            showToast('Distributor Added!'); 
+            if (typeof showToast === 'function') showToast('Distributor Added!'); 
         } else { 
-            showToast(result.message); 
+            if (typeof showToast === 'function') showToast(result.message); 
         } 
     } catch (err) { 
-        showToast('Error saving distributor.'); 
+        if (typeof showToast === 'function') showToast('Error saving distributor.'); 
     } finally { 
         btn.innerText = 'Save Distributor'; 
         btn.disabled = false; 
     } 
 }
 
-window.generateBulkShelfLabels = function() {
-    if (selectedInventory.size === 0) return showToast("Select items to print first.");
-    if (typeof window.jspdf === 'undefined' || typeof JsBarcode === 'undefined') {
-        return showToast("PDF/Barcode Library is still loading...");
-    }
-
-    showToast("Generating A4 Label Sheet...");
-    const { jsPDF } = window.jspdf;
-    
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    
-    const labelWidth = 65; 
-    const labelHeight = 35;
-    const marginX = 5;
-    const marginY = 5;
-    const cols = 3;
-    const rows = 8;
-    
-    let currentCol = 0;
-    let currentRow = 0;
-    let isFirstPage = true;
-
-    const canvas = document.createElement("canvas");
-
-    Array.from(selectedInventory).forEach((id) => {
-        const product = currentInventory.find(p => p._id === id);
-        if (!product || !product.variants || product.variants.length === 0) return;
-        
-        const variant = product.variants[0]; 
-        const barcodeVal = variant.sku || Math.floor(Math.random() * 1000000000000).toString();
-        
-        if (currentCol >= cols) {
-            currentCol = 0;
-            currentRow++;
-        }
-        if (currentRow >= rows) {
-            doc.addPage();
-            currentRow = 0;
-            currentCol = 0;
-            isFirstPage = false;
-        }
-
-        const x = marginX + (currentCol * labelWidth);
-        const y = marginY + (currentRow * labelHeight);
-
-        doc.setDrawColor(200, 200, 200);
-        doc.rect(x, y, labelWidth - 2, labelHeight - 2);
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.text(product.name.substring(0, 30), x + 2, y + 6);
-        
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.text(variant.weightOrVolume, x + 2, y + 10);
-        
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
-        doc.text(`Rs. ${variant.price}`, x + 2, y + 16);
-
-        try {
-            JsBarcode(canvas, barcodeVal, {
-                format: "CODE128",
-                width: 1.5,
-                height: 30,
-                displayValue: true,
-                fontSize: 12,
-                margin: 0
-            });
-            const imgData = canvas.toDataURL("image/jpeg", 1.0);
-            doc.addImage(imgData, 'JPEG', x + 2, y + 20, 50, 12);
-        } catch (e) {
-            console.warn("Barcode generation failed for SKU:", barcodeVal);
-        }
-
-        currentCol++;
-    });
-
-    doc.save(`Shelf_Labels_${new Date().toISOString().split('T')[0]}.pdf`);
-    showToast("Labels Ready for Printing! 🖨️");
-    
-    selectedInventory.clear();
-    updateInventoryBulkUI();
-    renderInventory();
-};
-
-function openBulkAssignModal() {
-    if (selectedInventory.size === 0) return;
-    document.getElementById('bulk-assign-count').innerText = `${selectedInventory.size} items selected`;
-    
-    const catSelect = document.getElementById('bulk-assign-category');
-    const brandSelect = document.getElementById('bulk-assign-brand');
-    
-    if(catSelect && typeof currentCategories !== 'undefined') {
-        catSelect.innerHTML = '<option value="">-- No Change --</option>';
-        currentCategories.forEach(cat => {
-            catSelect.innerHTML += `<option value="${cat.name}">${cat.name}</option>`;
-        });
-    }
-
-    if(brandSelect && typeof currentBrands !== 'undefined') {
-        brandSelect.innerHTML = '<option value="">-- No Change --</option>';
-        currentBrands.forEach(b => {
-            brandSelect.innerHTML += `<option value="${b.name}">${b.name}</option>`;
-        });
-    }
-
-    document.getElementById('bulk-assign-modal').classList.add('active');
-}
-
-function closeBulkAssignModal() {
-    document.getElementById('bulk-assign-modal').classList.remove('active');
-}
-
 async function applyBulkAssign() {
-    if (selectedInventory.size === 0) return;
+    if (typeof selectedInventory === 'undefined' || selectedInventory.size === 0) return;
     
     const newCat = document.getElementById('bulk-assign-category').value;
     const newBrand = document.getElementById('bulk-assign-brand').value;
     
-    if (!newCat && !newBrand) return showToast("No changes selected.");
+    if (!newCat && !newBrand) {
+        if (typeof showToast === 'function') showToast("No changes selected.");
+        return;
+    }
     
-    closeBulkAssignModal();
-    showToast(`Moving ${selectedInventory.size} products...`);
+    if (typeof closeBulkAssignModal === 'function') closeBulkAssignModal();
+    if (typeof showToast === 'function') showToast(`Moving ${selectedInventory.size} products...`);
     
     try {
         const ids = Array.from(selectedInventory);
@@ -316,35 +184,28 @@ async function applyBulkAssign() {
             }
         }));
         
-        showToast("Items moved successfully! 📦");
+        if (typeof showToast === 'function') showToast("Items moved successfully! 📦");
         selectedInventory.clear();
-        fetchInventory(); 
+        if (typeof fetchInventory === 'function') fetchInventory(); 
     } catch (err) {
-        showToast("Error moving items.");
+        if (typeof showToast === 'function') showToast("Error moving items.");
     }
 }
 
-function openBulkPriceModal() {
-    if (selectedInventory.size === 0) return;
-    document.getElementById('bulk-price-count').innerText = `${selectedInventory.size} items selected`;
-    document.getElementById('bulk-price-modal').classList.add('active');
-}
-
-function closeBulkPriceModal() { 
-    document.getElementById('bulk-price-modal').classList.remove('active'); 
-}
-
 async function applyBulkPriceEdit() {
-    if (selectedInventory.size === 0) return;
+    if (typeof selectedInventory === 'undefined' || selectedInventory.size === 0) return;
     
     const type = document.getElementById('bulk-price-type').value;
     const valueStr = document.getElementById('bulk-price-value').value;
     const value = parseFloat(valueStr);
     
-    if (!value || isNaN(value)) return showToast("Enter a valid number");
+    if (!value || isNaN(value)) {
+        if (typeof showToast === 'function') showToast("Enter a valid number");
+        return;
+    }
     
-    closeBulkPriceModal();
-    showToast(`Updating prices for ${selectedInventory.size} products...`);
+    if (typeof closeBulkPriceModal === 'function') closeBulkPriceModal();
+    if (typeof showToast === 'function') showToast(`Updating prices for ${selectedInventory.size} products...`);
     
     try {
         const ids = Array.from(selectedInventory);
@@ -370,110 +231,37 @@ async function applyBulkPriceEdit() {
             }
         }));
         
-        showToast("Prices Bulk Updated Successfully! 💰");
+        if (typeof showToast === 'function') showToast("Prices Bulk Updated Successfully! 💰");
         selectedInventory.clear();
-        fetchInventory(); 
+        if (typeof fetchInventory === 'function') fetchInventory(); 
     } catch (err) {
-        showToast("Error updating prices.");
+        if (typeof showToast === 'function') showToast("Error updating prices.");
     }
 }
 
 async function bulkDeactivateInventory() {
-    if (selectedInventory.size === 0) return;
+    if (typeof selectedInventory === 'undefined' || selectedInventory.size === 0) return;
     
     const btn = document.getElementById('inv-bulk-btn');
-    btn.innerText = 'Processing...'; 
-    btn.disabled = true;
+    if(btn) {
+        btn.innerText = 'Processing...'; 
+        btn.disabled = true;
+    }
     
     const ids = Array.from(selectedInventory);
     
     try {
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
         await Promise.all(ids.map(id => fetchFn(`${BACKEND_URL}/api/products/${id}/toggle`, { method: 'PUT' })));
-        showToast(`Toggled ${ids.length} products!`);
+        if (typeof showToast === 'function') showToast(`Toggled ${ids.length} products!`);
         selectedInventory.clear();
-        fetchInventory(); 
+        if (typeof fetchInventory === 'function') fetchInventory(); 
     } catch (err) { 
-        showToast('Error during bulk action.'); 
+        if (typeof showToast === 'function') showToast('Error during bulk action.'); 
     } finally { 
-        btn.disabled = false; 
-        updateInventoryBulkUI(); 
+        if(btn) btn.disabled = false; 
+        if (typeof updateInventoryBulkUI === 'function') updateInventoryBulkUI(); 
     }
-}
-
-function closeScannerModal() { 
-    if (html5QrcodeScanner) { 
-        html5QrcodeScanner.stop().then(() => { 
-            html5QrcodeScanner.clear(); 
-            html5QrcodeScanner = null; 
-        }).catch(err => console.log("Failed to stop scanner", err)); 
-    } 
-    document.getElementById('scanner-modal').classList.remove('active'); 
-}
-
-function startScanner(onSuccessCallback) { 
-    document.getElementById('scanner-modal').classList.add('active'); 
-    html5QrcodeScanner = new Html5Qrcode("reader"); 
-    
-    const scannerConfig = { 
-        fps: 20, 
-        formatsToSupport: [ 
-            Html5QrcodeSupportedFormats.EAN_13, 
-            Html5QrcodeSupportedFormats.EAN_8, 
-            Html5QrcodeSupportedFormats.UPC_A, 
-            Html5QrcodeSupportedFormats.UPC_E, 
-            Html5QrcodeSupportedFormats.CODE_128, 
-            Html5QrcodeSupportedFormats.CODE_39, 
-            Html5QrcodeSupportedFormats.QR_CODE 
-        ] 
-    }; 
-    
-    html5QrcodeScanner.start( 
-        { facingMode: "environment" }, 
-        scannerConfig, 
-        (decodedText) => { 
-            playBeep(); 
-            closeScannerModal(); 
-            onSuccessCallback(decodedText); 
-        }, 
-        (errorMessage) => { } 
-    ).catch(err => { 
-        showToast("Camera access denied or unavailable."); 
-        closeScannerModal(); 
-    }); 
-}
-
-function startScannerForSku(btnElement) { 
-    currentSkuInputTarget = btnElement.previousElementSibling; 
-    startScanner((decodedText) => { 
-        currentSkuInputTarget.value = decodedText; 
-        showToast(`SKU Captured: ${decodedText}`); 
-    }); 
-}
-
-function printBarcode(btnElement) {
-    const sku = btnElement.parentElement.querySelector('.var-sku').value.trim();
-    if(!sku) return showToast("Enter a SKU first to generate a barcode.");
-    
-    const container = document.getElementById('print-barcode-container');
-    container.innerHTML = '<svg id="barcode-canvas"></svg>';
-    
-    JsBarcode("#barcode-canvas", sku, { format: "CODE128", width: 2, height: 100, displayValue: true });
-    
-    container.classList.add('active-print');
-    window.print();
-    container.classList.remove('active-print');
-}
-
-function openAuditMode() {
-    document.getElementById('audit-scan-input').value = '';
-    document.getElementById('audit-result-area').classList.add('hidden');
-    document.getElementById('audit-modal').classList.add('active');
-    setTimeout(() => document.getElementById('audit-scan-input').focus(), 100);
-}
-
-function closeAuditMode() {
-    document.getElementById('audit-modal').classList.remove('active');
 }
 
 function handleAuditScan(e) {
@@ -491,16 +279,16 @@ function handleAuditScan(e) {
         }
 
         if (foundProduct && foundVariant) {
-            playBeep();
+            if (typeof playBeep === 'function') playBeep();
             document.getElementById('audit-item-name').innerText = `${foundProduct.name} (${foundVariant.weightOrVolume})`;
-            document.getElementById('audit-expected-stock').innerText = getDisplayStock(foundVariant);
+            document.getElementById('audit-expected-stock').innerText = typeof getDisplayStock === 'function' ? getDisplayStock(foundVariant) : foundVariant.stock;
             document.getElementById('audit-actual-stock').value = '';
             document.getElementById('audit-pid').value = foundProduct._id;
             document.getElementById('audit-vid').value = foundVariant._id;
             document.getElementById('audit-result-area').classList.remove('hidden');
             document.getElementById('audit-actual-stock').focus();
         } else {
-            showToast(`SKU ${sku} not found in database.`);
+            if (typeof showToast === 'function') showToast(`SKU ${sku} not found in database.`);
             document.getElementById('audit-scan-input').value = '';
         }
     }
@@ -508,17 +296,20 @@ function handleAuditScan(e) {
 
 async function submitAuditCorrection() {
     const actual = parseInt(document.getElementById('audit-actual-stock').value);
-    if(isNaN(actual)) return showToast("Enter actual physical count");
+    if(isNaN(actual)) {
+        if (typeof showToast === 'function') showToast("Enter actual physical count");
+        return;
+    }
     
     const pid = document.getElementById('audit-pid').value;
     const vid = document.getElementById('audit-vid').value;
     const product = currentInventory.find(p => p._id === pid);
     const variant = product.variants.find(v => v._id === vid);
     
-    const currentStock = getDisplayStock(variant);
+    const currentStock = typeof getDisplayStock === 'function' ? getDisplayStock(variant) : variant.stock;
 
     if (currentStock === actual) {
-        showToast("Count matches! No correction needed.");
+        if (typeof showToast === 'function') showToast("Count matches! No correction needed.");
     } else {
         const diff = actual - currentStock;
         try {
@@ -554,13 +345,13 @@ async function submitAuditCorrection() {
             });
             
             if (res.ok) {
-                showToast(`Inventory updated. Adjusted by ${diff}.`);
-                fetchInventory();
+                if (typeof showToast === 'function') showToast(`Inventory updated. Adjusted by ${diff}.`);
+                if (typeof fetchInventory === 'function') fetchInventory();
             } else {
-                showToast("Failed to update inventory.");
+                if (typeof showToast === 'function') showToast("Failed to update inventory.");
             }
         } catch(e) {
-            showToast("Network error.");
+            if (typeof showToast === 'function') showToast("Network error.");
         }
     }
     
@@ -569,99 +360,12 @@ async function submitAuditCorrection() {
     document.getElementById('audit-scan-input').focus();
 }
 
-function addVariantRow(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '') {
-    const container = document.getElementById('variants-container');
-    const row = document.createElement('div');
-    row.classList.add('variant-row');
-    row.innerHTML = `
-        <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" required style="min-width: 90px;">
-        <input type="number" placeholder="Price (₹)" class="var-price" value="${price}" required style="width: 70px; flex: none;">
-        <input type="number" placeholder="Stock" class="var-stock" value="${stock}" required style="width: 65px; flex: none;">
-        <input type="number" placeholder="Alert At" class="var-threshold" value="${threshold}" title="Low Stock Alert Threshold" required style="width: 65px; flex: none;">
-        <input type="date" class="var-expiry" value="${expiry ? new Date(expiry).toISOString().split('T')[0] : ''}" title="Expiry Date" style="width: 110px; flex: none;">
-        <input type="text" placeholder="SKU/Barcode" class="var-sku" value="${sku}" style="min-width: 90px;">
-        <button type="button" class="scan-sku-btn" onclick="startScannerForSku(this)" title="Scan Barcode">📷</button>
-        <button type="button" class="scan-sku-btn" onclick="printBarcode(this)" title="Generate & Print Label">🖨️</button>
-        <button type="button" class="remove-variant-btn" onclick="this.parentElement.remove()">✕</button>
-    `;
-    container.appendChild(row);
-}
-
-// ==============================================================
-// ADD PRODUCT MODAL LOGIC - UPDATED FOR BARCODE SCANNER PRE-FILL
-// ==============================================================
-function openAddProductModal(prefillSku = '') { 
-    if (typeof currentCategories !== 'undefined' && currentCategories.length === 0) return showToast("Create a category first!");
-    
-    document.getElementById('add-product-form').reset();
-    document.getElementById('edit-product-id').value = '';
-    document.getElementById('modal-form-title').innerText = 'Add New Product';
-    document.getElementById('current-image-text').style.display = 'none';
-    document.getElementById('variants-container').innerHTML = ''; 
-    document.getElementById('drop-zone').classList.remove('dragover');
-    
-    const previewImg = document.getElementById('drop-zone-preview');
-    const dropContent = document.getElementById('drop-zone-content');
-    if (previewImg) previewImg.style.display = 'none';
-    if (dropContent) dropContent.style.display = 'block';
-    
-    // Automatically inject the scanned SKU into the first variant row
-    addVariantRow('', '', '0', prefillSku, '5', ''); 
-    
-    // Switch to the inventory view if the user triggered this from the POS view
-    switchView('inventory');
-    
-    document.getElementById('add-product-modal').classList.add('active'); 
-}
-
-function openEditProductModal(id, e) {
-    if (e) e.stopPropagation();
-    const p = currentInventory.find(item => item._id === id);
-    if (!p) return;
-
-    document.getElementById('add-product-form').reset();
-    document.getElementById('edit-product-id').value = p._id;
-    document.getElementById('modal-form-title').innerText = 'Edit Product';
-    
-    document.getElementById('new-name').value = p.name;
-    document.getElementById('new-category').value = p.category;
-    document.getElementById('new-brand').value = p.brand || '';
-    document.getElementById('new-distributor').value = p.distributorName || '';
-    document.getElementById('new-tags').value = p.searchTags || ''; 
-    document.getElementById('current-image-text').style.display = p.imageUrl ? 'block' : 'none';
-
-    const previewImg = document.getElementById('drop-zone-preview');
-    const dropContent = document.getElementById('drop-zone-content');
-    if (p.imageUrl) {
-        if (previewImg) {
-            previewImg.src = p.imageUrl;
-            previewImg.style.display = 'block';
-        }
-        if (dropContent) dropContent.style.display = 'none';
-    } else {
-        if (previewImg) previewImg.style.display = 'none';
-        if (dropContent) dropContent.style.display = 'block';
-    }
-
-    const container = document.getElementById('variants-container');
-    container.innerHTML = '';
-    
-    if (p.variants && p.variants.length > 0) {
-        p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, getDisplayStock(v), v.sku, v.lowStockThreshold || 5, v.expiryDate || ''));
-    } else { 
-        addVariantRow(p.weightOrVolume || '', p.price || '', 0, '', 5, ''); 
-    }
-
-    document.getElementById('add-product-modal').classList.add('active');
-}
-
-function closeAddProductModal() { 
-    document.getElementById('add-product-modal').classList.remove('active'); 
-}
-
 async function autoFillProduct() {
     const nameInput = document.getElementById('new-name').value.trim();
-    if (!nameInput) return showToast("Please enter a Product Name first!");
+    if (!nameInput) {
+        if (typeof showToast === 'function') showToast("Please enter a Product Name first!");
+        return;
+    }
 
     const btn = document.getElementById('btn-autofill');
     const originalText = btn.innerHTML;
@@ -713,13 +417,13 @@ async function autoFillProduct() {
                 document.getElementById('new-tags').value = searchTags;
             }
 
-            showToast("✨ Auto-Filled via Gemini AI!");
+            if (typeof showToast === 'function') showToast("✨ Auto-Filled via Gemini AI!");
         } else {
-            showToast(result.message || "Failed to auto-fill.");
+            if (typeof showToast === 'function') showToast(result.message || "Failed to auto-fill.");
         }
     } catch (err) {
         console.error("Auto-Fill Error:", err);
-        showToast("Network error during AI auto-fill.");
+        if (typeof showToast === 'function') showToast("Network error during AI auto-fill.");
     } finally {
         btn.innerHTML = originalText;
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -829,42 +533,17 @@ async function submitNewProduct(e) {
             body: JSON.stringify(p) 
         });
         
-        closeAddProductModal(); 
-        inventoryPage = 1; 
-        fetchInventory(); 
-        showToast(editId ? 'Product Updated!' : 'Product Added!');
+        if (typeof closeAddProductModal === 'function') closeAddProductModal(); 
+        if (typeof inventoryPage !== 'undefined') window.inventoryPage = 1; 
+        if (typeof fetchInventory === 'function') fetchInventory(); 
+        if (typeof showToast === 'function') showToast(editId ? 'Product Updated!' : 'Product Added!');
     } catch (err) { 
         console.error("Save Product Error:", err); 
-        showToast('Error saving product.'); 
+        if (typeof showToast === 'function') showToast('Error saving product.'); 
     } finally { 
         btn.innerText = 'Save Product'; 
         btn.disabled = false; 
     }
-}
-
-function openRestockModal() { 
-    if (typeof currentDistributors !== 'undefined' && currentDistributors.length === 0) {
-        return showToast("Create a Distributor first!"); 
-    }
-    
-    document.getElementById('restock-form').reset(); 
-    document.getElementById('restock-selected-item').classList.add('hidden'); 
-    document.getElementById('restock-search-results').innerHTML = ''; 
-    document.getElementById('margin-display').innerText = 'Margin: --% | Profit: ₹--';
-    restockSelectedVariant = null; 
-    document.getElementById('submit-restock-btn').disabled = true; 
-    document.getElementById('restock-modal').classList.add('active'); 
-}
-
-function closeRestockModal() { 
-    document.getElementById('restock-modal').classList.remove('active'); 
-}
-
-function startScannerForRestock() { 
-    startScanner((decodedText) => { 
-        document.getElementById('restock-search').value = decodedText; 
-        searchRestockItem(decodedText); 
-    }); 
 }
 
 async function searchRestockItem(overrideSearchTerm = null) {
@@ -896,9 +575,11 @@ async function searchRestockItem(overrideSearchTerm = null) {
                     itemDiv.className = 'restock-result-item';
                     itemDiv.innerHTML = `
                         <h4>${p.name}</h4>
-                        <p>${v.weightOrVolume} • Current Stock: ${getDisplayStock(v)} • SKU: ${v.sku || 'N/A'}</p>
+                        <p>${v.weightOrVolume} • Current Stock: ${typeof getDisplayStock === 'function' ? getDisplayStock(v) : v.stock} • SKU: ${v.sku || 'N/A'}</p>
                     `;
-                    itemDiv.onclick = () => selectItemForRestock(p, v);
+                    itemDiv.onclick = () => {
+                        if(typeof selectItemForRestock === 'function') selectItemForRestock(p, v);
+                    };
                     resultsContainer.appendChild(itemDiv);
                 }
             });
@@ -908,53 +589,12 @@ async function searchRestockItem(overrideSearchTerm = null) {
     }
 }
 
-function selectItemForRestock(product, variant) {
-    restockSelectedVariant = { productId: product._id, variantId: variant._id };
-    
-    document.getElementById('restock-search-results').innerHTML = ''; 
-    document.getElementById('restock-search').value = '';
-    
-    document.getElementById('restock-item-name').innerText = product.name;
-    document.getElementById('restock-item-variant').innerText = `${variant.weightOrVolume} (Current Stock: ${getDisplayStock(variant)})`;
-    document.getElementById('restock-product-id').value = product._id; 
-    document.getElementById('restock-variant-id').value = variant._id;
-    document.getElementById('restock-sell').value = variant.price; 
-    
-    document.getElementById('restock-selected-item').classList.remove('hidden'); 
-    document.getElementById('submit-restock-btn').disabled = false;
-}
-
-function calculateMargin() {
-    const costInput = document.getElementById('restock-cost').value;
-    const sellInput = document.getElementById('restock-sell').value;
-    const display = document.getElementById('margin-display');
-    
-    if (!display) return;
-
-    const cost = parseFloat(costInput);
-    const sell = parseFloat(sellInput);
-
-    if (cost > 0 && sell > 0) {
-        const profit = sell - cost;
-        const margin = ((profit / sell) * 100).toFixed(1);
-        display.innerText = `Margin: ${margin}% | Profit: ₹${profit.toFixed(2)}`;
-        if (profit < 0) {
-            display.style.color = '#991b1b';
-            display.style.background = '#fef2f2';
-        } else {
-            display.style.color = '#0c4a6e';
-            display.style.background = '#e0f2fe';
-        }
-    } else {
-        display.innerText = `Margin: --% | Profit: ₹--`;
-        display.style.color = '#0c4a6e';
-        display.style.background = '#e0f2fe';
-    }
-}
-
 async function submitRestock(e) {
     e.preventDefault();
-    if (!restockSelectedVariant) return showToast("Please select an item to restock.");
+    if (typeof restockSelectedVariant === 'undefined' || !restockSelectedVariant) {
+        if (typeof showToast === 'function') showToast("Please select an item to restock.");
+        return;
+    }
     
     const btn = document.getElementById('submit-restock-btn'); 
     btn.innerText = 'Processing...'; 
@@ -985,15 +625,15 @@ async function submitRestock(e) {
         const result = await res.json();
         
         if (result.success) { 
-            showToast('Shipment Received & Logged! 📦'); 
-            closeRestockModal(); 
-            fetchInventory(); 
+            if (typeof showToast === 'function') showToast('Shipment Received & Logged! 📦'); 
+            if (typeof closeRestockModal === 'function') closeRestockModal(); 
+            if (typeof fetchInventory === 'function') fetchInventory(); 
             if (paymentStatus === 'Credit') fetchDistributors(); 
         } else { 
-            showToast('Failed to process restock.'); 
+            if (typeof showToast === 'function') showToast('Failed to process restock.'); 
         }
     } catch (err) { 
-        showToast('Network error.'); 
+        if (typeof showToast === 'function') showToast('Network error.'); 
     } finally { 
         btn.innerText = 'Process Restock'; 
         btn.disabled = false; 
@@ -1013,8 +653,8 @@ async function openAccountsPayable() {
         const result = await res.json();
         
         if (result.success) {
-            currentDistributors = result.data; 
-            const debtors = currentDistributors.filter(d => d.totalPendingAmount > 0);
+            window.currentDistributors = result.data; 
+            const debtors = window.currentDistributors.filter(d => d.totalPendingAmount > 0);
             
             container.innerHTML = '';
             if (debtors.length === 0) {
@@ -1031,7 +671,7 @@ async function openAccountsPayable() {
                         </div>
                         <div style="text-align: right;">
                             <div style="font-size:18px; font-weight:800; color:#dc2626; margin-bottom:8px;">₹${d.totalPendingAmount.toFixed(2)}</div>
-                            <button class="primary-btn-small" style="background:#dc2626;" onclick="promptDistributorPayment('${d._id}', '${d.name}', ${d.totalPendingAmount})">Log Payment</button>
+                            <button class="primary-btn-small" style="background:#dc2626;" onclick="if(typeof promptDistributorPayment === 'function') promptDistributorPayment('${d._id}', '${d.name.replace(/'/g, "\\'")}', ${d.totalPendingAmount})">Log Payment</button>
                         </div>
                     </div>
                 `;
@@ -1042,16 +682,15 @@ async function openAccountsPayable() {
     }
 }
 
-function closeAccountsPayable() {
-    document.getElementById('accounts-payable-modal').classList.remove('active');
-}
-
 function promptDistributorPayment(id, name, maxAmount) {
     const amountStr = prompt(`Logging payment to ${name}.\nOutstanding Balance: ₹${maxAmount}\n\nEnter amount paid (₹):`, maxAmount);
     if (!amountStr) return;
     
     const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount <= 0) return showToast("Invalid amount.");
+    if (isNaN(amount) || amount <= 0) {
+        if (typeof showToast === 'function') showToast("Invalid amount.");
+        return;
+    }
     
     const mode = prompt("Payment Mode (e.g. Bank Transfer, Cash, UPI):", "Bank Transfer");
     const note = prompt("Reference Note / Check Number (Optional):", "");
@@ -1060,7 +699,7 @@ function promptDistributorPayment(id, name, maxAmount) {
 }
 
 async function submitDistributorPayment(id, amount, mode, note) {
-    showToast('Processing payment record...');
+    if (typeof showToast === 'function') showToast('Processing payment record...');
     try {
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
         const res = await fetchFn(`${BACKEND_URL}/api/distributors/${id}/pay`, {
@@ -1071,13 +710,13 @@ async function submitDistributorPayment(id, amount, mode, note) {
         
         const result = await res.json();
         if (result.success) {
-            showToast('Supplier payment logged successfully! ✅');
+            if (typeof showToast === 'function') showToast('Supplier payment logged successfully! ✅');
             openAccountsPayable(); 
         } else {
-            showToast(result.message || 'Error processing payment.');
+            if (typeof showToast === 'function') showToast(result.message || 'Error processing payment.');
         }
     } catch(e) {
-        showToast('Network error logging payment.');
+        if (typeof showToast === 'function') showToast('Network error logging payment.');
     }
 }
 
@@ -1088,40 +727,13 @@ function quickRestock(productId, variantId, event) {
     const variant = product.variants.find(v => v._id === variantId);
     if (!variant) return;
 
-    openRestockModal();
-    selectItemForRestock(product, variant);
-}
-
-let rtvSelectedVariant = null;
-
-function openRTVModal(productId, variantId, event) {
-    event.stopPropagation();
-    const product = currentInventory.find(p => p._id === productId);
-    if (!product) return;
-    const variant = product.variants.find(v => v._id === variantId);
-    if (!variant) return;
-    
-    rtvSelectedVariant = { productId, variantId };
-    
-    document.getElementById('rtv-form').reset();
-    document.getElementById('rtv-item-name').innerText = product.name;
-    const dStock = getDisplayStock(variant); 
-    document.getElementById('rtv-item-variant').innerText = `${variant.weightOrVolume} (Current Stock: ${dStock})`;
-    document.getElementById('rtv-distributor').value = product.distributorName || '';
-    document.getElementById('rtv-max-qty').innerText = dStock;
-    document.getElementById('rtv-qty').max = dStock;
-    
-    document.getElementById('rtv-modal').classList.add('active');
-}
-
-function closeRTVModal() {
-    document.getElementById('rtv-modal').classList.remove('active');
-    rtvSelectedVariant = null;
+    if (typeof openRestockModal === 'function') openRestockModal();
+    if (typeof selectItemForRestock === 'function') selectItemForRestock(product, variant);
 }
 
 async function submitRTV(e) {
     e.preventDefault();
-    if (!rtvSelectedVariant) return;
+    if (typeof rtvSelectedVariant === 'undefined' || !rtvSelectedVariant) return;
     
     const btn = document.getElementById('submit-rtv-btn');
     btn.innerText = 'Processing...';
@@ -1147,98 +759,27 @@ async function submitRTV(e) {
         const result = await res.json();
         
         if (result.success) {
-            showToast('Return Processed Successfully! 🔙');
-            generateReturnChalanPDF(
-                payload.distributorName, 
-                document.getElementById('rtv-item-name').innerText, 
-                payload.returnedQuantity, 
-                payload.refundAmount, 
-                payload.reason
-            );
-            closeRTVModal();
-            fetchInventory();
+            if (typeof showToast === 'function') showToast('Return Processed Successfully! 🔙');
+            if (typeof generateReturnChalanPDF === 'function') {
+                generateReturnChalanPDF(
+                    payload.distributorName, 
+                    document.getElementById('rtv-item-name').innerText, 
+                    payload.returnedQuantity, 
+                    payload.refundAmount, 
+                    payload.reason
+                );
+            }
+            if (typeof closeRTVModal === 'function') closeRTVModal();
+            if (typeof fetchInventory === 'function') fetchInventory();
         } else {
-            showToast(result.message || 'Failed to process return.');
+            if (typeof showToast === 'function') showToast(result.message || 'Failed to process return.');
         }
     } catch (err) {
-        showToast('Network error.');
+        if (typeof showToast === 'function') showToast('Network error.');
     } finally {
         btn.innerText = 'Process Return';
         btn.disabled = false;
     }
-}
-
-function generateReturnChalanPDF(distributor, itemName, qty, refund, reason) {
-    try {
-        const doc = new window.jspdf.jsPDF();
-        
-        doc.setFontSize(22);
-        doc.setTextColor(10, 54, 34); 
-        doc.text("DAILYPICK.", 14, 20);
-        
-        doc.setFontSize(12);
-        doc.setTextColor(100);
-        doc.text("RETURN CHALLAN (RTV)", 14, 28);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(0);
-        doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 40);
-        doc.text(`Distributor: ${distributor}`, 14, 46);
-        doc.text(`Challan Ref: RTV-${Date.now().toString().slice(-6)}`, 14, 52);
-        
-        doc.autoTable({
-            startY: 60,
-            head: [['Item Description', 'Qty Returned', 'Reason', 'Expected Refund']],
-            body: [[itemName, qty, reason, `Rs. ${refund.toFixed(2)}`]],
-            theme: 'grid',
-            headStyles: { fillColor: [220, 38, 38] } 
-        });
-        
-        const finalY = doc.lastAutoTable.finalY || 60;
-        doc.text("Authorized Signature: ____________________", 14, finalY + 30);
-        doc.text("Driver Signature: ________________________", 100, finalY + 30);
-        
-        doc.save(`RTV_${distributor.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-    } catch(e) {
-        console.error("PDF Error:", e);
-        showToast("RTV processed, but PDF failed to generate.");
-    }
-}
-
-function openRestockHistory(productId, variantId, event) {
-    event.stopPropagation();
-    const product = currentInventory.find(p => p._id === productId);
-    if (!product) return;
-    const variant = product.variants.find(v => v._id === variantId);
-    if (!variant) return;
-
-    document.getElementById('history-item-name').innerText = product.name;
-    document.getElementById('history-item-variant').innerText = variant.weightOrVolume;
-    
-    const container = document.getElementById('history-timeline-container');
-    container.innerHTML = '';
-
-    if (!variant.purchaseHistory || variant.purchaseHistory.length === 0) {
-        container.innerHTML = '<p class="empty-state">No history found for this item.</p>';
-    } else {
-        const sortedHistory = [...variant.purchaseHistory].sort((a,b) => new Date(b.date) - new Date(a.date));
-        
-        sortedHistory.forEach(h => {
-            const dateStr = new Date(h.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-            const item = document.createElement('div');
-            item.className = 'history-item';
-            item.innerHTML = `
-                <div class="history-icon">📦</div>
-                <div class="history-details">
-                    <h4>+${h.addedQuantity} Units (Inv: ${h.invoiceNumber})</h4>
-                    <p>${dateStr} • Cost: ₹${h.purchasingPrice} • Sold For: ₹${h.sellingPrice}</p>
-                </div>
-            `;
-            container.appendChild(item);
-        });
-    }
-
-    document.getElementById('history-modal').classList.add('active');
 }
 
 async function saveInlineEdit(productId, variantId, field, element, event) {
@@ -1253,7 +794,7 @@ async function saveInlineEdit(productId, variantId, field, element, event) {
     if (Number(newVal) === variant[field]) return; 
     
     variant[field] = Number(newVal);
-    showToast('Saving update...');
+    if (typeof showToast === 'function') showToast('Saving update...');
     
     try {
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
@@ -1265,68 +806,12 @@ async function saveInlineEdit(productId, variantId, field, element, event) {
         
         const result = await res.json();
         if (result.success) {
-            showToast('Item updated successfully!');
-            updateInventoryDashboard();
+            if (typeof showToast === 'function') showToast('Item updated successfully!');
+            if (typeof updateInventoryDashboard === 'function') updateInventoryDashboard();
         } else {
-            showToast('Failed to update.');
+            if (typeof showToast === 'function') showToast('Failed to update.');
         }
     } catch(e) {
-        showToast('Error saving inline edit.');
+        if (typeof showToast === 'function') showToast('Error saving inline edit.');
     }
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    const fileInput = document.getElementById('new-image');
-    const dropZone = document.getElementById('drop-zone');
-    const dropContent = document.getElementById('drop-zone-content');
-    const previewImg = document.getElementById('drop-zone-preview');
-
-    if (fileInput && dropZone) {
-        fileInput.addEventListener('change', function() {
-            if (this.files && this.files[0]) {
-                const file = this.files[0];
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        if(previewImg) {
-                            previewImg.src = e.target.result;
-                            previewImg.style.display = 'block';
-                        }
-                        if(dropContent) dropContent.style.display = 'none';
-                    };
-                    reader.readAsDataURL(file);
-                }
-            } else {
-                if(previewImg) previewImg.style.display = 'none';
-                if(dropContent) dropContent.style.display = 'block';
-            }
-        });
-
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-        });
-
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            
-            if (files && files.length > 0) {
-                fileInput.files = files;
-                fileInput.dispatchEvent(new Event('change')); 
-            }
-        });
-    }
-});
