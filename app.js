@@ -1,55 +1,11 @@
 /* app.js */
 
-const originalFetch = window.fetch.bind(window);
-window.fetch = async function(resource, config = {}) {
-    if (typeof resource === 'string' && typeof BACKEND_URL !== 'undefined' && resource.startsWith(BACKEND_URL)) {
-        const token = localStorage.getItem('adminToken');
-        if (token) {
-            config.headers = {
-                ...config.headers,
-                'Authorization': `Bearer ${token}`
-            };
-        }
-    }
-    
-    const response = await originalFetch(resource, config);
-
-    if (response.status === 401 || response.status === 403) {
-        if (typeof resource === 'string' && !resource.includes('/api/auth/')) {
-            console.warn('Unauthorized intercept. Session expired or revoked.');
-            if (typeof window.logoutUser === 'function') {
-                window.logoutUser();
-                if (typeof showToast === 'function') showToast("Session expired. Please log in again.");
-            }
-        }
-    }
-
-    if (response.status === 429) {
-        console.warn('Rate limit exceeded.');
-        if (typeof showToast === 'function') showToast("Too many requests. Please slow down.");
-    }
-    
-    return response;
-};
-
 let currentUser = null;
 let currentPin = '';
 let realtimeSocket = null; 
 let realtimeReconnectTimeout = null;
 let globalStoreSettings = {};
 let wakeLock = null;
-
-// OPTIMIZED: Centralized modal utility to reduce DOM manipulation boilerplate.
-window.toggleModal = function(modalId, forceState) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        if (forceState !== undefined) {
-            forceState ? modal.classList.add('active') : modal.classList.remove('active');
-        } else {
-            modal.classList.toggle('active');
-        }
-    }
-};
 
 async function requestWakeLock() {
     try {
@@ -83,7 +39,7 @@ window.setupRealtimeConnection = function() {
     const token = localStorage.getItem('adminToken');
     if (!token) return;
 
-    const wsUrl = BACKEND_URL.replace(/^http/, 'ws') + `/api/ws/pos?token=${token}`;
+    const wsUrl = window.BACKEND_URL.replace(/^http/, 'ws') + `/api/ws/pos?token=${token}`;
     
     try {
         realtimeSocket = new WebSocket(wsUrl);
@@ -142,21 +98,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     if (savedUser) {
         console.log("Found saved session:", savedUser);
-        currentUser = JSON.parse(savedUser);
+        window.currentUser = JSON.parse(savedUser);
         
         if (loginContainer) loginContainer.style.display = 'none';
         if (appContainer) appContainer.style.display = 'block';
         
-        applyRoleRestrictions();
-        initializeApp();
+        if (typeof window.applyRoleRestrictions === 'function') window.applyRoleRestrictions();
+        window.initializeApp();
 
         try {
-            const res = await fetch(`${BACKEND_URL}/api/auth/verify?id=${currentUser._id || currentUser.id}`);
+            const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/auth/verify?id=${window.currentUser._id || window.currentUser.id}`);
             const result = await res.json();
             
-            if (!res.ok || !result.success || result.data.role !== currentUser.role) {
+            if (!res.ok || !result.success || result.data.role !== window.currentUser.role) {
                 console.warn("Session verification failed. Role mismatch or invalid user. Forcing logout.");
-                window.logoutUser();
+                if (typeof window.logoutUser === 'function') window.logoutUser();
                 if (typeof showToast === 'function') showToast("Session invalid. Please log in again.");
             }
         } catch (e) {
@@ -174,9 +130,9 @@ document.addEventListener('keydown', (e) => {
     const loginContainer = document.getElementById('pin-login-container');
     if (loginContainer && loginContainer.style.display !== 'none' && document.activeElement.id !== 'login-username') {
         if (e.key >= '0' && e.key <= '9') {
-            window.handlePinInput(e.key);
+            if (typeof window.handlePinInput === 'function') window.handlePinInput(e.key);
         } else if (e.key === 'Backspace' || e.key === 'Delete') {
-            window.clearPinInput();
+            if (typeof window.clearPinInput === 'function') window.clearPinInput();
         }
     }
 
@@ -186,231 +142,7 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-window.handlePinInput = function(num) {
-    if (currentPin.length < 4) {
-        currentPin += num;
-        updatePinDisplay();
-    }
-    if (currentPin.length === 4) {
-        window.submitPinLogin();
-    }
-};
-
-window.clearPinInput = function() {
-    currentPin = '';
-    updatePinDisplay();
-};
-
-function updatePinDisplay() {
-    for (let i = 1; i <= 4; i++) {
-        const dot = document.getElementById(`pin-dot-${i}`);
-        if (dot) {
-            if (i <= currentPin.length) {
-                const dynamicColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
-                dot.style.background = dynamicColor || '#062C1E'; 
-            } else {
-                dot.style.background = 'transparent';
-            }
-        }
-    }
-}
-
-window.submitPinLogin = async function() {
-    const usernameInput = document.getElementById('login-username');
-    const username = usernameInput ? usernameInput.value.trim() : '';
-
-    if (!username) {
-        if (typeof showToast === 'function') showToast("Please enter your Username");
-        window.clearPinInput();
-        if (usernameInput) usernameInput.focus();
-        return;
-    }
-
-    try {
-        if (typeof BACKEND_URL === 'undefined') {
-            if (typeof showToast === 'function') showToast("System Error: Backend URL missing");
-            window.clearPinInput();
-            return;
-        }
-
-        const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: username, pin: currentPin })
-        });
-        
-        const result = await res.json();
-        
-        if (result.success) {
-            currentUser = result.data;
-            localStorage.setItem('dailypick_user', JSON.stringify(currentUser));
-            
-            if (result.token) {
-                localStorage.setItem('adminToken', result.token);
-            }
-            
-            window.showLocationSelection();
-            
-        } else {
-            if (typeof showToast === 'function') showToast(result.message || 'Invalid Username or PIN');
-            window.clearPinInput();
-        }
-    } catch (e) {
-        console.error("Login fetch error:", e);
-        if (typeof showToast === 'function') showToast('Error connecting to server.');
-        window.clearPinInput();
-    }
-};
-
-window.showLocationSelection = async function() {
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/stores`);
-        if (res.ok) {
-            const data = await res.json();
-            if (data.data && data.data.length > 0) {
-                document.getElementById('pin-entry-step').style.display = 'none';
-                document.getElementById('location-selection-step').style.display = 'block';
-                
-                const storeSelect = document.getElementById('login-store-select');
-                storeSelect.innerHTML = '<option value="">Select Store...</option>';
-                data.data.forEach(s => {
-                    storeSelect.innerHTML += `<option value="${s._id}">${s.name} (${s.location})</option>`;
-                });
-                return; 
-            }
-        }
-    } catch (e) {}
-
-    window.finalizeLogin();
-};
-
-window.fetchRegistersForStore = async function(storeId) {
-    if (!storeId) return;
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/stores/${storeId}/registers`);
-        if (res.ok) {
-            const data = await res.json();
-            const regSelect = document.getElementById('login-register-select');
-            regSelect.innerHTML = '<option value="">Select Register...</option>';
-            if (data.data) {
-                data.data.forEach(r => {
-                    regSelect.innerHTML += `<option value="${r._id}">${r.name}</option>`;
-                });
-            }
-        }
-    } catch (e) { console.error("Error fetching registers", e); }
-};
-
-window.finalizeLogin = function() {
-    const storeSelect = document.getElementById('login-store-select');
-    const regSelect = document.getElementById('login-register-select');
-    
-    if (storeSelect && storeSelect.value) {
-        currentStoreId = storeSelect.value;
-        localStorage.setItem('dailypick_storeId', currentStoreId);
-    }
-    if (regSelect && regSelect.value) {
-        currentRegisterId = regSelect.value;
-        localStorage.setItem('dailypick_registerId', currentRegisterId);
-    }
-
-    const loginContainer = document.getElementById('pin-login-container');
-    const appContainer = document.getElementById('app-container');
-    const usernameInput = document.getElementById('login-username');
-    
-    if (loginContainer) loginContainer.style.display = 'none';
-    if (appContainer) appContainer.style.display = 'block';
-    
-    if (usernameInput) usernameInput.value = '';
-    window.clearPinInput();
-
-    applyRoleRestrictions();
-    initializeApp();
-    if (typeof showToast === 'function') showToast(`Welcome, ${currentUser.name}!`);
-};
-
-window.logoutUser = function() {
-    localStorage.removeItem('dailypick_user');
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('dailypick_storeId');
-    localStorage.removeItem('dailypick_registerId');
-    
-    if (realtimeSocket) {
-        realtimeSocket.onclose = null; 
-        realtimeSocket.close();
-        realtimeSocket = null;
-    }
-    if (realtimeReconnectTimeout) clearTimeout(realtimeReconnectTimeout);
-    
-    if (wakeLock !== null) {
-        wakeLock.release().then(() => wakeLock = null);
-    }
-
-    currentUser = null;
-    currentStoreId = null;
-    currentRegisterId = null;
-    
-    const loginContainer = document.getElementById('pin-login-container');
-    const appContainer = document.getElementById('app-container');
-    
-    if (loginContainer) loginContainer.style.display = 'flex';
-    if (appContainer) appContainer.style.display = 'none';
-    
-    const pinStep = document.getElementById('pin-entry-step');
-    const locStep = document.getElementById('location-selection-step');
-    if (pinStep) pinStep.style.display = 'block';
-    if (locStep) locStep.style.display = 'none';
-
-    window.clearPinInput();
-};
-
-function applyRoleRestrictions() {
-    const display = document.getElementById('current-user-display');
-    if (display) {
-        display.innerText = `${currentUser.name} (${currentUser.role})`;
-        display.style.display = 'block';
-    }
-    
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) logoutBtn.style.display = 'block';
-
-    const adminOnlyElements = document.querySelectorAll('.admin-only');
-
-    if (currentUser.role === 'Cashier') {
-        const navOverview = document.getElementById('nav-overview');
-        const navInventory = document.getElementById('nav-inventory');
-        const navAnalytics = document.getElementById('nav-analytics');
-        const navCustomers = document.getElementById('nav-customers');
-        
-        if (navOverview) navOverview.style.display = 'none';
-        if (navInventory) navInventory.style.display = 'none';
-        if (navAnalytics) navAnalytics.style.display = 'none';
-        if (navCustomers) navCustomers.style.display = 'none';
-        
-        const eodBtn = document.getElementById('eod-report-btn');
-        if (eodBtn) eodBtn.style.display = 'none';
-
-        adminOnlyElements.forEach(el => el.style.display = 'none');
-        if (typeof switchView === 'function') switchView('pos'); 
-    } else {
-        const navOverview = document.getElementById('nav-overview');
-        const navInventory = document.getElementById('nav-inventory');
-        const navAnalytics = document.getElementById('nav-analytics');
-        const navCustomers = document.getElementById('nav-customers');
-        
-        if (navOverview) navOverview.style.display = 'flex';
-        if (navInventory) navInventory.style.display = 'flex';
-        if (navAnalytics) navAnalytics.style.display = 'flex';
-        if (navCustomers) navCustomers.style.display = 'flex';
-        
-        const eodBtn = document.getElementById('eod-report-btn');
-        if (eodBtn) eodBtn.style.display = 'inline-block';
-
-        adminOnlyElements.forEach(el => el.style.display = 'inline-flex');
-    }
-}
-
-function initializeApp() {
+window.initializeApp = function() {
     if (typeof window.fetchGlobalSettings === 'function') window.fetchGlobalSettings(); 
     if (typeof fetchCategories === 'function') fetchCategories(); 
     if (typeof fetchBrands === 'function') fetchBrands();
@@ -421,12 +153,12 @@ function initializeApp() {
     window.setupRealtimeConnection();
     requestWakeLock(); 
 
-    if (currentUser && currentUser.role === 'Admin') {
+    if (window.currentUser && window.currentUser.role === 'Admin') {
         if (typeof renderOverview === 'function') renderOverview(); 
     }
     
     if (typeof checkCurrentShift === 'function') checkCurrentShift();
-}
+};
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -445,19 +177,19 @@ if ('serviceWorker' in navigator) {
 // ==========================================
 
 window.openStaffModal = async function() {
-    window.toggleModal('staff-modal', true);
+    if (typeof window.toggleModal === 'function') window.toggleModal('staff-modal', true);
     await fetchStaff();
 };
 
 window.closeStaffModal = function() {
-    window.toggleModal('staff-modal', false);
+    if (typeof window.toggleModal === 'function') window.toggleModal('staff-modal', false);
 };
 
 window.fetchStaff = async function() {
     const container = document.getElementById('staff-list-container');
     container.innerHTML = '<p class="empty-state">Loading staff...</p>';
     try {
-        const res = await fetch(`${BACKEND_URL}/api/users/staff`); 
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/users/staff`); 
         if (!res.ok) throw new Error('Failed to load staff');
         const data = await res.json();
         
@@ -492,45 +224,45 @@ window.submitNewStaff = async function(e) {
     const role = document.getElementById('new-staff-role').value;
 
     if (!name || !username || pin.length !== 4) {
-        showToast("Please provide valid details. PIN must be 4 digits.");
+        if (typeof showToast === 'function') showToast("Please provide valid details. PIN must be 4 digits.");
         return;
     }
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, username, pin, role })
         });
         const data = await res.json();
         if (data.success) {
-            showToast("User created successfully!");
+            if (typeof showToast === 'function') showToast("User created successfully!");
             document.getElementById('new-staff-name').value = '';
             document.getElementById('new-staff-username').value = '';
             document.getElementById('new-staff-pin').value = '';
             await fetchStaff();
         } else {
-            showToast(data.message || "Failed to create user");
+            if (typeof showToast === 'function') showToast(data.message || "Failed to create user");
         }
     } catch (e) {
-        showToast("Network Error: Could not save user.");
+        if (typeof showToast === 'function') showToast("Network Error: Could not save user.");
     }
 };
 
 window.openPromotionsModal = async function() {
-    window.toggleModal('promotions-modal', true);
+    if (typeof window.toggleModal === 'function') window.toggleModal('promotions-modal', true);
     await fetchPromotionsList();
 };
 
 window.closePromotionsModal = function() {
-    window.toggleModal('promotions-modal', false);
+    if (typeof window.toggleModal === 'function') window.toggleModal('promotions-modal', false);
 };
 
 window.fetchPromotionsList = async function() {
     const container = document.getElementById('promotions-list-container');
     container.innerHTML = '<p class="empty-state">Loading active promotions...</p>';
     try {
-        const res = await fetch(`${BACKEND_URL}/api/promotions`); 
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/promotions`); 
         if (!res.ok) throw new Error('Failed to load promotions');
         const data = await res.json();
         
@@ -565,39 +297,39 @@ window.submitNewPromotion = async function(e) {
     const minOrder = parseFloat(document.getElementById('promo-min-order').value) || 0;
 
     if (!code || isNaN(value)) {
-        showToast("Valid code and discount value required.");
+        if (typeof showToast === 'function') showToast("Valid code and discount value required.");
         return;
     }
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/promotions`, {
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/promotions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code, discountType: type, discountValue: value, minOrderValue: minOrder })
         });
         const data = await res.json();
         if (data.success) {
-            showToast("Promotion launched!");
+            if (typeof showToast === 'function') showToast("Promotion launched!");
             document.getElementById('promo-code').value = '';
             document.getElementById('promo-value').value = '';
             document.getElementById('promo-min-order').value = '';
             await fetchPromotionsList();
             if (typeof fetchPromotions === 'function') fetchPromotions(); 
         } else {
-            showToast(data.message || "Failed to create promo");
+            if (typeof showToast === 'function') showToast(data.message || "Failed to create promo");
         }
     } catch (e) {
-        showToast("Network Error: Could not save promo.");
+        if (typeof showToast === 'function') showToast("Network Error: Could not save promo.");
     }
 };
 
 window.openBulkImportModal = function() {
-    window.toggleModal('bulk-import-modal', true);
+    if (typeof window.toggleModal === 'function') window.toggleModal('bulk-import-modal', true);
     document.getElementById('bulk-import-results').innerHTML = '';
 };
 
 window.closeBulkImportModal = function() {
-    window.toggleModal('bulk-import-modal', false);
+    if (typeof window.toggleModal === 'function') window.toggleModal('bulk-import-modal', false);
     document.getElementById('bulk-csv-upload').value = '';
 };
 
@@ -619,13 +351,13 @@ window.submitBulkImport = async function(e) {
     const resultsDiv = document.getElementById('bulk-import-results');
 
     if (fileInput.files.length === 0) {
-        showToast("Please select a CSV file.");
+        if (typeof showToast === 'function') showToast("Please select a CSV file.");
         return;
     }
 
     const file = fileInput.files[0];
     if (file.type !== "text/csv" && !file.name.endsWith('.csv')) {
-        showToast("Invalid file format. Please upload a .csv file.");
+        if (typeof showToast === 'function') showToast("Invalid file format. Please upload a .csv file.");
         return;
     }
 
@@ -637,7 +369,7 @@ window.submitBulkImport = async function(e) {
         const formData = new FormData();
         formData.append('csvFile', file);
 
-        const res = await fetch(`${BACKEND_URL}/api/products/bulk`, {
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/products/bulk`, {
             method: 'POST',
             body: formData 
         });
@@ -645,17 +377,17 @@ window.submitBulkImport = async function(e) {
         const data = await res.json();
         if (data.success) {
             resultsDiv.innerHTML = `<span style="color:#10b981;">✅ Import Successful! Loaded ${data.count || 'multiple'} items.</span>`;
-            showToast("Bulk import successful.");
+            if (typeof showToast === 'function') showToast("Bulk import successful.");
             if (typeof fetchInventory === 'function') fetchInventory(); 
             fileInput.value = '';
         } else {
             resultsDiv.innerHTML = `<span style="color:#ef4444;">❌ Error: ${data.message || 'Data formatting issue.'}</span>`;
-            showToast("Import failed. Check format.");
+            if (typeof showToast === 'function') showToast("Import failed. Check format.");
         }
     } catch (e) {
         console.error(e);
         resultsDiv.innerHTML = `<span style="color:#ef4444;">❌ Network Error during upload.</span>`;
-        showToast("Network Error.");
+        if (typeof showToast === 'function') showToast("Network Error.");
     } finally {
         btn.innerHTML = `<i data-lucide="upload-cloud" class="icon-sm"></i> Start Import`;
         btn.disabled = false;
@@ -669,8 +401,7 @@ window.submitBulkImport = async function(e) {
 
 window.fetchGlobalSettings = async function() {
     try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(`${BACKEND_URL}/api/settings`);
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/settings`);
         const data = await res.json();
         if (data.success && data.data) {
             globalStoreSettings = data.data;
@@ -681,7 +412,7 @@ window.fetchGlobalSettings = async function() {
 };
 
 window.openSettingsModal = async function() {
-    window.toggleModal('global-settings-modal', true);
+    if (typeof window.toggleModal === 'function') window.toggleModal('global-settings-modal', true);
     await window.fetchGlobalSettings();
     document.getElementById('settings-store-name').value = globalStoreSettings.storeName || 'DAILYPICK.';
     document.getElementById('settings-store-address').value = globalStoreSettings.storeAddress || '';
@@ -692,7 +423,7 @@ window.openSettingsModal = async function() {
 };
 
 window.closeSettingsModal = function() {
-    window.toggleModal('global-settings-modal', false);
+    if (typeof window.toggleModal === 'function') window.toggleModal('global-settings-modal', false);
 };
 
 window.submitSettings = async function(e) {
@@ -707,8 +438,7 @@ window.submitSettings = async function(e) {
     };
 
     try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(`${BACKEND_URL}/api/settings`, {
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/settings`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -716,31 +446,30 @@ window.submitSettings = async function(e) {
         const data = await res.json();
         if (data.success) {
             globalStoreSettings = data.data;
-            showToast("Global settings updated!");
+            if (typeof showToast === 'function') showToast("Global settings updated!");
             closeSettingsModal();
         } else {
-            showToast("Failed to save settings.");
+            if (typeof showToast === 'function') showToast("Failed to save settings.");
         }
     } catch (e) {
-        showToast("Network Error.");
+        if (typeof showToast === 'function') showToast("Network Error.");
     }
 };
 
 window.openSecurityAuditModal = async function() {
-    window.toggleModal('security-audit-modal', true);
+    if (typeof window.toggleModal === 'function') window.toggleModal('security-audit-modal', true);
     await window.fetchAuditLogs();
 };
 
 window.closeSecurityAuditModal = function() {
-    window.toggleModal('security-audit-modal', false);
+    if (typeof window.toggleModal === 'function') window.toggleModal('security-audit-modal', false);
 };
 
 window.fetchAuditLogs = async function() {
     const container = document.getElementById('audit-logs-container');
     container.innerHTML = '<p class="empty-state">Loading logs...</p>';
     try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(`${BACKEND_URL}/api/audit?limit=50`);
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/audit?limit=50`);
         const data = await res.json();
         if (data.success && data.data.length > 0) {
             container.innerHTML = '';
@@ -772,13 +501,12 @@ window.fetchAuditLogs = async function() {
 };
 
 window.openStockTransferModal = async function() {
-    window.toggleModal('stock-transfer-modal', true);
+    if (typeof window.toggleModal === 'function') window.toggleModal('stock-transfer-modal', true);
     document.getElementById('transfer-selected-item').classList.add('hidden');
     document.getElementById('submit-transfer-btn').disabled = true;
     
     try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(`${BACKEND_URL}/api/stores`);
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/stores`);
         const data = await res.json();
         if (data.success) {
             const fromSelect = document.getElementById('transfer-from-store');
@@ -796,7 +524,7 @@ window.openStockTransferModal = async function() {
 };
 
 window.closeStockTransferModal = function() {
-    window.toggleModal('stock-transfer-modal', false);
+    if (typeof window.toggleModal === 'function') window.toggleModal('stock-transfer-modal', false);
     document.getElementById('transfer-search').value = '';
     document.getElementById('transfer-search-results').innerHTML = '';
     document.getElementById('transfer-qty').value = '';
@@ -871,15 +599,14 @@ window.submitStockTransfer = async function(e) {
     };
 
     if (payload.fromStoreId === payload.toStoreId) {
-        showToast("Source and destination must be different.");
+        if (typeof showToast === 'function') showToast("Source and destination must be different.");
         btn.disabled = false;
         btn.innerText = 'Transfer Stock';
         return;
     }
 
     try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(`${BACKEND_URL}/api/products/transfer`, {
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/products/transfer`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -887,14 +614,14 @@ window.submitStockTransfer = async function(e) {
         const data = await res.json();
         
         if (data.success) {
-            showToast("Stock transferred successfully!");
+            if (typeof showToast === 'function') showToast("Stock transferred successfully!");
             closeStockTransferModal();
             if (typeof fetchInventory === 'function') fetchInventory();
         } else {
-            showToast(data.message || "Failed to transfer stock.");
+            if (typeof showToast === 'function') showToast(data.message || "Failed to transfer stock.");
         }
     } catch (err) {
-        showToast("Network Error.");
+        if (typeof showToast === 'function') showToast("Network Error.");
     } finally {
         btn.disabled = false;
         btn.innerText = 'Transfer Stock';
@@ -908,12 +635,12 @@ window.submitStockTransfer = async function(e) {
 
 // --- AI Demand Forecasting ---
 window.openAIForecastModal = async function() {
-    window.toggleModal('ai-forecast-modal', true);
+    if (typeof window.toggleModal === 'function') window.toggleModal('ai-forecast-modal', true);
     await window.generateAIForecast();
 };
 
 window.closeAIForecastModal = function() {
-    window.toggleModal('ai-forecast-modal', false);
+    if (typeof window.toggleModal === 'function') window.toggleModal('ai-forecast-modal', false);
 };
 
 window.generateAIForecast = async function() {
@@ -927,8 +654,7 @@ window.generateAIForecast = async function() {
     `;
 
     try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(`${BACKEND_URL}/api/analytics/forecast`, { method: 'POST' });
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/analytics/forecast`, { method: 'POST' });
         const data = await res.json();
         
         if (data.success && data.data && data.data.recommendations) {
@@ -962,25 +688,25 @@ window.generateAIForecast = async function() {
     }
 };
 
-// --- PDF Purchase Orders (B2B Sourcing Override) ---
-// Overriding the existing openSourcingModal to inject the PDF generator button
 window.openSourcingModal = function() {
     const listContainer = document.getElementById('sourcing-list-container');
     listContainer.innerHTML = '';
     
     let supplierMap = {};
     
-    currentInventory.forEach(p => {
-        if(p.variants) {
-            p.variants.forEach(v => {
-                if(v.stock <= (v.lowStockThreshold || 5)) {
-                    let dist = p.distributorName || 'Unassigned Supplier';
-                    if(!supplierMap[dist]) supplierMap[dist] = [];
-                    supplierMap[dist].push(`${p.name} (${v.weightOrVolume}) - Current Stock: ${v.stock}`);
-                }
-            });
-        }
-    });
+    if (typeof currentInventory !== 'undefined') {
+        currentInventory.forEach(p => {
+            if(p.variants) {
+                p.variants.forEach(v => {
+                    if(v.stock <= (v.lowStockThreshold || 5)) {
+                        let dist = p.distributorName || 'Unassigned Supplier';
+                        if(!supplierMap[dist]) supplierMap[dist] = [];
+                        supplierMap[dist].push(`${p.name} (${v.weightOrVolume}) - Current Stock: ${v.stock}`);
+                    }
+                });
+            }
+        });
+    }
     
     if(Object.keys(supplierMap).length === 0) {
         listContainer.innerHTML = '<p class="empty-state">Inventory is healthy. No items require sourcing.</p>';
@@ -1006,13 +732,14 @@ window.openSourcingModal = function() {
         });
     }
     
-    window.toggleModal('sourcing-modal', true);
+    if (typeof window.toggleModal === 'function') window.toggleModal('sourcing-modal', true);
     if (typeof lucide !== 'undefined') lucide.createIcons();
 };
 
 window.generatePDFPO = function(distributorName, itemsList) {
     if (typeof window.jspdf === 'undefined') {
-        return showToast("PDF Library is still loading...");
+        if (typeof showToast === 'function') return showToast("PDF Library is still loading...");
+        return;
     }
     
     const { jsPDF } = window.jspdf;
@@ -1038,13 +765,12 @@ window.generatePDFPO = function(distributorName, itemsList) {
     doc.text(`PO Ref: PO-${Date.now().toString().slice(-6)}`, 140, 45);
     
     const tableData = itemsList.map((itemStr, index) => {
-        // Parse the string "Product Name (Variant) - Current Stock: X"
         const parts = itemStr.split(' - Current Stock: ');
         return [
             index + 1,
             parts[0] || itemStr,
-            "10 (Suggested)", // Default suggestion for PO
-            "__________" // Blank line for supplier to fill price
+            "10 (Suggested)", 
+            "__________" 
         ];
     });
 
@@ -1053,7 +779,7 @@ window.generatePDFPO = function(distributorName, itemsList) {
         head: [['#', 'Item Description', 'Requested Qty', 'Unit Price']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: [6, 44, 30] }, // Match UI Primary Color
+        headStyles: { fillColor: [6, 44, 30] }, 
         styles: { fontSize: 10 }
     });
     
@@ -1061,28 +787,30 @@ window.generatePDFPO = function(distributorName, itemsList) {
     doc.text("Authorized Signature: _______________________", 14, finalY + 30);
     
     doc.save(`PO_${distributorName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-    showToast(`PDF Generated for ${distributorName}`);
+    if (typeof showToast === 'function') showToast(`PDF Generated for ${distributorName}`);
 };
 
 // --- Advanced Financials P&L Export ---
 window.exportPnLReport = async function() {
-    if (typeof window.jspdf === 'undefined') return showToast("PDF Library loading...");
+    if (typeof window.jspdf === 'undefined') {
+        if (typeof showToast === 'function') return showToast("PDF Library loading...");
+        return;
+    }
     
-    showToast("Calculating Financials...");
+    if (typeof showToast === 'function') showToast("Calculating Financials...");
     
     try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        // Fetch 30-day P&L
         const d = new Date();
         const endDate = d.toISOString();
         d.setDate(d.getDate() - 30);
         const startDate = d.toISOString();
         
-        const res = await fetchFn(`${BACKEND_URL}/api/analytics/pnl?startDate=${startDate}&endDate=${endDate}`);
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/analytics/pnl?startDate=${startDate}&endDate=${endDate}`);
         const data = await res.json();
         
         if (!data.success || !data.data) {
-            return showToast("Failed to fetch financial data.");
+            if (typeof showToast === 'function') return showToast("Failed to fetch financial data.");
+            return;
         }
         
         const metrics = data.data;
@@ -1118,7 +846,7 @@ window.exportPnLReport = async function() {
             headStyles: { fillColor: [37, 99, 235] }, 
             styles: { fontSize: 11, cellPadding: 6 },
             didParseCell: function(data) {
-                if (data.row.index === 4 || data.row.index === 6) { // Bold Profit Rows
+                if (data.row.index === 4 || data.row.index === 6) { 
                     data.cell.styles.fontStyle = 'bold';
                     if (data.row.index === 6) {
                         data.cell.styles.textColor = metrics.netProfit >= 0 ? [16, 185, 129] : [239, 68, 68];
@@ -1128,9 +856,9 @@ window.exportPnLReport = async function() {
         });
         
         doc.save(`${storeName.replace(/\s+/g, '_')}_PnL_Report.pdf`);
-        showToast("P&L Report Downloaded!");
+        if (typeof showToast === 'function') showToast("P&L Report Downloaded!");
 
     } catch (e) {
-        showToast("Error generating P&L.");
+        if (typeof showToast === 'function') showToast("Error generating P&L.");
     }
 };
