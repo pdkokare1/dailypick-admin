@@ -1,155 +1,154 @@
 /* js/hardware.js */
 
+// DEPRECATION CONSULTATION: Basic Serial printing implementation.
+/*
 let thermalPort = null;
+window.connectThermalPrinter = async function() { ... }
+async function printThermalReceipt(order) { ... }
+async function printHardwareReceipt() { ... }
+*/
+
+// ENTERPRISE OPTIMIZATION: Raw ESC/POS Protocol Integration via WebSerial / WebUSB
+
+let activePrinterPort = null;
+let printerType = 'serial'; // 'serial' or 'usb'
+
+const ESC_CMD = {
+    INIT: '\x1B\x40',
+    ALIGN_LEFT: '\x1B\x61\x00',
+    ALIGN_CENTER: '\x1B\x61\x01',
+    ALIGN_RIGHT: '\x1B\x61\x02',
+    BOLD_ON: '\x1B\x45\x01',
+    BOLD_OFF: '\x1B\x45\x00',
+    DOUBLE_HEIGHT: '\x1B\x21\x10',
+    NORMAL_SIZE: '\x1B\x21\x00',
+    CUT_PAPER: '\x1D\x56\x41\x03',
+    OPEN_DRAWER: '\x1B\x70\x00\x19\xFA' // Hardware Kick Code for standard RJ11 Cash Drawers
+};
 
 window.connectThermalPrinter = async function() {
     try {
-        thermalPort = await navigator.serial.requestPort();
-        await thermalPort.open({ baudRate: 9600 }); 
-        if (typeof showToast === 'function') showToast("Thermal Printer Connected! 🖨️");
+        // Prefer WebSerial for standard POS Terminals, fallback to WebUSB
+        if ('serial' in navigator) {
+            activePrinterPort = await navigator.serial.requestPort();
+            await activePrinterPort.open({ baudRate: 9600 }); 
+            printerType = 'serial';
+            if (typeof showToast === 'function') showToast("Hardware Connected: WebSerial POS Active 🖨️");
+        } else if ('usb' in navigator) {
+            const device = await navigator.usb.requestDevice({ filters: [{}] });
+            await device.open();
+            await device.selectConfiguration(1);
+            await device.claimInterface(0);
+            activePrinterPort = device;
+            printerType = 'usb';
+            if (typeof showToast === 'function') showToast("Hardware Connected: WebUSB POS Active 🖨️");
+        } else {
+            throw new Error("Browser does not support WebSerial or WebUSB.");
+        }
     } catch (e) {
-        console.error("Printer connection failed", e);
-        if (typeof showToast === 'function') showToast("Could not connect to printer.");
+        console.error("Hardware connection failed:", e);
+        if (typeof showToast === 'function') showToast("Could not connect to POS hardware. Ensure Chrome/Edge is used.");
     }
 };
 
+async function writeToPrinter(dataBuffer) {
+    if (!activePrinterPort) return;
+    try {
+        if (printerType === 'serial') {
+            const writer = activePrinterPort.writable.getWriter();
+            await writer.write(dataBuffer);
+            writer.releaseLock();
+        } else if (printerType === 'usb') {
+            // Standard USB Endpoint for ESC/POS is usually 1, 2, or 3
+            await activePrinterPort.transferOut(1, dataBuffer); 
+        }
+    } catch (e) {
+        console.error("Write error:", e);
+    }
+}
+
 async function printThermalReceipt(order) {
-    if (!thermalPort) return; 
+    if (!activePrinterPort) return; 
+    
     try {
         let storeName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
         let storeAddress = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.storeAddress) ? globalStoreSettings.storeAddress : "Retail & Supermarket";
         let storeFooter = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.receiptFooterMessage) ? globalStoreSettings.receiptFooterMessage : "Thank you for shopping!";
         let gstin = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.gstin) ? `GSTIN: ${globalStoreSettings.gstin}\n` : "";
+        let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
 
-        const writer = thermalPort.writable.getWriter();
-        const encoder = new TextEncoder();
+        let receipt = ESC_CMD.INIT;
         
-        const ESC = '\x1B';
-        const GS = '\x1D';
-        const INIT = ESC + '@';
-        const ALIGN_CENTER = ESC + 'a' + '\x01';
-        const ALIGN_LEFT = ESC + 'a' + '\x00';
-        const BOLD_ON = ESC + 'E' + '\x01';
-        const BOLD_OFF = ESC + 'E' + '\x00';
-        const CUT = GS + 'V' + '\x41' + '\x03';
-
-        let receipt = INIT + ALIGN_CENTER + BOLD_ON + `${storeName}\n` + BOLD_OFF;
+        // Header
+        receipt += ESC_CMD.ALIGN_CENTER + ESC_CMD.DOUBLE_HEIGHT + ESC_CMD.BOLD_ON + `${storeName}\n` + ESC_CMD.NORMAL_SIZE + ESC_CMD.BOLD_OFF;
         receipt += `${storeAddress}\n`;
         if(gstin) receipt += gstin;
         receipt += "--------------------------------\n";
-        receipt += ALIGN_LEFT;
         
+        // Metadata
+        receipt += ESC_CMD.ALIGN_LEFT;
         receipt += `Order: ${order.orderNumber || order._id.substring(0,8)}\n`;
-        receipt += `Date: ${new Date().toLocaleString()}\n`;
-        if (order.customerPhone) {
+        receipt += `Date: ${new Date(order.createdAt || Date.now()).toLocaleString()}\n`;
+        if (order.customerPhone && order.customerPhone !== 'Guest') {
             receipt += `Customer: ${order.customerPhone}\n`;
         }
         receipt += "--------------------------------\n";
         
+        // Items
         let rawSubtotal = 0;
         order.items.forEach(item => {
-            receipt += `${item.name.substring(0, 25)}\n`;
-            receipt += `  ${item.qty} x ${item.price.toFixed(2)} = Rs. ${(item.qty * item.price).toFixed(2)}\n`;
+            receipt += `${item.name.substring(0, 30)}\n`;
+            let itemLine = `  ${item.qty} x ${item.price.toFixed(2)}`;
+            let totalLine = `Rs. ${(item.qty * item.price).toFixed(2)}`;
+            // Pad spaces for alignment
+            let spaces = 32 - itemLine.length - totalLine.length;
+            receipt += itemLine + " ".repeat(Math.max(0, spaces)) + totalLine + "\n";
             rawSubtotal += (item.qty * item.price);
         });
         
         receipt += "--------------------------------\n";
-        receipt += `Subtotal: Rs. ${rawSubtotal.toFixed(2)}\n`;
         
-        if (order.discountAmount > 0) {
-            receipt += `Promo Discount: -Rs. ${order.discountAmount.toFixed(2)}\n`;
-        }
-        if (order.pointsRedeemed > 0) {
-            receipt += `Loyalty Used: -Rs. ${order.pointsRedeemed.toFixed(2)}\n`;
-        }
-        if (order.taxAmount > 0) {
-            receipt += `Included Tax: Rs. ${order.taxAmount.toFixed(2)}\n`;
-        }
+        // Financials
+        receipt += `Subtotal:                  Rs. ${rawSubtotal.toFixed(2)}\n`;
+        if (order.discountAmount > 0) receipt += `Promo Discount:           -Rs. ${order.discountAmount.toFixed(2)}\n`;
+        if (order.pointsRedeemed > 0) receipt += `Loyalty Used:             -Rs. ${order.pointsRedeemed.toFixed(2)}\n`;
+        if (order.taxAmount > 0)      receipt += `Included Tax:              Rs. ${order.taxAmount.toFixed(2)}\n`;
         
         receipt += "--------------------------------\n";
-        receipt += BOLD_ON + `TOTAL DUE: Rs. ${order.totalAmount.toFixed(2)}\n` + BOLD_OFF;
+        receipt += ESC_CMD.DOUBLE_HEIGHT + ESC_CMD.BOLD_ON + `TOTAL DUE:      Rs. ${order.totalAmount.toFixed(2)}\n` + ESC_CMD.NORMAL_SIZE + ESC_CMD.BOLD_OFF;
         receipt += `Paid via: ${order.paymentMethod}\n`;
         receipt += "--------------------------------\n";
-        receipt += ALIGN_CENTER + `${storeFooter}\n\n\n\n\n` + CUT;
-
-        await writer.write(encoder.encode(receipt));
-        writer.releaseLock();
-    } catch (e) {
-        console.error("Printing failed", e);
-    }
-}
-
-async function printHardwareReceipt() {
-    if (!activeOrder) return showToast("No active order to print.");
-    
-    if (!('serial' in navigator)) {
-        return showToast("Hardware printing requires Chrome or Edge on Desktop.");
-    }
-    
-    try {
-        const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 9600 }); 
         
-        const writer = port.writable.getWriter();
-        const encoder = new TextEncoder();
-        
-        const init = encoder.encode('\x1B\x40'); 
-        const alignLeft = encoder.encode('\x1B\x61\x00');
-        const cutPaper = encoder.encode('\x1D\x56\x00');
-        
-        let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
-        let sFooter = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.receiptFooterMessage) ? globalStoreSettings.receiptFooterMessage : "Thank you for shopping!";
-        let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
-        
-        const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
-
-        let text = `          ${sName.toUpperCase()}          \n`;
-        text += `Order #${orderDisplayId}\n`;
-        text += `Date: ${new Date(activeOrder.createdAt).toLocaleString()}\n`;
-        text += "--------------------------------\n";
-        
-        activeOrder.items.forEach(i => {
-            text += `${i.qty}x ${i.name.substring(0, 20)}\n`;
-            text += `   Rs. ${(i.price * i.qty).toFixed(2)}\n`;
-        });
-        
-        text += "--------------------------------\n";
-        
-        if (activeOrder.taxAmount !== undefined || activeOrder.discountAmount !== undefined || activeOrder.pointsRedeemed !== undefined) {
-            const tax = activeOrder.taxAmount || 0;
-            const discount = activeOrder.discountAmount || 0;
-            const pts = activeOrder.pointsRedeemed || 0;
-            const subtotal = activeOrder.totalAmount - tax + discount + pts;
-            
-            text += `Subtotal: Rs. ${subtotal.toFixed(2)}\n`;
-            if (discount > 0) text += `Discount: -Rs. ${discount.toFixed(2)}\n`;
-            if (pts > 0) text += `Pts Redeemed: -Rs. ${pts.toFixed(2)}\n`;
-            if (tax > 0) text += `Tax (GST): Rs. ${tax.toFixed(2)}\n`;
+        // Footer & Loyalty
+        if (order.totalAmount > 0) {
+            const earnedPoints = Math.floor(order.totalAmount / loyaltyConv);
+            receipt += ESC_CMD.ALIGN_CENTER + `*** You earned ${earnedPoints} Points! ***\n`;
         }
         
-        text += `GRAND TOTAL: Rs. ${activeOrder.totalAmount.toFixed(2)}\n`;
-        text += `Payment: ${activeOrder.paymentMethod}\n`;
-        text += "--------------------------------\n";
+        receipt += ESC_CMD.ALIGN_CENTER + `${storeFooter}\n\n\n\n\n`;
         
-        const earnedPoints = Math.floor(activeOrder.totalAmount / loyaltyConv);
-        text += `*** You earned ${earnedPoints} Points! ***\n`;
-        text += `     ${sFooter}    \n\n\n\n`;
-        
-        await writer.write(init);
-        await writer.write(alignLeft);
-        await writer.write(encoder.encode(text));
-        await writer.write(cutPaper);
-        
-        writer.releaseLock();
-        await port.close();
-        
-        showToast("Hardware Print Complete! 🖨️");
-        
-    } catch (err) {
-        console.error("Hardware Print Error:", err);
-        showToast("Hardware Print Cancelled or Failed.");
+        // Hardware Execution
+        receipt += ESC_CMD.CUT_PAPER;
+        receipt += ESC_CMD.OPEN_DRAWER;
+
+        const encoder = new TextEncoder();
+        await writeToPrinter(encoder.encode(receipt));
+
+    } catch (e) {
+        console.error("Hardware Printing failed", e);
+        if (typeof showToast === 'function') showToast("Hardware print failed.");
     }
 }
+
+// Redirect old function call to the new robust one
+window.printHardwareReceipt = async function() {
+    if (!activeOrder) return;
+    await printThermalReceipt(activeOrder);
+};
+
+// ==========================================
+// --- EXISTING SCANNER LOGIC ---
+// ==========================================
 
 function startPosScanner() {
     if (posContinuousScanner) return;
@@ -221,10 +220,10 @@ async function handlePosScan(skuOrName) {
     }
 
     if (foundProduct && foundVariant) {
-        playBeep();
+        if (typeof playBeep === 'function') playBeep();
         addToPosCart(foundProduct, foundVariant);
-        showToast(`Added: ${foundProduct.name}`);
+        if (typeof showToast === 'function') showToast(`Added: ${foundProduct.name}`);
     } else {
-        showToast(`Item not found in database: ${skuOrName}`);
+        if (typeof showToast === 'function') showToast(`Item not found in database: ${skuOrName}`);
     }
 }
