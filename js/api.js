@@ -14,12 +14,14 @@ function populateDropdowns(data, selectConfigs) {
             ? config.emptyHTML 
             : (config.defaultHTML || '');
 
+        const fragment = document.createDocumentFragment();
         data.forEach(item => {
             const option = document.createElement('option');
             option.value = item.name;
             option.innerText = item.name;
-            select.appendChild(option);
+            fragment.appendChild(option);
         });
+        select.appendChild(fragment);
     });
 }
 
