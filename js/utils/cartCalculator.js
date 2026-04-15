@@ -24,6 +24,10 @@ export const CartCalculator = {
             const now = new Date();
             const currentHourMin = now.getHours() * 100 + now.getMinutes(); 
 
+            // OPTIMIZATION: Build a hash map of the inventory once for O(1) lookups during promotion calculations
+            const inventoryMap = new Map();
+            currentInventory.forEach(p => inventoryMap.set(p._id, p));
+
             currentPromotions.forEach(promo => {
                 if (promo.isActive) {
                     if (promo.startDate && new Date(promo.startDate) > now) return;
@@ -40,7 +44,8 @@ export const CartCalculator = {
                     posCart.forEach(item => {
                         let isApplicable = true;
                         if (promo.applicableCategory && promo.applicableCategory !== 'All') {
-                            const invItem = currentInventory.find(p => p._id === item.productId);
+                            // Fetch from the O(1) Map instead of O(N) Array.find
+                            const invItem = inventoryMap.get(item.productId);
                             if (!invItem || invItem.category !== promo.applicableCategory) {
                                 isApplicable = false;
                             }
