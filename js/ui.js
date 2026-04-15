@@ -193,8 +193,21 @@ window.openOrderModalById = function(id) {
 window.renderOverview = async function() {
     if (typeof currentOrders === 'undefined' || typeof currentInventory === 'undefined') return;
     
-    const trulyPending = currentOrders.filter(o => o.status === 'Order Placed' || o.status === 'Packing');
-    document.getElementById('ov-pending-count').innerText = trulyPending.length;
+    // OPTIMIZED: Single pass array iteration for multiple metrics to save memory and CPU
+    let pendingCount = 0;
+    let todayRevenue = 0;
+    const todayStr = new Date().toDateString();
+
+    currentOrders.forEach(o => {
+        if (o.status === 'Order Placed' || o.status === 'Packing') {
+            pendingCount++;
+        }
+        if (new Date(o.createdAt).toDateString() === todayStr && o.status !== 'Cancelled') {
+            todayRevenue += o.totalAmount;
+        }
+    });
+
+    document.getElementById('ov-pending-count').innerText = pendingCount;
 
     let lowStockCount = 0;
     currentInventory.forEach(p => {
@@ -220,11 +233,6 @@ window.renderOverview = async function() {
         } catch(e) {}
     }
 
-    const todayStr = new Date().toDateString();
-    const todayRevenue = currentOrders
-        .filter(o => new Date(o.createdAt).toDateString() === todayStr && o.status !== 'Cancelled')
-        .reduce((sum, o) => sum + o.totalAmount, 0);
-    
     const target = 10000;
     const progressPct = Math.min((todayRevenue / target) * 100, 100).toFixed(1);
     
