@@ -11,34 +11,37 @@ async function syncOfflinePOS() {
         const offlineQueue = await getAllFromIDB();
         if (offlineQueue.length === 0) return;
 
-        const itemToSync = offlineQueue[0]; 
-        const { id, ...payloadToSync } = itemToSync;
-
+        // OPTIMIZED: Drain the entire queue sequentially instead of processing just one item.
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(`${BACKEND_URL}/api/orders/pos`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payloadToSync)
-        });
-        
-        const result = await res.json();
-        if (result.success) {
-            await deleteFromIDB(id); 
-            showToast('Offline POS transaction synced! ✅');
-            if (typeof renderOverview === 'function') renderOverview(); 
-        } else {
-            await deleteFromIDB(id); 
-            
-            let failedQueue = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
-            failedQueue.push({
-                ...itemToSync,
-                failReason: result.message || 'Unknown backend rejection',
-                failedAt: new Date().toISOString()
+
+        for (const itemToSync of offlineQueue) {
+            const { id, ...payloadToSync } = itemToSync;
+
+            const res = await fetchFn(`${BACKEND_URL}/api/orders/pos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payloadToSync)
             });
-            localStorage.setItem('dailypick_failed_syncs', JSON.stringify(failedQueue));
             
-            showToast(`Offline Sync Failed: ${result.message}`);
-            if (typeof renderOverview === 'function') renderOverview(); 
+            const result = await res.json();
+            if (result.success) {
+                await deleteFromIDB(id); 
+                showToast('Offline POS transaction synced! ✅');
+                if (typeof renderOverview === 'function') renderOverview(); 
+            } else {
+                await deleteFromIDB(id); 
+                
+                let failedQueue = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
+                failedQueue.push({
+                    ...itemToSync,
+                    failReason: result.message || 'Unknown backend rejection',
+                    failedAt: new Date().toISOString()
+                });
+                localStorage.setItem('dailypick_failed_syncs', JSON.stringify(failedQueue));
+                
+                showToast(`Offline Sync Failed: ${result.message}`);
+                if (typeof renderOverview === 'function') renderOverview(); 
+            }
         }
     } catch (e) {
         console.log('Sync attempted, still offline or server unreachable.');
