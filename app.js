@@ -36,7 +36,7 @@ const DailyPickApp = (function() {
             }
         });
 
-        document.addEventListener("DOMContentLoaded", async () => {
+        async function initializeSession() {
             console.log("App initializing, checking for saved session...");
             const savedUser = localStorage.getItem('dailypick_user');
             const loginContainer = document.getElementById('pin-login-container');
@@ -73,7 +73,13 @@ const DailyPickApp = (function() {
                 if (loginContainer) loginContainer.style.display = 'flex';
                 if (appContainer) appContainer.style.display = 'none';
             }
-        });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeSession);
+        } else {
+            initializeSession();
+        }
 
         document.addEventListener('keydown', (e) => {
             const loginContainer = document.getElementById('pin-login-container');
