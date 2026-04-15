@@ -1,34 +1,39 @@
 /* js/pos.js */
 
-function handlePosScan(sku) {
-    let foundProduct = null;
-    let foundVariant = null;
+// OPTIMIZED: Replaced O(N*M) nested loop with an O(1) Lazy Cache Map.
+let skuLookupCache = null;
+let lastInventorySize = -1;
 
+function getSkuMap() {
+    if (typeof currentInventory === 'undefined') return new Map();
+    if (skuLookupCache && currentInventory.length === lastInventorySize) return skuLookupCache;
+
+    skuLookupCache = new Map();
     for (const p of currentInventory) {
         if (p.variants) {
             for (const v of p.variants) {
-                if (v.sku === sku) {
-                    foundProduct = p;
-                    foundVariant = v;
-                    break;
-                }
+                skuLookupCache.set(v.sku, { product: p, variant: v });
             }
         }
-        if (foundProduct) break;
     }
+    lastInventorySize = currentInventory.length;
+    return skuLookupCache;
+}
 
-    if (foundProduct && foundVariant) {
+function handlePosScan(sku) {
+    const map = getSkuMap();
+    const found = map.get(sku);
+
+    if (found) {
         if (typeof playBeep === 'function') playBeep();
-        addToPosCart(foundProduct, foundVariant);
+        addToPosCart(found.product, found.variant);
     } else {
         if (typeof playBeep === 'function') playBeep();
         const addNow = confirm(`Barcode ${sku} is not in your inventory. Do you want to add it as a new product?`);
-        if (addNow) {
-            if (typeof openAddProductModal === 'function') {
-                openAddProductModal(sku); 
-            } else {
-                showToast('Add product functionality not found.');
-            }
+        if (addNow && typeof openAddProductModal === 'function') {
+            openAddProductModal(sku); 
+        } else if (addNow) {
+            showToast('Add product functionality not found.');
         }
     }
 }
@@ -75,7 +80,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function fetchCustomerLoyalty(phone) {
     try {
-        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${phone}`);
+        // OPTIMIZED: Secured with auth wrapper fallback
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/customers/profile/${phone}`);
         const result = await res.json();
         if (result.success && result.data) {
             currentCustomerProfile = result.data;
@@ -143,11 +150,16 @@ function renderPosQuickTap() {
     grid.innerHTML = '';
     
     let quickItems = [];
-    currentInventory.forEach(p => {
-        if (p.isActive && p.variants && p.variants.length > 0 && quickItems.length < 15) {
-            quickItems.push({ product: p, variant: p.variants[0] }); 
+    if (typeof currentInventory !== 'undefined') {
+        // OPTIMIZED: Break early logic to avoid full O(N) array scan.
+        for (let i = 0; i < currentInventory.length; i++) {
+            const p = currentInventory[i];
+            if (p.isActive && p.variants && p.variants.length > 0) {
+                quickItems.push({ product: p, variant: p.variants[0] });
+                if (quickItems.length >= 15) break; 
+            }
         }
-    });
+    }
 
     if (quickItems.length === 0) {
         grid.innerHTML = '<p class="empty-state" style="grid-column: 1/-1;">Add inventory items first.</p>';
@@ -473,7 +485,8 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
 
     if (paymentMethod === 'Pay Later' && phone) {
         try {
-            const res = await fetch(`${BACKEND_URL}/api/customers/profile/${phone}`);
+            const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+            const res = await fetchFn(`${BACKEND_URL}/api/customers/profile/${phone}`);
             const result = await res.json();
             if (result.success && result.data) {
                 const profile = result.data;
