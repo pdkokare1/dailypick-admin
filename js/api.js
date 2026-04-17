@@ -87,8 +87,16 @@ async function archiveProduct(id, event) {
     if(event) event.stopPropagation();
     if(!confirm("Are you sure you want to archive this product? It will be hidden from the store without breaking historical sales data.")) return;
     
+    // OPTIMIZATION: Attach Idempotency header to prevent accidental multi-archiving if the network lags
+    const idempotencyKey = 'ARCHIVE-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+    
     try {
-        const res = await adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/products/${id}/archive`, { method: 'PUT' });
+        const res = await adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/products/${id}/archive`, { 
+            method: 'PUT',
+            headers: {
+                'Idempotency-Key': idempotencyKey
+            }
+        });
         const result = await res.json();
         if(result.success) {
             if(typeof showToast === 'function') showToast("Product archived securely.");
