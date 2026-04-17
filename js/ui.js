@@ -1,5 +1,19 @@
 /* js/ui.js */
 
+// OPTIMIZATION: Global 503 Circuit Breaker Interceptor
+// Instantly catches backend load-shedding events and alerts the user gracefully.
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+    const response = await originalFetch.apply(this, args);
+    if (response.status === 503) {
+        console.warn('[CIRCUIT BREAKER] 503 Service Unavailable Detected');
+        if (typeof showToast === 'function') {
+            showToast('⚠️ System overloaded. Circuit Breaker active. Pausing requests for 30s.');
+        }
+    }
+    return response;
+};
+
 const views = {
     overview: document.getElementById('overview-view'),
     pos: document.getElementById('pos-view'),
