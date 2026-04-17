@@ -4,7 +4,10 @@ const AuthManager = (function() {
     // --- Private Methods & Logic ---
 
     const handlePinInput = function(num) {
-        if (typeof currentPin !== 'undefined' && currentPin.length < 4) {
+        // OPTIMIZATION: Ensure window.currentPin is initialized as a string before checking length to prevent undefined TypeErrors
+        window.currentPin = window.currentPin || '';
+        
+        if (window.currentPin.length < 4) {
             window.currentPin += num;
             updatePinDisplay();
         }
