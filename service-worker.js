@@ -1,6 +1,7 @@
 /* service-worker.js */
 
-const CACHE_NAME = 'dailypick-admin-cache-v6'; 
+// OPTIMIZATION: Bumped cache version to v7 to force instant browser update
+const CACHE_NAME = 'dailypick-admin-cache-v7'; 
 const OFFLINE_QUEUE_NAME = 'dailypick-offline-orders';
 
 const ASSETS_TO_CACHE = [
@@ -35,24 +36,22 @@ function openDB() {
     });
 }
 
-// DEPRECATION CONSULTATION: Legacy offline saver
-/*
-async function saveOfflineOrder(requestUrl, headers, body) { ... }
-async function syncOfflineOrders() { ... }
-*/
-
 // ENTERPRISE OPTIMIZATION: Robust Outbox Pattern with Exponential Backoff
 async function saveToEnterpriseOutbox(requestUrl, headers, body, method = 'POST') {
     const db = await openDB();
     const tx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
     const store = tx.objectStore(OFFLINE_QUEUE_NAME);
     
-    // OPTIMIZATION: Ensure idempotency key exists in headers to prevent double-billing when network stutters
-    if (!headers.has('Idempotency-Key')) {
-        headers.append('Idempotency-Key', 'OFFLINE-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
+    // OPTIMIZATION FIX: Intercepted Request headers are natively immutable. 
+    // We must clone them into a new mutable Headers object before appending the Idempotency Key.
+    const mutableHeaders = new Headers(headers);
+    
+    // Ensure idempotency key exists in headers to prevent double-billing when network stutters
+    if (!mutableHeaders.has('Idempotency-Key')) {
+        mutableHeaders.append('Idempotency-Key', 'OFFLINE-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
     }
     
-    const headersArray = Array.from(headers.entries());
+    const headersArray = Array.from(mutableHeaders.entries());
     
     const payload = {
         url: requestUrl,
@@ -60,7 +59,7 @@ async function saveToEnterpriseOutbox(requestUrl, headers, body, method = 'POST'
         headers: headersArray,
         body: body,
         timestamp: Date.now(),
-        retryCount: 0 // New: Track retries
+        retryCount: 0 
     };
     store.add(payload);
     return new Promise((resolve) => {
@@ -137,7 +136,6 @@ self.addEventListener('sync', (event) => {
     }
 });
 
-// OPTIMIZATION: Cross-communication port to allow the UI to forcefully trigger SW outbox flushing
 self.addEventListener('message', (event) => {
     if (event.data === 'trigger-sync') {
         processEnterpriseOutbox();
@@ -155,11 +153,6 @@ self.addEventListener('fetch', (event) => {
         );
         return;
     }
-
-    // DEPRECATION CONSULTATION: Legacy POS interceptor
-    /*
-    if (event.request.method === 'POST' && requestUrl.pathname.includes('/api/orders/pos')) { ... }
-    */
 
     // ENTERPRISE OPTIMIZATION: Zero-Downtime Interceptor for ALL critical operations (POS, Shifts, Expenses)
     if (['POST', 'PUT', 'PATCH'].includes(event.request.method) && requestUrl.pathname.startsWith('/api/')) {
