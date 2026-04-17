@@ -17,6 +17,11 @@ async function syncOfflinePOS() {
         for (const itemToSync of offlineQueue) {
             const { id, ...payloadToSync } = itemToSync;
 
+            // OPTIMIZATION: Ensure Idempotency Key is explicitly attached to prevent double-billing during unstable network reconnections
+            if (!payloadToSync.idempotencyKey) {
+                payloadToSync.idempotencyKey = 'OFFLINE-SYNC-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+            }
+
             const res = await fetchFn(`${BACKEND_URL}/api/orders/pos`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
