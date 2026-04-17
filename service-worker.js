@@ -1,6 +1,6 @@
 /* service-worker.js */
 
-const CACHE_NAME = 'dailypick-admin-cache-v5'; 
+const CACHE_NAME = 'dailypick-admin-cache-v6'; 
 const OFFLINE_QUEUE_NAME = 'dailypick-offline-orders';
 
 const ASSETS_TO_CACHE = [
