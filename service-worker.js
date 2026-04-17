@@ -47,6 +47,11 @@ async function saveToEnterpriseOutbox(requestUrl, headers, body, method = 'POST'
     const tx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
     const store = tx.objectStore(OFFLINE_QUEUE_NAME);
     
+    // OPTIMIZATION: Ensure idempotency key exists in headers to prevent double-billing when network stutters
+    if (!headers.has('Idempotency-Key')) {
+        headers.append('Idempotency-Key', 'OFFLINE-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
+    }
+    
     const headersArray = Array.from(headers.entries());
     
     const payload = {
