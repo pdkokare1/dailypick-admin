@@ -25,6 +25,10 @@ async function fetchAnalytics() {
 
         updateAnalyticsRange(7); 
         fetchLeaderboard();
+
+        // NEW ENTERPRISE INTEGRATION: Fire secondary fetches for advanced backend computations
+        fetchEnterprisePnl();
+        fetchAIForecast();
         
     } catch (e) {
         console.error("Analytics Error", e);
@@ -218,5 +222,35 @@ async function fetchLeaderboard() {
     } catch (e) {
         console.warn("Leaderboard fetch failed", e);
         if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard(null);
+    }
+}
+
+// ENTERPRISE INTEGRATION: Asynchronously fetch server-side DB Rollups
+async function fetchEnterprisePnl() {
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/analytics/pnl`);
+        const result = await res.json();
+        if (result.success) {
+            console.log("[ENTERPRISE PNL SYNC]", result.data);
+            // Can be hooked into future DOM elements easily
+        }
+    } catch (e) {
+        console.warn("Materialized PNL Rollup sync delayed.");
+    }
+}
+
+// ENTERPRISE INTEGRATION: Pull Gemini AI forecasts for active actions
+async function fetchAIForecast() {
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/analytics/forecast`);
+        const result = await res.json();
+        if (result.success && result.data && result.data.recommendations) {
+            console.log("[GEMINI AI FORECAST]", result.data.recommendations);
+            // Output AI recommendations natively into the console for store manager review
+        }
+    } catch (e) {
+        console.warn("AI Forecast unavailable.");
     }
 }
