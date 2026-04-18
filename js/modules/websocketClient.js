@@ -3,6 +3,8 @@
 
 let realtimeSocket = null; 
 let realtimeReconnectTimeout = null;
+// FIX: Track ping interval to proactively keep the proxy connection alive
+let realtimePingInterval = null; 
 
 window.setupRealtimeConnection = function() {
     if (realtimeSocket && realtimeSocket.readyState <= 1) return; 
@@ -18,6 +20,14 @@ window.setupRealtimeConnection = function() {
         realtimeSocket.onopen = () => {
             console.log("Secure Realtime WebSocket Connected");
             if (realtimeReconnectTimeout) clearTimeout(realtimeReconnectTimeout);
+
+            // FIX: Proactively send heartbeat every 15 seconds so cloud proxy doesn't drop the line
+            if (realtimePingInterval) clearInterval(realtimePingInterval);
+            realtimePingInterval = setInterval(() => {
+                if (realtimeSocket && realtimeSocket.readyState === WebSocket.OPEN) {
+                    realtimeSocket.send(JSON.stringify({ type: 'PONG' }));
+                }
+            }, 15000);
         };
 
         realtimeSocket.onmessage = (event) => {
@@ -48,12 +58,16 @@ window.setupRealtimeConnection = function() {
 
         realtimeSocket.onclose = () => {
             console.warn("Realtime WebSocket Closed. Attempting reconnect in 3s...");
+            // FIX: Clear interval to prevent memory leaks when socket is down
+            if (realtimePingInterval) clearInterval(realtimePingInterval);
             realtimeSocket = null;
             realtimeReconnectTimeout = setTimeout(window.setupRealtimeConnection, 3000);
         };
 
         realtimeSocket.onerror = (err) => {
             console.error("Realtime WebSocket Error:", err);
+            // FIX: Clear interval on error
+            if (realtimePingInterval) clearInterval(realtimePingInterval);
             realtimeSocket.close(); 
         };
     } catch (e) {
