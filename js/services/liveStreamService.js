@@ -6,14 +6,12 @@ let sseRetryCount = 0;
 export async function connectAdminLiveStream() {
     if (window.adminStreamController) return; 
 
-    const token = localStorage.getItem('adminToken');
-    if (!token) return;
-
+    // FIX: Removed manual token retrieval. `adminFetchWithAuth` handles this.
     window.adminStreamController = new AbortController();
 
     try {
-        const response = await fetch(`${CONFIG.BACKEND_URL}/api/orders/stream/admin`, {
-            headers: { 'Authorization': `Bearer ${token}` },
+        // FIX: Replaced standard `fetch` with `window.adminFetchWithAuth`
+        const response = await window.adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/orders/stream/admin`, {
             credentials: 'include',
             signal: window.adminStreamController.signal
         });
