@@ -39,6 +39,47 @@ async function fetchDropdownData(endpoint, errorMessage, successCallback) {
     }
 }
 
+// OPTIMIZATION: Master Bootstrap Fetcher to prevent Network Waterfall on Login
+async function fetchBootstrapData() {
+    try {
+        const res = await adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/bootstrap`);
+        const result = await res.json();
+        
+        if (result.success && result.data) {
+            const d = result.data;
+
+            // 1. Categories
+            if(typeof currentCategories !== 'undefined') window.currentCategories = d.categories;
+            populateDropdowns(d.categories, [
+                { id: 'new-category', emptyHTML: '<option value="" disabled selected>No Categories Created</option>' },
+                { id: 'inventory-cat-filter', defaultHTML: '<option value="All">All Categories</option>' }
+            ]);
+
+            // 2. Brands
+            if(typeof currentBrands !== 'undefined') window.currentBrands = d.brands;
+            populateDropdowns(d.brands, [
+                { id: 'new-brand', defaultHTML: '<option value="">Select Brand (Optional)</option>' },
+                { id: 'inventory-brand-filter', defaultHTML: '<option value="All">All Brands</option>' }
+            ]);
+
+            // 3. Distributors
+            if(typeof currentDistributors !== 'undefined') window.currentDistributors = d.distributors;
+            populateDropdowns(d.distributors, [
+                { id: 'new-distributor', defaultHTML: '<option value="">Select Distributor (Optional)</option>' },
+                { id: 'restock-distributor', defaultHTML: '<option value="">Select a Distributor</option>' },
+                { id: 'inventory-dist-filter', defaultHTML: '<option value="All">All Distributors</option>' }
+            ]);
+
+            // 4. Promotions
+            currentPromotions = d.promotions;
+            window.currentPromotions = d.promotions;
+        }
+    } catch (e) {
+        console.error('Error loading bootstrap payload', e);
+        if (typeof showToast === 'function') showToast('Error loading initial data from server.');
+    }
+}
+
 async function fetchCategories() {
     await fetchDropdownData('categories', 'Error loading categories from server', (data) => {
         if(typeof currentCategories !== 'undefined') window.currentCategories = data;
@@ -116,6 +157,7 @@ async function archiveProduct(id, event) {
 // BRIDGE: Exposing all API repository functions to global scope
 window.populateDropdowns = populateDropdowns;
 window.fetchDropdownData = fetchDropdownData;
+window.fetchBootstrapData = fetchBootstrapData; // NEW: Exposed for app.js
 window.fetchCategories = fetchCategories;
 window.fetchBrands = fetchBrands;
 window.fetchDistributors = fetchDistributors;
