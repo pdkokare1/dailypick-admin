@@ -1,6 +1,5 @@
 /* service-worker.js */
 
-// OPTIMIZATION: Bumped cache version to v7 to force instant browser update
 const CACHE_NAME = 'dailypick-admin-cache-v7'; 
 const OFFLINE_QUEUE_NAME = 'dailypick-offline-orders';
 
@@ -36,17 +35,13 @@ function openDB() {
     });
 }
 
-// ENTERPRISE OPTIMIZATION: Robust Outbox Pattern with Exponential Backoff
 async function saveToEnterpriseOutbox(requestUrl, headers, body, method = 'POST') {
     const db = await openDB();
     const tx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
     const store = tx.objectStore(OFFLINE_QUEUE_NAME);
     
-    // OPTIMIZATION FIX: Intercepted Request headers are natively immutable. 
-    // We must clone them into a new mutable Headers object before appending the Idempotency Key.
     const mutableHeaders = new Headers(headers);
     
-    // Ensure idempotency key exists in headers to prevent double-billing when network stutters
     if (!mutableHeaders.has('Idempotency-Key')) {
         mutableHeaders.append('Idempotency-Key', 'OFFLINE-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9));
     }
@@ -88,7 +83,6 @@ async function processEnterpriseOutbox() {
                 body: JSON.stringify(data.body)
             });
 
-            // 400s are user errors (e.g., duplicate order), we drop them so they don't block the queue forever
             if (response.ok || response.status === 400 || response.status === 409) { 
                 const delTx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
                 delTx.objectStore(OFFLINE_QUEUE_NAME).delete(data.id);
@@ -97,7 +91,6 @@ async function processEnterpriseOutbox() {
             }
         } catch (err) {
             console.warn('[Enterprise SW] Sync failed for payload. Incrementing retry count.', err);
-            // Exponential backoff logic
             data.retryCount = (data.retryCount || 0) + 1;
             const updateTx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
             updateTx.objectStore(OFFLINE_QUEUE_NAME).put(data);
@@ -154,8 +147,12 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // ENTERPRISE OPTIMIZATION: Zero-Downtime Interceptor for ALL critical operations (POS, Shifts, Expenses)
-    if (['POST', 'PUT', 'PATCH'].includes(event.request.method) && requestUrl.pathname.startsWith('/api/')) {
+    // CRITICAL FIX: Explicitly exclude /api/auth/ from offline interception. 
+    // Authentication requires a live database connection and cannot be faked offline.
+    if (['POST', 'PUT', 'PATCH'].includes(event.request.method) && 
+        requestUrl.pathname.startsWith('/api/') && 
+        !requestUrl.pathname.startsWith('/api/auth/')) {
+        
         event.respondWith(
             fetch(event.request.clone()).catch(async (err) => {
                 console.warn(`[Enterprise SW] Network offline. Saving ${event.request.method} locally.`);
