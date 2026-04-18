@@ -5,12 +5,12 @@ async function fetchCustomers() {
     if (feed) feed.innerHTML = '<p class="empty-state">Loading customers...</p>';
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/orders/customers`);
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/orders/customers`);
         const result = await res.json();
         
         if (result.success) {
             if (typeof allHistoricalOrders !== 'undefined' && allHistoricalOrders.length === 0) {
-                const orderRes = await fetch(`${BACKEND_URL}/api/orders`);
+                const orderRes = await adminFetchWithAuth(`${BACKEND_URL}/api/orders`);
                 const orderData = await orderRes.json();
                 if(orderData.success) allHistoricalOrders = orderData.data;
             }
@@ -53,7 +53,7 @@ async function fetchCustomerCreditProfile(phone) {
     }
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${phone}`);
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/customers/profile/${phone}`);
         const result = await res.json();
         
         if (result.success && result.data) {
@@ -97,7 +97,7 @@ async function toggleCredit() {
     }
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${window.currentCustomerPhone}/limit`, {
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/customers/profile/${window.currentCustomerPhone}/limit`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isCreditEnabled: newStatus, creditLimit: limitInput, name: nameInput })
@@ -129,7 +129,7 @@ async function saveCreditLimit() {
     const nameInput = document.getElementById('deep-dive-name').innerText;
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${window.currentCustomerPhone}/limit`, {
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/customers/profile/${window.currentCustomerPhone}/limit`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isCreditEnabled: true, creditLimit: limitInput, name: nameInput })
@@ -157,7 +157,7 @@ async function submitPayment() {
     }
     
     try {
-        const res = await fetch(`${BACKEND_URL}/api/customers/profile/${window.currentCustomerPhone}/pay`, {
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/customers/profile/${window.currentCustomerPhone}/pay`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ amount: amount })
@@ -182,7 +182,7 @@ async function openKhataReminders() {
     if (container) container.innerHTML = '<p class="empty-state">Scanning customer ledgers...</p>';
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/customers`); 
+        const res = await adminFetchWithAuth(`${BACKEND_URL}/api/customers`); 
         
         if (res.ok) {
             const result = await res.json();
