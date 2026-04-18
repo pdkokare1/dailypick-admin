@@ -53,19 +53,34 @@ const DailyPickApp = (function() {
                 if (appContainer) appContainer.style.display = 'block';
                 
                 if (typeof window.applyRoleRestrictions === 'function') window.applyRoleRestrictions();
-                window.initializeApp();
-
+                
                 try {
                     const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/auth/verify?id=${window.currentUser._id || window.currentUser.id}`);
+                    
+                    // FIX: Explicitly intercept dead tokens before attempting to parse JSON to prevent ghost sessions
+                    if (res.status === 401 || res.status === 403) {
+                        console.warn("Session definitively invalid. Forcing logout.");
+                        if (typeof window.logoutUser === 'function') window.logoutUser();
+                        return; // Stop initialization
+                    }
+
                     const result = await res.json();
                     
-                    if (!res.ok || !result.success || result.data.role !== window.currentUser.role) {
+                    // FIX: Added safe check for !result.data to prevent TypeError null pointer crashes
+                    if (!res.ok || !result.success || !result.data || result.data.role !== window.currentUser.role) {
                         console.warn("Session verification failed. Role mismatch or invalid user. Forcing logout.");
                         if (typeof window.logoutUser === 'function') window.logoutUser();
                         if (typeof showToast === 'function') showToast("Session invalid. Please log in again.");
+                        return; // Stop initialization
                     }
+
+                    // Only initialize the app data after verifying the session is 100% valid
+                    window.initializeApp();
+
                 } catch (e) {
                     console.warn("Could not reach background verification endpoint. Trusting local session temporarily.", e);
+                    // Safe to boot app here because we only hit this if the server is literally unreachable (offline PWA mode)
+                    window.initializeApp(); 
                 }
                 
             } else {
