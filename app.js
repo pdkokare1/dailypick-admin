@@ -118,10 +118,18 @@ const DailyPickApp = (function() {
             // Expose initializeApp globally as before to ensure other scripts don't break
             window.initializeApp = function() {
                 if (typeof window.fetchGlobalSettings === 'function') window.fetchGlobalSettings(); 
-                if (typeof fetchCategories === 'function') fetchCategories(); 
-                if (typeof fetchBrands === 'function') fetchBrands();
-                if (typeof fetchDistributors === 'function') fetchDistributors();
-                if (typeof fetchPromotions === 'function') fetchPromotions(); 
+                
+                // OPTIMIZATION: Trigger the single master Bootstrap payload instead of 4 separate fetches
+                if (typeof window.fetchBootstrapData === 'function') {
+                    window.fetchBootstrapData();
+                } else {
+                    // Fail-safe fallback in case api.js hasn't loaded yet
+                    if (typeof fetchCategories === 'function') fetchCategories(); 
+                    if (typeof fetchBrands === 'function') fetchBrands();
+                    if (typeof fetchDistributors === 'function') fetchDistributors();
+                    if (typeof fetchPromotions === 'function') fetchPromotions(); 
+                }
+                
                 if (typeof fetchOrders === 'function') fetchOrders();
                 
                 // Now calls the decoupled service
