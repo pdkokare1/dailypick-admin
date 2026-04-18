@@ -56,6 +56,7 @@ const AuthManager = (function() {
             const res = await fetch(`${window.BACKEND_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', // FIXED: Added to satisfy strict backend CORS policy
                 body: JSON.stringify({ username: username, pin: window.currentPin })
             });
             
@@ -84,7 +85,9 @@ const AuthManager = (function() {
 
     const showLocationSelection = async function() {
         try {
-            const res = await fetch(`${window.BACKEND_URL}/api/stores`);
+            const res = await fetch(`${window.BACKEND_URL}/api/stores`, {
+                credentials: 'include' // FIXED: Added to satisfy strict backend CORS policy
+            });
             if (res.ok) {
                 const data = await res.json();
                 if (data.data && data.data.length > 0) {
@@ -107,7 +110,9 @@ const AuthManager = (function() {
     const fetchRegistersForStore = async function(storeId) {
         if (!storeId) return;
         try {
-            const res = await fetch(`${window.BACKEND_URL}/api/stores/${storeId}/registers`);
+            const res = await fetch(`${window.BACKEND_URL}/api/stores/${storeId}/registers`, {
+                credentials: 'include' // FIXED: Added to satisfy strict backend CORS policy
+            });
             if (res.ok) {
                 const data = await res.json();
                 const regSelect = document.getElementById('login-register-select');
