@@ -11,41 +11,52 @@ async function syncOfflinePOS() {
         const offlineQueue = await getAllFromIDB();
         if (offlineQueue.length === 0) return;
 
-        // OPTIMIZED: Drain the entire queue sequentially instead of processing just one item.
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
 
         for (const itemToSync of offlineQueue) {
             const { id, ...payloadToSync } = itemToSync;
 
-            // OPTIMIZATION: Ensure Idempotency Key is explicitly attached to prevent double-billing during unstable network reconnections
             if (!payloadToSync.idempotencyKey) {
                 payloadToSync.idempotencyKey = 'OFFLINE-SYNC-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
             }
 
-            const res = await fetchFn(`${BACKEND_URL}/api/orders/pos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payloadToSync)
-            });
-            
-            const result = await res.json();
-            if (result.success) {
-                await deleteFromIDB(id); 
-                showToast('Offline POS transaction synced! ✅');
-                if (typeof renderOverview === 'function') renderOverview(); 
-            } else {
-                await deleteFromIDB(id); 
-                
-                let failedQueue = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
-                failedQueue.push({
-                    ...itemToSync,
-                    failReason: result.message || 'Unknown backend rejection',
-                    failedAt: new Date().toISOString()
+            // OPTIMIZATION: AbortController prevents hanging requests on flaky networks
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+            try {
+                const res = await fetchFn(`${BACKEND_URL}/api/orders/pos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payloadToSync),
+                    signal: controller.signal
                 });
-                localStorage.setItem('dailypick_failed_syncs', JSON.stringify(failedQueue));
+                clearTimeout(timeoutId);
                 
-                showToast(`Offline Sync Failed: ${result.message}`);
-                if (typeof renderOverview === 'function') renderOverview(); 
+                const result = await res.json();
+                if (result.success) {
+                    await deleteFromIDB(id); 
+                    showToast('Offline POS transaction synced! ✅');
+                    if (typeof renderOverview === 'function') renderOverview(); 
+                } else {
+                    await deleteFromIDB(id); 
+                    
+                    let failedQueue = JSON.parse(localStorage.getItem('dailypick_failed_syncs') || '[]');
+                    failedQueue.push({
+                        ...itemToSync,
+                        failReason: result.message || 'Unknown backend rejection',
+                        failedAt: new Date().toISOString()
+                    });
+                    localStorage.setItem('dailypick_failed_syncs', JSON.stringify(failedQueue));
+                    
+                    showToast(`Offline Sync Failed: ${result.message}`);
+                    if (typeof renderOverview === 'function') renderOverview(); 
+                }
+            } catch (err) {
+                clearTimeout(timeoutId);
+                // If it aborts due to timeout, break the loop and try again on the next interval
+                console.warn('Sync request timed out or network dropped during transit. Will retry later.', err);
+                break;
             }
         }
     } catch (e) {
@@ -57,7 +68,6 @@ async function syncOfflinePOS() {
 
 setInterval(syncOfflinePOS, 30000);
 
-// OPTIMIZATION: Instantly trigger offline queue sync the moment the device reconnects to Wi-Fi/Cellular
 window.addEventListener('online', () => {
     if (!isSyncing) {
         if (typeof showToast === 'function') showToast('Network restored. Flushing offline queue...');
