@@ -80,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function fetchCustomerLoyalty(phone) {
     try {
-        // OPTIMIZED: Secured with auth wrapper fallback
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
         const res = await fetchFn(`${BACKEND_URL}/api/customers/profile/${phone}`);
         const result = await res.json();
@@ -114,12 +113,23 @@ function renderLoyaltyBadge() {
         badge.style.borderRadius = '8px';
         badge.style.border = '1px solid #bbf7d0';
         
-        badge.innerHTML = `
-            <span style="font-size: 12px; color: #16a34a; font-weight: 600;">⭐ ${points} Points Available</span>
-            <button type="button" class="primary-btn-small" style="background: ${appliedLoyaltyPoints > 0 ? '#ef4444' : '#22c55e'}; font-size: 10px; padding: 4px 8px;" onclick="toggleLoyaltyRedemption()">
-                ${appliedLoyaltyPoints > 0 ? 'Cancel' : 'Redeem'}
-            </button>
-        `;
+        const pointsText = document.createElement('span');
+        pointsText.style.fontSize = '12px';
+        pointsText.style.color = '#16a34a';
+        pointsText.style.fontWeight = '600';
+        pointsText.textContent = `⭐ ${points} Points Available`;
+
+        const actionBtn = document.createElement('button');
+        actionBtn.type = 'button';
+        actionBtn.className = 'primary-btn-small';
+        actionBtn.style.background = appliedLoyaltyPoints > 0 ? '#ef4444' : '#22c55e';
+        actionBtn.style.fontSize = '10px';
+        actionBtn.style.padding = '4px 8px';
+        actionBtn.textContent = appliedLoyaltyPoints > 0 ? 'Cancel' : 'Redeem';
+        actionBtn.onclick = toggleLoyaltyRedemption;
+
+        badge.appendChild(pointsText);
+        badge.appendChild(actionBtn);
         phoneInput.parentNode.appendChild(badge);
     }
 }
@@ -151,7 +161,6 @@ function renderPosQuickTap() {
     
     let quickItems = [];
     if (typeof currentInventory !== 'undefined') {
-        // OPTIMIZED: Break early logic to avoid full O(N) array scan.
         for (let i = 0; i < currentInventory.length; i++) {
             const p = currentInventory[i];
             if (p.isActive && p.variants && p.variants.length > 0) {
@@ -162,26 +171,54 @@ function renderPosQuickTap() {
     }
 
     if (quickItems.length === 0) {
-        grid.innerHTML = '<p class="empty-state" style="grid-column: 1/-1;">Add inventory items first.</p>';
+        const empty = document.createElement('p');
+        empty.className = 'empty-state';
+        empty.style.gridColumn = '1/-1';
+        empty.textContent = 'Add inventory items first.';
+        grid.appendChild(empty);
         return;
     }
 
-    // OPTIMIZED: Fragment batching for quick tap grid rendering
     const fragment = document.createDocumentFragment();
 
     quickItems.forEach(item => {
-        const thumbHtml = item.product.imageUrl 
-            ? `<img src="${item.product.imageUrl}" alt="${item.product.name}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px; margin-bottom: 6px;">`
-            : `<div style="width: 40px; height: 40px; border-radius: 8px; background: #E2E8F0; display: flex; align-items: center; justify-content: center; font-size: 20px; margin: 0 auto 6px auto;">📦</div>`;
-        
         const card = document.createElement('div');
         card.className = 'pos-quick-card';
-        card.innerHTML = `
-            ${thumbHtml}
-            <p>${item.product.name.substring(0, 15)}</p>
-            <span>₹${item.variant.price}</span>
-        `;
         card.onclick = () => { playBeep(); addToPosCart(item.product, item.variant); };
+        
+        if (item.product.imageUrl) {
+            const img = document.createElement('img');
+            img.src = item.product.imageUrl;
+            img.alt = item.product.name;
+            img.style.width = '40px';
+            img.style.height = '40px';
+            img.style.objectFit = 'cover';
+            img.style.borderRadius = '8px';
+            img.style.marginBottom = '6px';
+            card.appendChild(img);
+        } else {
+            const box = document.createElement('div');
+            box.style.width = '40px';
+            box.style.height = '40px';
+            box.style.borderRadius = '8px';
+            box.style.background = '#E2E8F0';
+            box.style.display = 'flex';
+            box.style.alignItems = 'center';
+            box.style.justifyContent = 'center';
+            box.style.fontSize = '20px';
+            box.style.margin = '0 auto 6px auto';
+            box.textContent = '📦';
+            card.appendChild(box);
+        }
+        
+        const title = document.createElement('p');
+        title.textContent = item.product.name.substring(0, 15);
+        card.appendChild(title);
+
+        const priceSpan = document.createElement('span');
+        priceSpan.textContent = `₹${item.variant.price}`;
+        card.appendChild(priceSpan);
+
         fragment.appendChild(card);
     });
 
@@ -245,7 +282,6 @@ function clearPosCart() {
     broadcastCFDUpdate(0); 
 }
 
-// OPTIMIZED: Pure math function decoupled and delegated to CartCalculator Engine
 function calculateCartTotals() {
     const totals = window.CartCalculator.calculate(
         posCart, 
@@ -266,7 +302,6 @@ function calculateCartTotals() {
 function renderPosCart() {
     const container = document.getElementById('pos-cart-items-container');
     const totalEl = document.getElementById('pos-cart-total');
-    
     const subtotalEl = document.getElementById('pos-cart-subtotal');
     const discountEl = document.getElementById('pos-cart-discount');
     const taxEl = document.getElementById('pos-cart-tax');
@@ -274,7 +309,12 @@ function renderPosCart() {
     container.innerHTML = '';
     
     if (posCart.length === 0) {
-        container.innerHTML = '<p class="empty-state" style="margin-top: 40px;">Cart is empty.<br><span style="font-size: 12px;">Scan or tap an item to begin.</span></p>';
+        const emptyMsg = document.createElement('p');
+        emptyMsg.className = 'empty-state';
+        emptyMsg.style.marginTop = '40px';
+        emptyMsg.innerHTML = 'Cart is empty.<br><span style="font-size: 12px;">Scan or tap an item to begin.</span>';
+        container.appendChild(emptyMsg);
+
         totalEl.innerText = '₹0.00';
         if(subtotalEl) subtotalEl.innerText = '₹0.00';
         if(discountEl) discountEl.innerText = '-₹0.00';
@@ -289,8 +329,6 @@ function renderPosCart() {
     }
 
     const totals = calculateCartTotals();
-
-    // OPTIMIZED: Fragment batching for cart items to ensure POS remains completely lag-free during fast scanning
     const fragment = document.createDocumentFragment();
 
     posCart.forEach((item, index) => {
@@ -299,27 +337,77 @@ function renderPosCart() {
         
         const div = document.createElement('div');
         div.className = 'pos-cart-item';
-        div.innerHTML = `
-            <div style="flex: 1;">
-                <div style="display:flex; align-items:center; gap:6px;">
-                    <h4 style="font-size: 13px;">${item.name}</h4>
-                    ${item.productId && !item.productId.startsWith('CUSTOM') ? `<button style="background:none; border:none; cursor:pointer;" onclick="openPosQuickView('${item.productId}')">ℹ️</button>` : ''}
-                </div>
-                <p style="font-size: 11px; color: var(--text-muted);">${item.selectedVariant} • ₹${item.price} ${tRate > 0 ? `<span style="color:#10b981; font-size:9px;">(GST ${tRate}%)</span>` : ''}</p>
-            </div>
-            <div class="pos-qty-controls">
-                <button class="pos-qty-btn" onclick="updatePosCartItemQty(${index}, -1)">-</button>
-                <span style="font-size: 13px; font-weight: bold; min-width: 20px; text-align: center;">${item.qty}</span>
-                <button class="pos-qty-btn" onclick="updatePosCartItemQty(${index}, 1)">+</button>
-            </div>
-            <div style="font-weight: 800; font-size: 14px; min-width: 60px; text-align: right;">₹${itemTotal.toFixed(2)}</div>
-        `;
+
+        const infoDiv = document.createElement('div');
+        infoDiv.style.flex = '1';
+
+        const headerRow = document.createElement('div');
+        headerRow.style.display = 'flex';
+        headerRow.style.alignItems = 'center';
+        headerRow.style.gap = '6px';
+
+        const title = document.createElement('h4');
+        title.style.fontSize = '13px';
+        title.textContent = item.name;
+        headerRow.appendChild(title);
+
+        if (item.productId && !item.productId.startsWith('CUSTOM')) {
+            const infoBtn = document.createElement('button');
+            infoBtn.style.background = 'none';
+            infoBtn.style.border = 'none';
+            infoBtn.style.cursor = 'pointer';
+            infoBtn.textContent = 'ℹ️';
+            infoBtn.onclick = () => openPosQuickView(item.productId);
+            headerRow.appendChild(infoBtn);
+        }
+
+        const subtitle = document.createElement('p');
+        subtitle.style.fontSize = '11px';
+        subtitle.style.color = 'var(--text-muted)';
+        subtitle.innerHTML = `${item.selectedVariant} • ₹${item.price} ${tRate > 0 ? `<span style="color:#10b981; font-size:9px;">(GST ${tRate}%)</span>` : ''}`;
+
+        infoDiv.appendChild(headerRow);
+        infoDiv.appendChild(subtitle);
+        
+        const controls = document.createElement('div');
+        controls.className = 'pos-qty-controls';
+        
+        const minusBtn = document.createElement('button');
+        minusBtn.className = 'pos-qty-btn';
+        minusBtn.textContent = '-';
+        minusBtn.onclick = () => updatePosCartItemQty(index, -1);
+        
+        const qtySpan = document.createElement('span');
+        qtySpan.style.fontSize = '13px';
+        qtySpan.style.fontWeight = 'bold';
+        qtySpan.style.minWidth = '20px';
+        qtySpan.style.textAlign = 'center';
+        qtySpan.textContent = item.qty;
+        
+        const plusBtn = document.createElement('button');
+        plusBtn.className = 'pos-qty-btn';
+        plusBtn.textContent = '+';
+        plusBtn.onclick = () => updatePosCartItemQty(index, 1);
+        
+        controls.appendChild(minusBtn);
+        controls.appendChild(qtySpan);
+        controls.appendChild(plusBtn);
+        
+        const totalDiv = document.createElement('div');
+        totalDiv.style.fontWeight = '800';
+        totalDiv.style.fontSize = '14px';
+        totalDiv.style.minWidth = '60px';
+        totalDiv.style.textAlign = 'right';
+        totalDiv.textContent = `₹${itemTotal.toFixed(2)}`;
+
+        div.appendChild(infoDiv);
+        div.appendChild(controls);
+        div.appendChild(totalDiv);
         fragment.appendChild(div);
     });
 
     container.appendChild(fragment);
 
-    // Render calculated values
     if(subtotalEl) subtotalEl.innerText = `₹${totals.subtotal.toFixed(2)}`;
     
     if(discountEl) {
@@ -338,7 +426,15 @@ function renderPosCart() {
         loyaltyLine.style.fontSize = '13px';
         loyaltyLine.style.color = '#8b5cf6';
         loyaltyLine.style.marginBottom = '4px';
-        loyaltyLine.innerHTML = `<span>Loyalty Redeemed:</span> <span id="pos-cart-loyalty">-₹0.00</span>`;
+        
+        const lbl = document.createElement('span');
+        lbl.textContent = 'Loyalty Redeemed:';
+        const val = document.createElement('span');
+        val.id = 'pos-cart-loyalty';
+        val.textContent = '-₹0.00';
+        
+        loyaltyLine.appendChild(lbl);
+        loyaltyLine.appendChild(val);
         taxElContainer.parentNode.insertBefore(loyaltyLine, taxElContainer.nextSibling); 
     }
 
@@ -390,15 +486,37 @@ function openPosQuickView(productId) {
     if(product.variants) {
         product.variants.forEach(v => {
             const dStock = getDisplayStock(v); 
-            list.innerHTML += `
-                <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; border: 1px solid #e2e8f0;">
-                    <div>
-                        <strong style="font-size: 13px;">${v.weightOrVolume}</strong>
-                        <p style="font-size: 11px; color: var(--text-muted);">Stock: ${dStock}</p>
-                    </div>
-                    <button class="primary-btn-small" onclick="addToPosCart({_id: '${product._id}', name: '${product.name}', taxRate: ${product.taxRate || 0}, taxType: '${product.taxType || 'Inclusive'}', hsnCode: '${product.hsnCode || ''}'}, {_id: '${v._id}', weightOrVolume: '${v.weightOrVolume}', price: ${v.price}}); closePosQuickView();">Add ₹${v.price}</button>
-                </div>
-            `;
+            
+            const row = document.createElement('div');
+            row.style.background = '#F8FAFC';
+            row.style.padding = '12px';
+            row.style.borderRadius = '8px';
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.border = '1px solid #e2e8f0';
+
+            const txtDiv = document.createElement('div');
+            const strng = document.createElement('strong');
+            strng.style.fontSize = '13px';
+            strng.textContent = v.weightOrVolume;
+            const pStock = document.createElement('p');
+            pStock.style.fontSize = '11px';
+            pStock.style.color = 'var(--text-muted)';
+            pStock.textContent = `Stock: ${dStock}`;
+            txtDiv.appendChild(strng);
+            txtDiv.appendChild(pStock);
+
+            const btn = document.createElement('button');
+            btn.className = 'primary-btn-small';
+            btn.textContent = `Add ₹${v.price}`;
+            btn.onclick = () => {
+                addToPosCart({_id: product._id, name: product.name, taxRate: product.taxRate || 0, taxType: product.taxType || 'Inclusive', hsnCode: product.hsnCode || ''}, {_id: v._id, weightOrVolume: v.weightOrVolume, price: v.price});
+                closePosQuickView();
+            };
+
+            row.appendChild(txtDiv);
+            row.appendChild(btn);
+            list.appendChild(row);
         });
     }
     document.getElementById('pos-quick-view-modal').classList.add('active');
@@ -428,19 +546,49 @@ function openHeldCartsModal() {
     container.innerHTML = '';
     
     if (heldCarts.length === 0) {
-        container.innerHTML = '<p class="empty-state">No held carts.</p>';
+        const emp = document.createElement('p');
+        emp.className = 'empty-state';
+        emp.textContent = 'No held carts.';
+        container.appendChild(emp);
     } else {
         heldCarts.forEach((cart, index) => {
             const itemNames = cart.items.map(i => `${i.qty}x ${i.name}`).join(', ');
-            container.innerHTML += `
-                <div style="background: #F8FAFC; padding: 12px; border-radius: 8px; border: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="flex: 1; padding-right: 12px;">
-                        <h4 style="font-size:14px; margin-bottom:4px;">${cart.phone} - ₹${cart.total.toFixed(2)}</h4>
-                        <p style="font-size:11px; color:var(--text-muted);">${cart.time} • ${itemNames.substring(0, 40)}...</p>
-                    </div>
-                    <button class="primary-btn-small" style="background: #3b82f6;" onclick="resumeHeldCart(${index})">Resume</button>
-                </div>
-            `;
+            
+            const row = document.createElement('div');
+            row.style.background = '#F8FAFC';
+            row.style.padding = '12px';
+            row.style.borderRadius = '8px';
+            row.style.border = '1px solid #E2E8F0';
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.alignItems = 'center';
+
+            const txtDiv = document.createElement('div');
+            txtDiv.style.flex = '1';
+            txtDiv.style.paddingRight = '12px';
+
+            const h4 = document.createElement('h4');
+            h4.style.fontSize = '14px';
+            h4.style.marginBottom = '4px';
+            h4.textContent = `${cart.phone} - ₹${cart.total.toFixed(2)}`;
+
+            const p = document.createElement('p');
+            p.style.fontSize = '11px';
+            p.style.color = 'var(--text-muted)';
+            p.textContent = `${cart.time} • ${itemNames.substring(0, 40)}...`;
+
+            txtDiv.appendChild(h4);
+            txtDiv.appendChild(p);
+
+            const btn = document.createElement('button');
+            btn.className = 'primary-btn-small';
+            btn.style.background = '#3b82f6';
+            btn.textContent = 'Resume';
+            btn.onclick = () => resumeHeldCart(index);
+
+            row.appendChild(txtDiv);
+            row.appendChild(btn);
+            container.appendChild(row);
         });
     }
     document.getElementById('held-carts-modal').classList.add('active');
