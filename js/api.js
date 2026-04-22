@@ -10,15 +10,22 @@ function populateDropdowns(data, selectConfigs) {
         const select = document.getElementById(config.id);
         if (!select) return;
 
-        select.innerHTML = (data.length === 0 && config.emptyHTML) 
-            ? config.emptyHTML 
-            : (config.defaultHTML || '');
+        // Secure clearance replacing vulnerable innerHTML
+        while (select.firstChild) {
+            select.removeChild(select.firstChild);
+        }
+
+        if (data.length === 0 && config.emptyHTML) {
+            select.insertAdjacentHTML('beforeend', config.emptyHTML); 
+        } else if (config.defaultHTML) {
+            select.insertAdjacentHTML('beforeend', config.defaultHTML);
+        }
 
         const fragment = document.createDocumentFragment();
         data.forEach(item => {
             const option = document.createElement('option');
             option.value = item.name;
-            option.innerText = item.name;
+            option.textContent = item.name; // Secure insertion
             fragment.appendChild(option);
         });
         select.appendChild(fragment);
@@ -157,7 +164,7 @@ async function archiveProduct(id, event) {
 // BRIDGE: Exposing all API repository functions to global scope
 window.populateDropdowns = populateDropdowns;
 window.fetchDropdownData = fetchDropdownData;
-window.fetchBootstrapData = fetchBootstrapData; // NEW: Exposed for app.js
+window.fetchBootstrapData = fetchBootstrapData; 
 window.fetchCategories = fetchCategories;
 window.fetchBrands = fetchBrands;
 window.fetchDistributors = fetchDistributors;
