@@ -3,8 +3,8 @@
 
 let realtimeSocket = null; 
 let realtimeReconnectTimeout = null;
-// FIX: Track ping interval to proactively keep the proxy connection alive
 let realtimePingInterval = null; 
+let reconnectAttempts = 0; // OPTIMIZATION: Track attempts for exponential backoff
 
 window.setupRealtimeConnection = function() {
     if (realtimeSocket && realtimeSocket.readyState <= 1) return; 
@@ -19,9 +19,9 @@ window.setupRealtimeConnection = function() {
 
         realtimeSocket.onopen = () => {
             console.log("Secure Realtime WebSocket Connected");
+            reconnectAttempts = 0; // OPTIMIZATION: Reset on successful connection
             if (realtimeReconnectTimeout) clearTimeout(realtimeReconnectTimeout);
 
-            // FIX: Proactively send heartbeat every 15 seconds so cloud proxy doesn't drop the line
             if (realtimePingInterval) clearInterval(realtimePingInterval);
             realtimePingInterval = setInterval(() => {
                 if (realtimeSocket && realtimeSocket.readyState === WebSocket.OPEN) {
@@ -57,16 +57,18 @@ window.setupRealtimeConnection = function() {
         };
 
         realtimeSocket.onclose = () => {
-            console.warn("Realtime WebSocket Closed. Attempting reconnect in 3s...");
-            // FIX: Clear interval to prevent memory leaks when socket is down
+            // OPTIMIZATION: Exponential backoff calculation (max 30 seconds) prevents self-inflicted DDoS
+            const delay = Math.min(1000 * (2 ** reconnectAttempts), 30000);
+            reconnectAttempts++;
+
+            console.warn(`Realtime WebSocket Closed. Attempting reconnect in ${delay}ms...`);
             if (realtimePingInterval) clearInterval(realtimePingInterval);
             realtimeSocket = null;
-            realtimeReconnectTimeout = setTimeout(window.setupRealtimeConnection, 3000);
+            realtimeReconnectTimeout = setTimeout(window.setupRealtimeConnection, delay);
         };
 
         realtimeSocket.onerror = (err) => {
             console.error("Realtime WebSocket Error:", err);
-            // FIX: Clear interval on error
             if (realtimePingInterval) clearInterval(realtimePingInterval);
             realtimeSocket.close(); 
         };
