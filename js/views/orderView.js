@@ -10,48 +10,62 @@ window.renderListView = function(orders) {
         return; 
     }
     
-    const fragment = document.createDocumentFragment();
+    // OPTIMIZATION: Chunked DOM Rendering to prevent UI freezing on large datasets
+    let index = 0;
+    const chunkSize = 50;
 
-    orders.forEach(order => {
-        const isRoutine = order.deliveryType === 'Routine';
-        const isPacking = order.status === 'Packing';
-        const cardWrapper = document.createElement('div');
-        cardWrapper.style.display = 'flex'; 
-        cardWrapper.style.alignItems = 'center'; 
-        cardWrapper.style.gap = '12px';
-        
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox'; 
-        checkbox.className = 'order-checkbox';
-        checkbox.checked = typeof selectedOrders !== 'undefined' && selectedOrders.has(order._id);
-        checkbox.onclick = (e) => {
-            if (typeof toggleOrderSelection === 'function') toggleOrderSelection(order._id, e);
-        };
+    function renderNextChunk() {
+        const fragment = document.createDocumentFragment();
+        const end = Math.min(index + chunkSize, orders.length);
 
-        const card = document.createElement('div'); 
-        card.classList.add('order-card');
-        card.style.flex = '1';
-        if(isPacking) card.style.borderLeft = '4px solid #4338CA';
+        for (; index < end; index++) {
+            const order = orders[index];
+            const isRoutine = order.deliveryType === 'Routine';
+            const isPacking = order.status === 'Packing';
+            const cardWrapper = document.createElement('div');
+            cardWrapper.style.display = 'flex'; 
+            cardWrapper.style.alignItems = 'center'; 
+            cardWrapper.style.gap = '12px';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox'; 
+            checkbox.className = 'order-checkbox';
+            checkbox.checked = typeof selectedOrders !== 'undefined' && selectedOrders.has(order._id);
+            checkbox.onclick = (e) => {
+                if (typeof toggleOrderSelection === 'function') toggleOrderSelection(order._id, e);
+            };
 
-        const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
+            const card = document.createElement('div'); 
+            card.classList.add('order-card');
+            card.style.flex = '1';
+            if(isPacking) card.style.borderLeft = '4px solid #4338CA';
 
-        card.innerHTML = `
-            <div class="order-info">
-                <h4>Order #${orderDisplayId}</h4>
-                <p class="order-meta">${order.customerName || 'Guest'} • ${isRoutine ? '📅 Routine' : '⚡ Instant'} ${isPacking ? '• 📦 Packing' : ''}</p>
-            </div>
-            <div class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</div>
-        `;
-        card.onclick = () => {
-            if (typeof openOrderModal === 'function') openOrderModal(order);
-        };
-        
-        cardWrapper.appendChild(checkbox); 
-        cardWrapper.appendChild(card);
-        fragment.appendChild(cardWrapper);
-    });
+            const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
 
-    ordersFeed.appendChild(fragment);
+            card.innerHTML = `
+                <div class="order-info">
+                    <h4>Order #${orderDisplayId}</h4>
+                    <p class="order-meta">${order.customerName || 'Guest'} • ${isRoutine ? '📅 Routine' : '⚡ Instant'} ${isPacking ? '• 📦 Packing' : ''}</p>
+                </div>
+                <div class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</div>
+            `;
+            card.onclick = () => {
+                if (typeof openOrderModal === 'function') openOrderModal(order);
+            };
+            
+            cardWrapper.appendChild(checkbox); 
+            cardWrapper.appendChild(card);
+            fragment.appendChild(cardWrapper);
+        }
+
+        ordersFeed.appendChild(fragment);
+
+        if (index < orders.length) {
+            requestAnimationFrame(renderNextChunk);
+        }
+    }
+
+    requestAnimationFrame(renderNextChunk);
 };
 
 window.renderKanbanView = function(orders) {
@@ -67,57 +81,72 @@ window.renderKanbanView = function(orders) {
     const today = new Date();
     today.setHours(0,0,0,0);
 
-    const fragNew = document.createDocumentFragment();
-    const fragPack = document.createDocumentFragment();
-    const fragDisp = document.createDocumentFragment();
+    // OPTIMIZATION: Chunked DOM Rendering for Kanban Board
+    let index = 0;
+    const chunkSize = 50;
 
-    orders.forEach(order => {
-        if(order.status === 'Dispatched' && new Date(order.createdAt) < today) return; 
+    function renderNextChunk() {
+        const fragNew = document.createDocumentFragment();
+        const fragPack = document.createDocumentFragment();
+        const fragDisp = document.createDocumentFragment();
 
-        const isRoutine = order.deliveryType === 'Routine';
-        const card = document.createElement('div');
-        card.className = 'kanban-card';
-        card.onclick = () => {
-            if (typeof openOrderModal === 'function') openOrderModal(order);
-        };
+        const end = Math.min(index + chunkSize, orders.length);
 
-        let actionHtml = '';
-        if (order.status === 'Order Placed') {
-            actionHtml = `<div class="kanban-actions"><button class="kanban-btn btn-pack" onclick="if(typeof updateOrderStatus === 'function') updateOrderStatus('${order._id}', 'Packing', event)">Start Packing</button></div>`;
-            countNew++;
-        } else if (order.status === 'Packing') {
-            actionHtml = `<div class="kanban-actions"><button class="kanban-btn btn-dispatch" onclick="if(typeof updateOrderStatus === 'function') updateOrderStatus('${order._id}', 'Dispatched', event)">Dispatch Now</button></div>`;
-            countPack++;
-        } else if (order.status === 'Dispatched') {
-            actionHtml = `<span style="font-size: 11px; font-weight: 700; color: #16A34A;">🚚 Out for Delivery</span>`;
-            countDisp++;
+        for (; index < end; index++) {
+            const order = orders[index];
+            if(order.status === 'Dispatched' && new Date(order.createdAt) < today) continue; 
+
+            const isRoutine = order.deliveryType === 'Routine';
+            const card = document.createElement('div');
+            card.className = 'kanban-card';
+            card.onclick = () => {
+                if (typeof openOrderModal === 'function') openOrderModal(order);
+            };
+
+            let actionHtml = '';
+            if (order.status === 'Order Placed') {
+                actionHtml = `<div class="kanban-actions"><button class="kanban-btn btn-pack" onclick="if(typeof updateOrderStatus === 'function') updateOrderStatus('${order._id}', 'Packing', event)">Start Packing</button></div>`;
+                countNew++;
+            } else if (order.status === 'Packing') {
+                actionHtml = `<div class="kanban-actions"><button class="kanban-btn btn-dispatch" onclick="if(typeof updateOrderStatus === 'function') updateOrderStatus('${order._id}', 'Dispatched', event)">Dispatch Now</button></div>`;
+                countPack++;
+            } else if (order.status === 'Dispatched') {
+                actionHtml = `<span style="font-size: 11px; font-weight: 700; color: #16A34A;">🚚 Out for Delivery</span>`;
+                countDisp++;
+            }
+
+            const itemsPreview = order.items.map(i => `${i.qty}x ${i.name}`).join(', ').substring(0, 30) + '...';
+            const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <h4>#${orderDisplayId}</h4>
+                    <span class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</span>
+                </div>
+                <p style="margin-bottom: 4px; font-weight: 600; color: var(--text-main);">${order.customerName || 'Guest'}</p>
+                <p>${itemsPreview}</p>
+                ${actionHtml}
+            `;
+
+            if (order.status === 'Order Placed') fragNew.appendChild(card);
+            else if (order.status === 'Packing') fragPack.appendChild(card);
+            else if (order.status === 'Dispatched') fragDisp.appendChild(card);
         }
 
-        const itemsPreview = order.items.map(i => `${i.qty}x ${i.name}`).join(', ').substring(0, 30) + '...';
-        const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
+        colNew.appendChild(fragNew);
+        colPack.appendChild(fragPack);
+        colDisp.appendChild(fragDisp);
 
-        card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <h4>#${orderDisplayId}</h4>
-                <span class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</span>
-            </div>
-            <p style="margin-bottom: 4px; font-weight: 600; color: var(--text-main);">${order.customerName || 'Guest'}</p>
-            <p>${itemsPreview}</p>
-            ${actionHtml}
-        `;
+        document.getElementById('kb-count-new').innerText = countNew;
+        document.getElementById('kb-count-pack').innerText = countPack;
+        document.getElementById('kb-count-disp').innerText = countDisp;
 
-        if (order.status === 'Order Placed') fragNew.appendChild(card);
-        else if (order.status === 'Packing') fragPack.appendChild(card);
-        else if (order.status === 'Dispatched') fragDisp.appendChild(card);
-    });
+        if (index < orders.length) {
+            requestAnimationFrame(renderNextChunk);
+        }
+    }
 
-    colNew.appendChild(fragNew);
-    colPack.appendChild(fragPack);
-    colDisp.appendChild(fragDisp);
-
-    document.getElementById('kb-count-new').innerText = countNew;
-    document.getElementById('kb-count-pack').innerText = countPack;
-    document.getElementById('kb-count-disp').innerText = countDisp;
+    requestAnimationFrame(renderNextChunk);
 };
 
 window.openOrderModal = function(order) {
