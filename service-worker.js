@@ -75,6 +75,14 @@ async function processEnterpriseOutbox() {
     console.log(`[Enterprise SW] Processing ${requests.length} offline transactions...`);
 
     for (const data of requests) {
+        // OPTIMIZATION: Prevent poisoned queue items from permanently blocking sync
+        if (data.retryCount && data.retryCount > 5) {
+            console.error(`[Enterprise SW] Transaction ${data.id} failed 5 times. Purging from queue to prevent blockages.`);
+            const delTx = db.transaction(OFFLINE_QUEUE_NAME, 'readwrite');
+            delTx.objectStore(OFFLINE_QUEUE_NAME).delete(data.id);
+            continue;
+        }
+
         try {
             const headers = new Headers(data.headers);
             const response = await fetch(data.url, {
@@ -147,8 +155,6 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // CRITICAL FIX: Explicitly exclude /api/auth/ from offline interception. 
-    // Authentication requires a live database connection and cannot be faked offline.
     if (['POST', 'PUT', 'PATCH'].includes(event.request.method) && 
         requestUrl.pathname.startsWith('/api/') && 
         !requestUrl.pathname.startsWith('/api/auth/')) {
@@ -218,6 +224,10 @@ self.addEventListener('fetch', (event) => {
                 return networkResponse;
             }).catch(() => {}); 
             
+            // OPTIMIZATION: WaitUntil ensures the background fetch finishes even if SW tries to sleep
+            if (cachedResponse) {
+                event.waitUntil(fetchPromise);
+            }
             return cachedResponse || fetchPromise;
         })
     );
