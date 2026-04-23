@@ -745,11 +745,14 @@ function calculateSplit() {
     let cash = parseFloat(cashStr) || 0;
     let upi = parseFloat(upiStr) || 0;
 
-    let totalEntered = cash + upi;
-    let balance = currentGrandTotal - totalEntered;
+    // ENTERPRISE FIX: Use strict integer math (Paise) to eliminate floating-point calculation drift on the frontend UI
+    let totalEnteredPaise = Math.round(cash * 100) + Math.round(upi * 100);
+    let grandTotalPaise = Math.round(currentGrandTotal * 100);
+    let balancePaise = grandTotalPaise - totalEnteredPaise;
+    let balance = balancePaise / 100;
     
     const balanceEl = document.getElementById('split-balance-display');
-    if (Math.abs(balance) < 0.01) {
+    if (balance === 0) {
         balanceEl.innerText = '₹0.00 (Perfect)';
         balanceEl.style.color = '#10b981';
     } else if (balance > 0) {
@@ -770,9 +773,14 @@ function addQuickCash(amount) {
 
 function setExactCash() {
     const upi = parseFloat(document.getElementById('split-upi-input').value) || 0;
-    const remaining = currentGrandTotal - upi;
-    if (remaining > 0) {
-        document.getElementById('split-cash-input').value = remaining.toFixed(2);
+    
+    // Convert to integers to prevent fractional math errors
+    const upiPaise = Math.round(upi * 100);
+    const grandTotalPaise = Math.round(currentGrandTotal * 100);
+    const remainingPaise = grandTotalPaise - upiPaise;
+    
+    if (remainingPaise > 0) {
+        document.getElementById('split-cash-input').value = (remainingPaise / 100).toFixed(2);
         calculateSplit();
     }
 }
@@ -781,10 +789,15 @@ function processSplitPayment() {
     let cash = parseFloat(document.getElementById('split-cash-input').value) || 0;
     let upi = parseFloat(document.getElementById('split-upi-input').value) || 0;
     
-    if (Math.abs((cash + upi) - currentGrandTotal) > 0.01) {
+    const totalEnteredPaise = Math.round(cash * 100) + Math.round(upi * 100);
+    const grandTotalPaise = Math.round(currentGrandTotal * 100);
+    
+    if (totalEnteredPaise !== grandTotalPaise) {
         return showToast("Split amounts must equal the exact grand total!");
     }
     
     closeSplitPaymentModal();
     processPosCheckout('Split', { cash: cash, upi: upi });
+}
+
 }
