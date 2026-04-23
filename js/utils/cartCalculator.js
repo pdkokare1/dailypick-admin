@@ -105,13 +105,13 @@ export const CartCalculator = {
 
         let grandTotalPaise = preLoyaltyTotalPaise - finalLoyaltyPointsPaise;
         
-        // Convert back to standard floats for the frontend components
-        const subtotal = subtotalPaise / 100;
-        const totalTax = totalTaxPaise / 100;
-        const totalDiscount = totalDiscountPaise / 100;
-        const grandTotal = grandTotalPaise / 100;
-        const tierDiscountAmount = tierDiscountAmountPaise / 100;
-        const finalLoyaltyPoints = finalLoyaltyPointsPaise / 100;
+        // ENTERPRISE FIX: Ensure strictly fixed Numbers are emitted to completely neutralize fractional anomalies in V8 JS Engine
+        const subtotal = Number((subtotalPaise / 100).toFixed(2));
+        const totalTax = Number((totalTaxPaise / 100).toFixed(2));
+        const totalDiscount = Number((totalDiscountPaise / 100).toFixed(2));
+        const grandTotal = Number((grandTotalPaise / 100).toFixed(2));
+        const tierDiscountAmount = Number((tierDiscountAmountPaise / 100).toFixed(2));
+        const finalLoyaltyPoints = Number((finalLoyaltyPointsPaise / 100).toFixed(2));
 
         return { subtotal, totalTax, totalDiscount, grandTotal, tierDiscountAmount, tierName, finalLoyaltyPoints };
     }
