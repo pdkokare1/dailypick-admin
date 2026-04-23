@@ -4,7 +4,6 @@ const AuthManager = (function() {
     // --- Private Methods & Logic ---
 
     const handlePinInput = function(num) {
-        // OPTIMIZATION: Ensure window.currentPin is initialized as a string before checking length to prevent undefined TypeErrors
         window.currentPin = window.currentPin || '';
         
         if (window.currentPin.length < 4) {
@@ -56,7 +55,7 @@ const AuthManager = (function() {
             const res = await fetch(`${window.BACKEND_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include', // FIXED: Added to satisfy strict backend CORS policy
+                credentials: 'include',
                 body: JSON.stringify({ username: username, pin: window.currentPin })
             });
             
@@ -86,7 +85,7 @@ const AuthManager = (function() {
     const showLocationSelection = async function() {
         try {
             const res = await fetch(`${window.BACKEND_URL}/api/stores`, {
-                credentials: 'include' // FIXED: Added to satisfy strict backend CORS policy
+                credentials: 'include' 
             });
             if (res.ok) {
                 const data = await res.json();
@@ -95,10 +94,22 @@ const AuthManager = (function() {
                     document.getElementById('location-selection-step').style.display = 'block';
                     
                     const storeSelect = document.getElementById('login-store-select');
-                    storeSelect.innerHTML = '<option value="">Select Store...</option>';
+                    
+                    // SECURE DOM UPDATE: Replaced innerHTML concatenation
+                    storeSelect.innerHTML = '';
+                    const defaultOpt = document.createElement('option');
+                    defaultOpt.value = "";
+                    defaultOpt.textContent = "Select Store...";
+                    storeSelect.appendChild(defaultOpt);
+
+                    const fragment = document.createDocumentFragment();
                     data.data.forEach(s => {
-                        storeSelect.innerHTML += `<option value="${s._id}">${s.name} (${s.location})</option>`;
+                        const opt = document.createElement('option');
+                        opt.value = s._id;
+                        opt.textContent = `${s.name} (${s.location})`;
+                        fragment.appendChild(opt);
                     });
+                    storeSelect.appendChild(fragment);
                     return; 
                 }
             }
@@ -111,16 +122,28 @@ const AuthManager = (function() {
         if (!storeId) return;
         try {
             const res = await fetch(`${window.BACKEND_URL}/api/stores/${storeId}/registers`, {
-                credentials: 'include' // FIXED: Added to satisfy strict backend CORS policy
+                credentials: 'include' 
             });
             if (res.ok) {
                 const data = await res.json();
                 const regSelect = document.getElementById('login-register-select');
-                regSelect.innerHTML = '<option value="">Select Register...</option>';
+                
+                // SECURE DOM UPDATE: Replaced innerHTML concatenation
+                regSelect.innerHTML = '';
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = "";
+                defaultOpt.textContent = "Select Register...";
+                regSelect.appendChild(defaultOpt);
+
                 if (data.data) {
+                    const fragment = document.createDocumentFragment();
                     data.data.forEach(r => {
-                        regSelect.innerHTML += `<option value="${r._id}">${r.name}</option>`;
+                        const opt = document.createElement('option');
+                        opt.value = r._id;
+                        opt.textContent = r.name;
+                        fragment.appendChild(opt);
                     });
+                    regSelect.appendChild(fragment);
                 }
             }
         } catch (e) { console.error("Error fetching registers", e); }
