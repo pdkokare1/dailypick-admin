@@ -32,25 +32,30 @@ window.setupRealtimeConnection = function() {
 
         realtimeSocket.onmessage = (event) => {
             try {
-                const data = JSON.parse(event.data);
+                const parsedData = JSON.parse(event.data);
                 
-                if (data.type === 'PING') {
-                    realtimeSocket.send(JSON.stringify({ type: 'PONG' }));
-                    return;
-                }
+                // OPTIMIZATION: Handle both single events and the new High-Throughput Micro-Batched Arrays from the backend
+                const eventsToProcess = Array.isArray(parsedData) ? parsedData : [parsedData];
                 
-                if (data.type === 'CONNECTION_ESTABLISHED') {
-                    console.log('✅ Real-Time Sync Active:', data.message);
-                    return;
-                }
-                
-                if (data.type === 'NEW_ORDER' || data.type === 'ORDER_STATUS_UPDATED') {
-                    if (typeof fetchOrders === 'function') fetchOrders();
-                    if (typeof renderOverview === 'function') renderOverview();
-                }
-                if (data.type === 'INVENTORY_UPDATE') {
-                    if (typeof fetchInventory === 'function') fetchInventory();
-                }
+                eventsToProcess.forEach(data => {
+                    if (data.type === 'PING') {
+                        realtimeSocket.send(JSON.stringify({ type: 'PONG' }));
+                        return;
+                    }
+                    
+                    if (data.type === 'CONNECTION_ESTABLISHED') {
+                        console.log('✅ Real-Time Sync Active:', data.message);
+                        return;
+                    }
+                    
+                    if (data.type === 'NEW_ORDER' || data.type === 'ORDER_STATUS_UPDATED') {
+                        if (typeof fetchOrders === 'function') fetchOrders();
+                        if (typeof renderOverview === 'function') renderOverview();
+                    }
+                    if (data.type === 'INVENTORY_UPDATE') {
+                        if (typeof fetchInventory === 'function') fetchInventory();
+                    }
+                });
             } catch (e) {
                 console.warn("WebSocket message error", e);
             }
