@@ -137,7 +137,7 @@ async function saveCreditLimit() {
         const result = await res.json();
         
         if (result.success) {
-            if (typeof showToast === 'function') showToast(`Credit limit saved: ₹${limitInput}`);
+            if (typeof showToast === 'function') showToast(`Credit limit saved: Rs ${limitInput}`);
         } else {
             if (typeof showToast === 'function') showToast(result.message || 'Failed to save limit.');
         }
@@ -165,9 +165,9 @@ async function submitPayment() {
         const result = await res.json();
         
         if (result.success) {
-            if (typeof showToast === 'function') showToast(`Recorded payment of ₹${amount}!`);
+            if (typeof showToast === 'function') showToast(`Recorded payment of Rs ${amount}!`);
             paymentInput.value = ''; 
-            document.getElementById('credit-used-display').innerText = `₹${result.data.creditUsed}`;
+            document.getElementById('credit-used-display').innerText = `Rs ${result.data.creditUsed}`;
         } else {
             if (typeof showToast === 'function') showToast(result.message || 'Failed to record payment.');
         }
@@ -202,3 +202,17 @@ async function openKhataReminders() {
 function closeKhataReminders() {
     document.getElementById('khata-reminders-modal').classList.remove('active');
 }
+
+// --- NEW: WHATSAPP COMMUNICATIONS LOGIC ---
+window.sendKhataReminderWhatsApp = function(phone, name, amount) {
+    if (!phone || phone.length < 10) {
+        if (typeof showToast === 'function') showToast("No valid phone number for this customer.");
+        return;
+    }
+    let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "The Gamut";
+    
+    const msg = `Hello ${name},\n\nThis is a gentle reminder from ${sName} regarding your pending Khata balance of Rs ${amount.toFixed(2)}.\n\nPlease settle this at your earliest convenience.\n\nThank you!`;
+    
+    const encodedText = encodeURIComponent(msg);
+    window.open(`https://wa.me/91${phone}?text=${encodedText}`, '_blank');
+};
