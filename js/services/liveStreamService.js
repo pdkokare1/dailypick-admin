@@ -6,19 +6,22 @@ let sseRetryCount = 0;
 export async function connectAdminLiveStream() {
     if (window.adminStreamController) return; 
 
-    // FIX: Removed manual token retrieval. `adminFetchWithAuth` handles this.
     window.adminStreamController = new AbortController();
 
     try {
-        // FIX: Replaced standard `fetch` with `window.adminFetchWithAuth`
-        const response = await window.adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/orders/stream/admin`, {
+        // --- AGGREGATOR FIX: TENANT ISOLATION ---
+        // Securely bind the SSE stream to the logged-in user's specific store
+        const tenantId = localStorage.getItem('dailypick_storeId');
+        const streamUrl = `${CONFIG.BACKEND_URL}/api/orders/stream/admin${tenantId ? `?storeId=${tenantId}` : ''}`;
+
+        const response = await window.adminFetchWithAuth(streamUrl, {
             credentials: 'include',
             signal: window.adminStreamController.signal
         });
 
         if (!response.ok) throw new Error('Stream connection failed due to authorization or server error');
 
-        console.log("🟢 Live Order Stream Connected (Secured)");
+        console.log("🟢 Live Order Stream Connected (Secured for Tenant)");
         sseRetryCount = 0; 
 
         const reader = response.body.getReader();
