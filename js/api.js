@@ -1,7 +1,19 @@
 /* js/api.js */
 import { CONFIG } from './core/config.js';
-import { adminFetchWithAuth } from './utils/httpClient.js';
+import { adminFetchWithAuth as originalAdminFetch } from './utils/httpClient.js';
 import { connectAdminLiveStream } from './services/liveStreamService.js';
+
+// --- AGGREGATOR GLOBAL SECURITY ---
+// Intercept the base authenticated fetcher to ensure every request 
+// securely broadcasts the Store Owner's Tenant ID to the backend via headers.
+window.adminFetchWithAuth = async function(url, options = {}) {
+    options.headers = options.headers || {};
+    const tenantId = localStorage.getItem('dailypick_storeId');
+    if (tenantId) {
+        options.headers['x-tenant-id'] = tenantId;
+    }
+    return originalAdminFetch(url, options);
+};
 
 let currentPromotions = []; 
 
@@ -10,7 +22,6 @@ function populateDropdowns(data, selectConfigs) {
         const select = document.getElementById(config.id);
         if (!select) return;
 
-        // Secure clearance replacing vulnerable innerHTML
         while (select.firstChild) {
             select.removeChild(select.firstChild);
         }
@@ -25,17 +36,16 @@ function populateDropdowns(data, selectConfigs) {
         data.forEach(item => {
             const option = document.createElement('option');
             option.value = item.name;
-            option.textContent = item.name; // Secure insertion
+            option.textContent = item.name; 
             fragment.appendChild(option);
         });
         select.appendChild(fragment);
     });
 }
 
-// Abstracted Data Fetcher
 async function fetchDropdownData(endpoint, errorMessage, successCallback) {
     try {
-        const res = await adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/${endpoint}`);
+        const res = await window.adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/${endpoint}`);
         const result = await res.json();
         if (result.success) {
             successCallback(result.data);
@@ -46,30 +56,26 @@ async function fetchDropdownData(endpoint, errorMessage, successCallback) {
     }
 }
 
-// OPTIMIZATION: Master Bootstrap Fetcher to prevent Network Waterfall on Login
 async function fetchBootstrapData() {
     try {
-        const res = await adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/bootstrap`);
+        const res = await window.adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/bootstrap`);
         const result = await res.json();
         
         if (result.success && result.data) {
             const d = result.data;
 
-            // 1. Categories
             if(typeof currentCategories !== 'undefined') window.currentCategories = d.categories;
             populateDropdowns(d.categories, [
                 { id: 'new-category', emptyHTML: '<option value="" disabled selected>No Categories Created</option>' },
                 { id: 'inventory-cat-filter', defaultHTML: '<option value="All">All Categories</option>' }
             ]);
 
-            // 2. Brands
             if(typeof currentBrands !== 'undefined') window.currentBrands = d.brands;
             populateDropdowns(d.brands, [
                 { id: 'new-brand', defaultHTML: '<option value="">Select Brand (Optional)</option>' },
                 { id: 'inventory-brand-filter', defaultHTML: '<option value="All">All Brands</option>' }
             ]);
 
-            // 3. Distributors
             if(typeof currentDistributors !== 'undefined') window.currentDistributors = d.distributors;
             populateDropdowns(d.distributors, [
                 { id: 'new-distributor', defaultHTML: '<option value="">Select Distributor (Optional)</option>' },
@@ -77,7 +83,6 @@ async function fetchBootstrapData() {
                 { id: 'inventory-dist-filter', defaultHTML: '<option value="All">All Distributors</option>' }
             ]);
 
-            // 4. Promotions
             currentPromotions = d.promotions;
             window.currentPromotions = d.promotions;
         }
@@ -125,7 +130,21 @@ async function fetchPromotions() {
     });
 }
 
-// OPTIMIZED: Abstracted CSV downloads
+// --- NEW: SUPERADMIN GLOBAL ENDPOINTS ---
+async function fetchGlobalSettlements() {
+    await fetchDropdownData('settlements/global', 'Error loading global settlements', (data) => {
+        window.globalSettlements = data;
+        if(typeof renderGlobalSettlements === 'function') renderGlobalSettlements();
+    });
+}
+
+async function fetchGlobalDisputes() {
+    await fetchDropdownData('settlements/disputes', 'Error loading disputes', (data) => {
+        window.globalDisputes = data;
+        if(typeof renderGlobalDisputes === 'function') renderGlobalDisputes();
+    });
+}
+
 function downloadCSV(endpoint) { window.open(`${CONFIG.BACKEND_URL}/api/${endpoint}`, '_blank'); }
 function exportOrdersCSV() { downloadCSV('orders/export'); }
 function exportCustomersCSV() { downloadCSV('customers/export'); }
@@ -135,11 +154,10 @@ async function archiveProduct(id, event) {
     if(event) event.stopPropagation();
     if(!confirm("Are you sure you want to archive this product? It will be hidden from the store without breaking historical sales data.")) return;
     
-    // OPTIMIZATION: Attach Idempotency header to prevent accidental multi-archiving if the network lags
     const idempotencyKey = 'ARCHIVE-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
     
     try {
-        const res = await adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/products/${id}/archive`, { 
+        const res = await window.adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/products/${id}/archive`, { 
             method: 'PUT',
             headers: {
                 'Idempotency-Key': idempotencyKey
@@ -169,6 +187,8 @@ window.fetchCategories = fetchCategories;
 window.fetchBrands = fetchBrands;
 window.fetchDistributors = fetchDistributors;
 window.fetchPromotions = fetchPromotions;
+window.fetchGlobalSettlements = fetchGlobalSettlements;
+window.fetchGlobalDisputes = fetchGlobalDisputes;
 window.exportOrdersCSV = exportOrdersCSV;
 window.exportCustomersCSV = exportCustomersCSV;
 window.exportInventoryCSV = exportInventoryCSV;
