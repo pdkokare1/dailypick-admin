@@ -171,6 +171,7 @@
                             <button class="primary-btn-small admin-only" style="background:#8b5cf6; color: white; border: none;" onclick="openStaffModal()"><i data-lucide="users" class="icon-sm"></i> Staff</button>
                             <button class="primary-btn-small admin-only" style="background:#ec4899; color: white; border: none;" onclick="openPromotionsModal()"><i data-lucide="tag" class="icon-sm"></i> Promos</button>
                             <button class="primary-btn-small admin-only" style="background:#3b82f6; color: white; border: none;" onclick="openStoreManagementModal()"><i data-lucide="map" class="icon-sm"></i> Manage Stores</button>
+                            <button class="primary-btn-small admin-only" style="background:#0ea5e9; color: white; border: none;" onclick="openDeveloperPortal()"><i data-lucide="terminal" class="icon-sm"></i> Developer API</button>
                             <button class="primary-btn-small admin-only" style="background:#475569; color: white; border: none;" onclick="openSecurityAuditModal()"><i data-lucide="shield" class="icon-sm"></i> Audits</button>
                             <button class="primary-btn-small admin-only" style="background:#0f172a; color: white; border: none;" onclick="openSettingsModal()"><i data-lucide="settings" class="icon-sm"></i> Settings</button>
                         </div>
@@ -525,6 +526,35 @@
                 </div>
             </main>
         </article>
+
+        <div id="developer-portal-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 400;">
+            <div class="form-card" style="max-width: 550px; text-align: center;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <h2 style="color: #0ea5e9;">Enterprise Developer API</h2>
+                        <span style="background:#e0f2fe; color:#0369a1; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Secure Sandbox</span>
+                    </div>
+                    <button aria-label="Close Modal" class="close-btn" onclick="document.getElementById('developer-portal-modal').classList.remove('active')" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                
+                <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px; text-align: left; line-height: 1.6;">
+                    Connect your local ERP systems (like Tally or SAP) directly to the DailyPick Aggregator. Generate a secure API key below to authorize your backend webhooks.
+                </p>
+                
+                <div style="background: #F8FAFC; padding: 24px; border-radius: 12px; border: 1px solid #E2E8F0; margin-bottom: 24px;">
+                    <div id="api-key-display-area" style="margin-bottom: 16px;">
+                        <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; font-weight: 800;">Your Secret Key</h4>
+                        <input type="text" id="dev-api-key-box" readonly value="****************************************" style="width: 100%; padding: 16px; font-family: monospace; font-size: 14px; background: #E2E8F0; border: 1px solid #CBD5E1; border-radius: 8px; text-align: center; color: #475569; font-weight: bold;">
+                    </div>
+                    
+                    <button id="generate-key-btn" class="primary-btn" style="background: #0ea5e9; width: 100%;" onclick="generatePartnerKey()">Generate New API Key</button>
+                    
+                    <p style="font-size: 11px; color: #ef4444; margin-top: 12px; font-weight: 600;">
+                        ⚠️ Warning: Generating a new key will instantly invalidate your old key. All active ERP integrations will disconnect until updated.
+                    </p>
+                </div>
+            </div>
+        </div>
 
         <div id="print-receipt-container"></div>
         <div id="print-packing-slip-container"></div>
