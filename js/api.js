@@ -130,21 +130,6 @@ async function fetchPromotions() {
     });
 }
 
-// --- NEW: SUPERADMIN GLOBAL ENDPOINTS ---
-async function fetchGlobalSettlements() {
-    await fetchDropdownData('settlements/global', 'Error loading global settlements', (data) => {
-        window.globalSettlements = data;
-        if(typeof renderGlobalSettlements === 'function') renderGlobalSettlements();
-    });
-}
-
-async function fetchGlobalDisputes() {
-    await fetchDropdownData('settlements/disputes', 'Error loading disputes', (data) => {
-        window.globalDisputes = data;
-        if(typeof renderGlobalDisputes === 'function') renderGlobalDisputes();
-    });
-}
-
 function downloadCSV(endpoint) { window.open(`${CONFIG.BACKEND_URL}/api/${endpoint}`, '_blank'); }
 function exportOrdersCSV() { downloadCSV('orders/export'); }
 function exportCustomersCSV() { downloadCSV('customers/export'); }
@@ -187,8 +172,6 @@ window.fetchCategories = fetchCategories;
 window.fetchBrands = fetchBrands;
 window.fetchDistributors = fetchDistributors;
 window.fetchPromotions = fetchPromotions;
-window.fetchGlobalSettlements = fetchGlobalSettlements;
-window.fetchGlobalDisputes = fetchGlobalDisputes;
 window.exportOrdersCSV = exportOrdersCSV;
 window.exportCustomersCSV = exportCustomersCSV;
 window.exportInventoryCSV = exportInventoryCSV;
