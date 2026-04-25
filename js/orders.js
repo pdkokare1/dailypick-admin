@@ -219,13 +219,15 @@ async function updateOrderStatus(orderId, newStatus, event) {
     if (isProcessingOrderAction) return;
     
     isProcessingOrderAction = true;
-    const order = currentOrders.find(o => o._id === orderId);
-    if(order) {
-        if ((order.status === 'Order Placed' || order.status === 'Packing') && (newStatus === 'Dispatched' || newStatus === 'Completed' || newStatus === 'Cancelled')) {
+    
+    // Optimistic UI Update
+    let localOrder = currentOrders.find(o => o._id === orderId);
+    if(localOrder) {
+        if ((localOrder.status === 'Order Placed' || localOrder.status === 'Packing') && (newStatus === 'Dispatched' || newStatus === 'Completed' || newStatus === 'Cancelled')) {
             globalPendingCount = Math.max(0, globalPendingCount - 1);
-            globalPendingRevenue = Math.max(0, globalPendingRevenue - order.totalAmount);
+            globalPendingRevenue = Math.max(0, globalPendingRevenue - localOrder.totalAmount);
         }
-        order.status = newStatus;
+        localOrder.status = newStatus;
     }
     updateDashboard();
     if (typeof showToast === 'function') showToast(`Order marked as ${newStatus}`);
@@ -235,11 +237,28 @@ async function updateOrderStatus(orderId, newStatus, event) {
         const body = newStatus === 'Dispatched' ? null : JSON.stringify({ status: newStatus });
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
         
-        await fetchFn(`${BACKEND_URL}/api/orders/${orderId}/${endpoint}`, { 
+        const res = await fetchFn(`${BACKEND_URL}/api/orders/${orderId}/${endpoint}`, { 
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: body
         });
+        
+        const result = await res.json();
+        
+        // NEW: If backend assigned an automated rider, update the UI and notify the cashier
+        if (result.success && result.data) {
+            if (localOrder) {
+                if (result.data.deliveryDriverName) localOrder.deliveryDriverName = result.data.deliveryDriverName;
+                if (result.data.driverPhone) localOrder.driverPhone = result.data.driverPhone;
+                if (result.data.trackingLink) localOrder.trackingLink = result.data.trackingLink;
+                
+                if (newStatus === 'Packed' && result.data.deliveryDriverName !== 'Unassigned') {
+                     if (typeof showToast === 'function') showToast(`Rider Assigned: ${result.data.deliveryDriverName} 🛵`);
+                }
+            }
+            updateDashboard(); // Re-render to show the new rider data
+        }
+
     } catch(e) {
         if (typeof showToast === 'function') showToast('Network error, order may not have synced.');
     } finally {
