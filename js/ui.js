@@ -661,3 +661,51 @@ window.submitNewRegister = async function() {
         }
     } catch (e) { if (typeof showToast === 'function') showToast("Network error"); }
 };
+
+// --- NEW: DEVELOPER PORTAL LOGIC ---
+window.openDeveloperPortal = function() {
+    if (typeof currentStoreId === 'undefined' || !currentStoreId) {
+        if (typeof showToast === 'function') showToast("Please log into a specific store to access its API settings.");
+        return;
+    }
+    
+    document.getElementById('developer-portal-modal').classList.add('active');
+    
+    // Check if the store already has an API key saved
+    // Note: In a true enterprise app, we wouldn't fetch the key to the frontend again for security, 
+    // but for this MVP, we can indicate if one is active.
+    document.getElementById('dev-api-key-box').value = "****************************************";
+};
+
+window.generatePartnerKey = async function() {
+    if (!confirm("Warning: This will invalidate any existing ERP connections. Are you sure you want to generate a new key?")) return;
+    
+    const btn = document.getElementById('generate-key-btn');
+    const keyBox = document.getElementById('dev-api-key-box');
+    
+    btn.innerText = 'Generating...';
+    btn.disabled = true;
+
+    try {
+        const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/stores/${currentStoreId}/key`, {
+            method: 'POST'
+        });
+        
+        const data = await res.json();
+        
+        if (data.success && data.data && data.data.apiKey) {
+            keyBox.value = data.data.apiKey;
+            keyBox.select();
+            document.execCommand('copy');
+            if (typeof showToast === 'function') showToast("✅ New Key Generated & Copied to Clipboard!");
+        } else {
+            if (typeof showToast === 'function') showToast(data.message || "Unauthorized: Only Admins can generate keys.");
+            keyBox.value = "ERROR: UNAUTHORIZED";
+        }
+    } catch (e) { 
+        if (typeof showToast === 'function') showToast("Network error"); 
+    } finally {
+        btn.innerText = 'Generate New API Key';
+        btn.disabled = false;
+    }
+};
