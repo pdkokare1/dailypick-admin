@@ -19,7 +19,6 @@ window.renderInventory = function(isLastPage = true) {
         ? currentInventory 
         : currentInventory.slice((inventoryPage - 1) * 30);
 
-    // OPTIMIZATION: DOM Virtualization (Chunked Rendering)
     let index = 0;
     const chunkSize = 50;
 
@@ -32,8 +31,6 @@ window.renderInventory = function(isLastPage = true) {
             const card = document.createElement('div'); 
             card.classList.add('inventory-card');
             
-            // --- AGGREGATOR UPDATE: The root level 'p' now represents the MasterProduct, 
-            // but the activity is tracked via the local StoreInventory variants ---
             let isLocalActive = true;
             if (p.variants && p.variants.length > 0) {
                 isLocalActive = p.variants.some(v => v.isActive !== false);
@@ -42,7 +39,6 @@ window.renderInventory = function(isLastPage = true) {
             
             const checkboxHtml = `<input type="checkbox" class="order-checkbox" ${typeof selectedInventory !== 'undefined' && selectedInventory.has(p._id) ? 'checked' : ''} onclick="if(typeof toggleInventorySelection === 'function') toggleInventorySelection('${p._id}', event)">`;
             
-            // Image comes from Master Catalog
             const thumb = p.imageUrl 
                 ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
                 : `<div style="width:40px; height:40px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">📦</div>`;
@@ -53,7 +49,6 @@ window.renderInventory = function(isLastPage = true) {
             
             if (p.variants) {
                 p.variants.forEach(v => {
-                    // Stock is now inherently local to this specific Store's tenant ID
                     const dStock = typeof getDisplayStock === 'function' ? getDisplayStock(v) : v.stock; 
                     totalStock += dStock;
                     if (dStock <= 0) {
@@ -112,7 +107,7 @@ window.renderInventory = function(isLastPage = true) {
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #F8FAFC; border-radius: 8px; margin-bottom: 4px; font-size: 12px;" onclick="event.stopPropagation()">
                     <span>${v.weightOrVolume} ${expiryHtml} ${runwayHtml}</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <span style="color: var(--text-muted);">₹</span>
+                        <span style="color: var(--text-muted);">Rs</span>
                         <input class="inline-edit-input" type="number" value="${v.price}" onkeydown="if(typeof saveInlineEdit === 'function') saveInlineEdit('${p._id}', '${v.inventoryId || v._id}', 'price', this, event)" title="Press Enter to save">
                         ${marginHtml}
                         <span style="color: var(--text-muted); margin-left: 8px;">Qty:</span>
@@ -202,7 +197,7 @@ window.updateInventoryDashboard = function() {
         document.getElementById('stat-out-stock').innerText = outOfStock;
         document.getElementById('stat-low-stock').innerText = lowStock;
         document.getElementById('stat-dead-stock').innerText = deadStock; 
-        document.getElementById('stat-total-value').innerText = `₹${totalValue.toFixed(2)}`;
+        document.getElementById('stat-total-value').innerText = `Rs ${totalValue.toFixed(2)}`;
     }
     
     const overviewView = document.getElementById('overview-view');
