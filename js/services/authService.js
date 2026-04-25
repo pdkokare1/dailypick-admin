@@ -95,7 +95,6 @@ const AuthManager = (function() {
                     
                     const storeSelect = document.getElementById('login-store-select');
                     
-                    // SECURE DOM UPDATE: Replaced innerHTML concatenation
                     storeSelect.innerHTML = '';
                     const defaultOpt = document.createElement('option');
                     defaultOpt.value = "";
@@ -128,7 +127,6 @@ const AuthManager = (function() {
                 const data = await res.json();
                 const regSelect = document.getElementById('login-register-select');
                 
-                // SECURE DOM UPDATE: Replaced innerHTML concatenation
                 regSelect.innerHTML = '';
                 const defaultOpt = document.createElement('option');
                 defaultOpt.value = "";
@@ -224,6 +222,7 @@ const AuthManager = (function() {
         if (logoutBtn) logoutBtn.style.display = 'block';
 
         const adminOnlyElements = document.querySelectorAll('.admin-only');
+        const superadminOnlyElements = document.querySelectorAll('.superadmin-only');
 
         if (window.currentUser.role === 'Cashier') {
             const navOverview = document.getElementById('nav-overview');
@@ -240,8 +239,12 @@ const AuthManager = (function() {
             if (eodBtn) eodBtn.style.display = 'none';
 
             adminOnlyElements.forEach(el => el.style.display = 'none');
+            superadminOnlyElements.forEach(el => el.style.display = 'none');
+
             if (typeof window.switchView === 'function') window.switchView('pos'); 
-        } else {
+            
+        } else if (window.currentUser.role === 'SuperAdmin') {
+            // --- AGGREGATOR: SUPERADMIN GOD MODE ---
             const navOverview = document.getElementById('nav-overview');
             const navInventory = document.getElementById('nav-inventory');
             const navAnalytics = document.getElementById('nav-analytics');
@@ -256,13 +259,31 @@ const AuthManager = (function() {
             if (eodBtn) eodBtn.style.display = 'inline-block';
 
             adminOnlyElements.forEach(el => el.style.display = 'inline-flex');
+            superadminOnlyElements.forEach(el => el.style.display = 'inline-flex'); // God Mode Unlocked
+            
+        } else {
+            // Standard StoreAdmin
+            const navOverview = document.getElementById('nav-overview');
+            const navInventory = document.getElementById('nav-inventory');
+            const navAnalytics = document.getElementById('nav-analytics');
+            const navCustomers = document.getElementById('nav-customers');
+            
+            if (navOverview) navOverview.style.display = 'flex';
+            if (navInventory) navInventory.style.display = 'flex';
+            if (navAnalytics) navAnalytics.style.display = 'flex';
+            if (navCustomers) navCustomers.style.display = 'flex';
+            
+            const eodBtn = document.getElementById('eod-report-btn');
+            if (eodBtn) eodBtn.style.display = 'inline-block';
+
+            adminOnlyElements.forEach(el => el.style.display = 'inline-flex');
+            superadminOnlyElements.forEach(el => el.style.display = 'none'); // Locked
         }
     };
 
     // --- Public API Integration ---
     return {
         init: function() {
-            // Map strictly to window to maintain absolute backward compatibility with the rest of the application
             window.handlePinInput = handlePinInput;
             window.clearPinInput = clearPinInput;
             window.updatePinDisplay = updatePinDisplay;
