@@ -168,6 +168,9 @@
                             <button class="primary-btn-small" style="background:#D4AF37; color: white; border: none;" onclick="openShiftModal()"><i data-lucide="store" class="icon-sm"></i> Register Cash</button>
                             <button class="primary-btn-small" style="background:#ef4444; color: white; border: none;" onclick="openExpenseModal()"><i data-lucide="receipt" class="icon-sm"></i> Log Expense</button>
                             <button id="eod-report-btn" class="primary-btn-small" style="background:#062C1E; color: white; border: none;" onclick="openEodReport()"><i data-lucide="flag" class="icon-sm"></i> End of Day</button>
+                            
+                            <button class="primary-btn-small superadmin-only" style="background:#020617; color: white; border: none; display: none;" onclick="openSuperAdminDashboard()"><i data-lucide="globe" class="icon-sm"></i> Platform Admin</button>
+
                             <button class="primary-btn-small admin-only" style="background:#8b5cf6; color: white; border: none;" onclick="openStaffModal()"><i data-lucide="users" class="icon-sm"></i> Staff</button>
                             <button class="primary-btn-small admin-only" style="background:#ec4899; color: white; border: none;" onclick="openPromotionsModal()"><i data-lucide="tag" class="icon-sm"></i> Promos</button>
                             <button class="primary-btn-small admin-only" style="background:#3b82f6; color: white; border: none;" onclick="openStoreManagementModal()"><i data-lucide="map" class="icon-sm"></i> Manage Stores</button>
@@ -530,6 +533,28 @@
         <div id="print-packing-slip-container"></div>
         <div id="print-barcode-container"></div>
         <div id="print-bulk-labels-container"></div>
+
+        <div id="superadmin-dashboard-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 360;">
+            <div class="form-card drawer-content" style="max-width: 700px; overflow-y: auto;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <h2 style="color: var(--primary);">Platform God Mode</h2>
+                        <span style="background:#020617; color:white; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">SuperAdmin</span>
+                    </div>
+                    <button aria-label="Close Modal" class="close-btn" onclick="closeSuperAdminDashboard()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                
+                <h3 style="font-size: 15px; margin-bottom: 12px; color: var(--primary);">Pending Settlements (Partner Payouts)</h3>
+                <div id="global-settlements-container" style="max-height: 300px; overflow-y: auto; margin-bottom: 32px; border: 1px solid #E5E7EB; border-radius: 12px; padding: 12px; background: white;">
+                    <p class="empty-state">Loading settlements...</p>
+                </div>
+
+                <h3 style="font-size: 15px; margin-bottom: 12px; color: #DC2626;">Active Partner Disputes</h3>
+                <div id="global-disputes-container" style="max-height: 300px; overflow-y: auto; border: 1px solid #FECACA; border-radius: 12px; padding: 12px; background: white;">
+                    <p class="empty-state">Loading disputes...</p>
+                </div>
+            </div>
+        </div>
 
         <div id="ai-forecast-modal" class="modal-overlay drawer-overlay hidden-modal" style="z-index: 350;">
             <div class="form-card drawer-content" style="max-width: 650px; overflow-y: auto;">
