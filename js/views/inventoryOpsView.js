@@ -188,11 +188,93 @@ window.startScanner = function(onSuccessCallback) {
     }); 
 };
 
+// --- NEW: AGGREGATOR CATALOG SEARCH INTERCEPTOR ---
+let catalogSearchTimeout = null;
+
+window.searchMasterCatalog = async function(query) {
+    if (!query || query.length < 3) return;
+    
+    document.getElementById('catalog-search-status').innerText = "Searching global catalog...";
+    
+    clearTimeout(catalogSearchTimeout);
+    catalogSearchTimeout = setTimeout(async () => {
+        try {
+            // We use the same backend endpoint, but tell it to ignore storeId restrictions to search globally
+            const res = await fetch(`${apiBaseUrl}/products/autocomplete?q=${encodeURIComponent(query)}&global=true`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await res.json();
+            
+            if (result.success && result.data.length > 0) {
+                renderCatalogResults(result.data);
+            } else {
+                document.getElementById('catalog-search-status').innerText = "Not found in Global Catalog. Fill details to create new Master Product.";
+                // Allow them to fill in the custom details if the brand isn't in the platform yet
+                document.getElementById('custom-product-details').style.display = 'block';
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }, 400);
+};
+
+window.renderCatalogResults = function(masterProducts) {
+    const container = document.getElementById('catalog-results-container');
+    document.getElementById('catalog-search-status').innerText = `Found ${masterProducts.length} matches. Click one to map to your store.`;
+    container.innerHTML = '';
+    
+    masterProducts.forEach(mp => {
+        const card = document.createElement('div');
+        card.style.cssText = "padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; gap: 12px; background: white;";
+        
+        const imgUrl = mp.imageUrl || 'https://via.placeholder.com/40';
+        
+        card.innerHTML = `
+            <img src="${imgUrl}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;">
+            <div>
+                <div style="font-weight: 600; font-size: 14px;">${mp.name}</div>
+                <div style="font-size: 12px; color: #64748b;">${mp.brand || 'No Brand'} • ${mp.category}</div>
+            </div>
+        `;
+        
+        card.onclick = () => selectMasterProduct(mp);
+        container.appendChild(card);
+    });
+};
+
+window.selectMasterProduct = function(masterProduct) {
+    // Hide the search results and lock the name/category inputs
+    document.getElementById('catalog-results-container').innerHTML = '';
+    document.getElementById('catalog-search-status').innerText = "Product Selected! Define your local price and stock below.";
+    
+    document.getElementById('new-name').value = masterProduct.name;
+    document.getElementById('new-name').readOnly = true;
+    
+    document.getElementById('custom-product-details').style.display = 'none'; // Hide category/brand drops
+    
+    // Clear existing variants
+    document.getElementById('variants-container').innerHTML = '';
+    
+    // Load the master variants for the store owner to price
+    if (masterProduct.variants && masterProduct.variants.length > 0) {
+        masterProduct.variants.forEach(v => {
+            // They provide the local Price and Stock. The weight/sku is locked to the master.
+            addVariantRow(v.weightOrVolume, '', '0', v.sku || '', '5', '', true); 
+        });
+    }
+};
+
 window.startScannerForSku = function(btnElement) { 
     window.currentSkuInputTarget = btnElement.previousElementSibling; 
     startScanner((decodedText) => { 
         window.currentSkuInputTarget.value = decodedText; 
         if (typeof showToast === 'function') showToast(`SKU Captured: ${decodedText}`); 
+        
+        // --- AGGREGATOR UPDATE: If they scan a barcode while adding a product, search the master catalog instantly
+        if (document.getElementById('add-product-modal').classList.contains('active')) {
+            document.getElementById('catalog-search-input').value = decodedText;
+            searchMasterCatalog(decodedText);
+        }
     }); 
 };
 
@@ -223,18 +305,19 @@ window.closeAuditMode = function() {
     document.getElementById('audit-modal').classList.remove('active');
 };
 
-window.addVariantRow = function(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '') {
+// Modified to accept a 'readOnlyMaster' flag so users don't overwrite the global EAN/Weight
+window.addVariantRow = function(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '', readOnlyMaster = false) {
     const container = document.getElementById('variants-container');
     const row = document.createElement('div');
     row.classList.add('variant-row');
     row.innerHTML = `
-        <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" required style="min-width: 90px;">
-        <input type="number" placeholder="Price (₹)" class="var-price" value="${price}" required style="width: 70px; flex: none;">
-        <input type="number" placeholder="Stock" class="var-stock" value="${stock}" required style="width: 65px; flex: none;">
+        <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" ${readOnlyMaster ? 'readonly' : 'required'} style="min-width: 90px; ${readOnlyMaster ? 'background: #f1f5f9;' : ''}">
+        <input type="number" placeholder="Local Price (₹)" class="var-price" value="${price}" required style="width: 90px; flex: none; background: #e0f2fe; border-color: #7dd3fc;">
+        <input type="number" placeholder="Local Stock" class="var-stock" value="${stock}" required style="width: 80px; flex: none; background: #e0f2fe; border-color: #7dd3fc;">
         <input type="number" placeholder="Alert At" class="var-threshold" value="${threshold}" title="Low Stock Alert Threshold" required style="width: 65px; flex: none;">
         <input type="date" class="var-expiry" value="${expiry ? new Date(expiry).toISOString().split('T')[0] : ''}" title="Expiry Date" style="width: 110px; flex: none;">
-        <input type="text" placeholder="SKU/Barcode" class="var-sku" value="${sku}" style="min-width: 90px;">
-        <button type="button" class="scan-sku-btn" onclick="startScannerForSku(this)" title="Scan Barcode">📷</button>
+        <input type="text" placeholder="SKU/Barcode" class="var-sku" value="${sku}" ${readOnlyMaster ? 'readonly' : ''} style="min-width: 90px; ${readOnlyMaster ? 'background: #f1f5f9;' : ''}">
+        <button type="button" class="scan-sku-btn" onclick="startScannerForSku(this)" title="Scan Barcode" ${readOnlyMaster ? 'disabled' : ''}>📷</button>
         <button type="button" class="scan-sku-btn" onclick="printBarcode(this)" title="Generate & Print Label">🖨️</button>
         <button type="button" class="remove-variant-btn" onclick="this.parentElement.remove()">✕</button>
     `;
@@ -246,16 +329,16 @@ window.openAddProductModal = function(prefillSku = '') {
     
     document.getElementById('add-product-form').reset();
     document.getElementById('edit-product-id').value = '';
-    document.getElementById('modal-form-title').innerText = 'Add New Product';
-    document.getElementById('current-image-text').style.display = 'none';
+    document.getElementById('modal-form-title').innerText = 'Add Inventory from Catalog';
+    
+    // Un-hide the search inputs
+    const searchWrapper = document.getElementById('catalog-search-wrapper');
+    if(searchWrapper) searchWrapper.style.display = 'block';
+    
+    document.getElementById('new-name').readOnly = false;
+    document.getElementById('custom-product-details').style.display = 'block';
+    
     document.getElementById('variants-container').innerHTML = ''; 
-    document.getElementById('drop-zone').classList.remove('dragover');
-    
-    const previewImg = document.getElementById('drop-zone-preview');
-    const dropContent = document.getElementById('drop-zone-content');
-    if (previewImg) previewImg.style.display = 'none';
-    if (dropContent) dropContent.style.display = 'block';
-    
     addVariantRow('', '', '0', prefillSku, '5', ''); 
     
     if (typeof switchView === 'function') switchView('inventory');
@@ -269,33 +352,22 @@ window.openEditProductModal = function(id, e) {
 
     document.getElementById('add-product-form').reset();
     document.getElementById('edit-product-id').value = p._id;
-    document.getElementById('modal-form-title').innerText = 'Edit Product';
+    document.getElementById('modal-form-title').innerText = 'Edit Local Details';
+    
+    // Hide the master search since they are editing an existing link
+    const searchWrapper = document.getElementById('catalog-search-wrapper');
+    if(searchWrapper) searchWrapper.style.display = 'none';
     
     document.getElementById('new-name').value = p.name;
-    document.getElementById('new-category').value = p.category;
-    document.getElementById('new-brand').value = p.brand || '';
-    document.getElementById('new-distributor').value = p.distributorName || '';
-    document.getElementById('new-tags').value = p.searchTags || ''; 
-    document.getElementById('current-image-text').style.display = p.imageUrl ? 'block' : 'none';
-
-    const previewImg = document.getElementById('drop-zone-preview');
-    const dropContent = document.getElementById('drop-zone-content');
-    if (p.imageUrl) {
-        if (previewImg) {
-            previewImg.src = p.imageUrl;
-            previewImg.style.display = 'block';
-        }
-        if (dropContent) dropContent.style.display = 'none';
-    } else {
-        if (previewImg) previewImg.style.display = 'none';
-        if (dropContent) dropContent.style.display = 'block';
-    }
+    document.getElementById('new-name').readOnly = true; // Cannot rename Master Catalog
+    document.getElementById('custom-product-details').style.display = 'none';
 
     const container = document.getElementById('variants-container');
     container.innerHTML = '';
     
     if (p.variants && p.variants.length > 0) {
-        p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, (typeof getDisplayStock === 'function' ? getDisplayStock(v) : v.stock), v.sku, v.lowStockThreshold || 5, v.expiryDate || ''));
+        // They can only edit the price, stock, and threshold. The rest is readOnly.
+        p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, (typeof getDisplayStock === 'function' ? getDisplayStock(v) : v.stock), v.sku, v.lowStockThreshold || 5, v.expiryDate || '', true));
     } else { 
         addVariantRow(p.weightOrVolume || '', p.price || '', 0, '', 5, ''); 
     }
@@ -305,7 +377,11 @@ window.openEditProductModal = function(id, e) {
 
 window.closeAddProductModal = function() { 
     document.getElementById('add-product-modal').classList.remove('active'); 
+    document.getElementById('catalog-results-container').innerHTML = '';
+    document.getElementById('catalog-search-status').innerText = '';
 };
+
+// ... [Restock, Margin, and RTV functions remain entirely unchanged from original] ...
 
 window.openRestockModal = function() { 
     if (typeof currentDistributors !== 'undefined' && currentDistributors.length === 0) {
@@ -478,59 +554,3 @@ window.openRestockHistory = function(productId, variantId, event) {
 
     document.getElementById('history-modal').classList.add('active');
 };
-
-document.addEventListener('DOMContentLoaded', () => {
-    const fileInput = document.getElementById('new-image');
-    const dropZone = document.getElementById('drop-zone');
-    const dropContent = document.getElementById('drop-zone-content');
-    const previewImg = document.getElementById('drop-zone-preview');
-
-    if (fileInput && dropZone) {
-        fileInput.addEventListener('change', function() {
-            if (this.files && this.files[0]) {
-                const file = this.files[0];
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        if(previewImg) {
-                            previewImg.src = e.target.result;
-                            previewImg.style.display = 'block';
-                        }
-                        if(dropContent) dropContent.style.display = 'none';
-                    };
-                    reader.readAsDataURL(file);
-                }
-            } else {
-                if(previewImg) previewImg.style.display = 'none';
-                if(dropContent) dropContent.style.display = 'block';
-            }
-        });
-
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-        });
-
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            
-            if (files && files.length > 0) {
-                fileInput.files = files;
-                fileInput.dispatchEvent(new Event('change')); 
-            }
-        });
-    }
-});
