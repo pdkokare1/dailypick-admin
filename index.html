@@ -951,55 +951,60 @@
         <div id="add-product-modal" class="modal-overlay drawer-overlay hidden-modal">
             <div class="form-card drawer-content" style="overflow-y: auto; width: 100%; max-width: 650px;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h2 id="modal-form-title">Add New Product</h2>
+                    <h2 id="modal-form-title">Add Inventory from Catalog</h2>
                     <button aria-label="Close Modal" class="close-btn" onclick="closeAddProductModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
                 </div>
+
+                <div id="catalog-search-wrapper" style="background: #F8FAFC; padding: 16px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #E2E8F0; display: none;">
+                    <h3 style="font-size: 14px; font-weight: 800; color: var(--primary); margin-bottom: 12px;">Step 1: Search Global Catalog</h3>
+                    <div class="input-group" style="margin-bottom: 12px; display: flex; gap: 8px;">
+                        <input type="text" id="catalog-search-input" placeholder="Type product name, brand, or scan barcode..." style="flex: 1; font-weight: 600; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" oninput="searchMasterCatalog(this.value)">
+                        <button type="button" class="primary-btn" style="background: #0ea5e9; width: auto; padding: 0 16px; border-radius: 8px;" onclick="startScannerForSku(this)"><i data-lucide="camera" class="icon-sm"></i> Scan</button>
+                    </div>
+                    <div id="catalog-search-status" style="font-size: 13px; font-weight: 600; color: #64748b; margin-bottom: 8px;"></div>
+                    <div id="catalog-results-container" style="display: flex; flex-direction: column; max-height: 250px; overflow-y: auto; gap: 8px;"></div>
+                </div>
+
                 <form id="add-product-form" onsubmit="submitNewProduct(event)">
                     <input type="hidden" id="edit-product-id">
-                    
-                    <div class="input-group">
-                        <label>Product Image (Optional)</label>
-                        <div id="drop-zone" class="drop-zone" style="position: relative; overflow: hidden; cursor: pointer;">
-                            <div id="drop-zone-content">
-                                <i data-lucide="folder-open" style="width: 32px; height: 32px; color: var(--text-muted); margin-bottom: 12px;"></i>
-                                <p style="font-size: 14px; color: var(--text-muted); margin: 8px 0; font-weight: 600;">Drag and drop image here or click to browse</p>
-                            </div>
-                            <img id="drop-zone-preview" src="" alt="Preview" style="display: none; max-height: 150px; margin: 0 auto; border-radius: 8px; object-fit: contain;">
-                            <input type="file" aria-label="Upload Image" id="new-image" accept="image/*" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;">
-                        </div>
-                        <p id="current-image-text" style="font-size: 12px; color: var(--text-muted); margin-top: 8px; display: none; font-weight: 600;">Leave blank to keep current image.</p>
-                    </div>
+
+                    <h3 style="font-size: 14px; font-weight: 800; color: var(--primary); margin-bottom: 16px;">Step 2: Local Details</h3>
 
                     <div class="input-group">
                         <label>Product Name</label>
                         <div style="display: flex; gap: 8px;">
-                            <input type="text" aria-label="Product Name" id="new-name" required placeholder="e.g., Almond Milk" style="flex: 1; margin-bottom: 0;">
+                            <input type="text" aria-label="Product Name" id="new-name" required placeholder="e.g., Almond Milk" style="flex: 1; margin-bottom: 0; font-weight: 700; background: white;">
                             <button type="button" class="primary-btn" id="btn-autofill" style="background: #8b5cf6; width: auto; padding: 0 16px;" onclick="autoFillProduct()"><i data-lucide="sparkles" class="icon-sm"></i> Auto-Fill</button>
                         </div>
                     </div>
-                    
-                    <div class="input-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div><label>Category</label><select aria-label="Category" id="new-category" required></select></div>
-                        <div><label>Brand (Optional)</label><select aria-label="Brand" id="new-brand"><option value="">Select Brand</option></select></div>
+
+                    <div id="custom-product-details">
+                        <div style="background: #FFFBEB; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px dashed #FDE68A;">
+                            <p style="font-size: 12px; color: #92400E; font-weight: 600;">⚠️ Not in Global Catalog? Fill these to request a new Master Item.</p>
+                        </div>
+                        <div class="input-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div><label>Category</label><select aria-label="Category" id="new-category" required></select></div>
+                            <div><label>Brand (Optional)</label><select aria-label="Brand" id="new-brand"><option value="">Select Brand</option></select></div>
+                        </div>
+                        <div class="input-group">
+                            <label>Distributor (Optional)</label>
+                            <select aria-label="Distributor" id="new-distributor"><option value="">Select Distributor</option></select>
+                        </div>
+                        <div class="input-group">
+                            <label>Hidden Search Tags (Comma Separated)</label>
+                            <input type="text" aria-label="Search Tags" id="new-tags" placeholder="e.g. sweet, frozen, summer, cold">
+                        </div>
                     </div>
-                    <div class="input-group">
-                        <label>Distributor (Optional)</label>
-                        <select aria-label="Distributor" id="new-distributor"><option value="">Select Distributor</option></select>
-                    </div>
-                    <div class="input-group">
-                        <label>Hidden Search Tags (Comma Separated)</label>
-                        <input type="text" aria-label="Search Tags" id="new-tags" placeholder="e.g. sweet, frozen, summer, cold">
-                    </div>
-                    
+
                     <div class="input-group" style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #E5E7EB;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <label style="margin: 0;">Sizes / Variants / SKUs</label>
+                            <label style="margin: 0;">Local Pricing & Stock</label>
                             <button type="button" class="primary-btn-small" style="background: #F3F4F6; color: var(--text-main);" onclick="addVariantRow()"><i data-lucide="plus" class="icon-sm"></i> Add Size</button>
                         </div>
                         <div id="variants-container"></div>
                     </div>
 
-                    <button type="submit" id="submit-product-btn" class="primary-btn" style="margin-top: 16px;">Save Product</button>
+                    <button type="submit" id="submit-product-btn" class="primary-btn" style="margin-top: 16px; background: #10b981;">Save to My Store</button>
                 </form>
             </div>
         </div>
