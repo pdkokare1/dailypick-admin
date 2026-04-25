@@ -199,7 +199,6 @@ window.searchMasterCatalog = async function(query) {
     clearTimeout(catalogSearchTimeout);
     catalogSearchTimeout = setTimeout(async () => {
         try {
-            // We use the same backend endpoint, but tell it to ignore storeId restrictions to search globally
             const res = await fetch(`${apiBaseUrl}/products/autocomplete?q=${encodeURIComponent(query)}&global=true`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -209,7 +208,6 @@ window.searchMasterCatalog = async function(query) {
                 renderCatalogResults(result.data);
             } else {
                 document.getElementById('catalog-search-status').innerText = "Not found in Global Catalog. Fill details to create new Master Product.";
-                // Allow them to fill in the custom details if the brand isn't in the platform yet
                 document.getElementById('custom-product-details').style.display = 'block';
             }
         } catch (e) {
@@ -243,22 +241,17 @@ window.renderCatalogResults = function(masterProducts) {
 };
 
 window.selectMasterProduct = function(masterProduct) {
-    // Hide the search results and lock the name/category inputs
     document.getElementById('catalog-results-container').innerHTML = '';
     document.getElementById('catalog-search-status').innerText = "Product Selected! Define your local price and stock below.";
     
     document.getElementById('new-name').value = masterProduct.name;
     document.getElementById('new-name').readOnly = true;
     
-    document.getElementById('custom-product-details').style.display = 'none'; // Hide category/brand drops
-    
-    // Clear existing variants
+    document.getElementById('custom-product-details').style.display = 'none'; 
     document.getElementById('variants-container').innerHTML = '';
     
-    // Load the master variants for the store owner to price
     if (masterProduct.variants && masterProduct.variants.length > 0) {
         masterProduct.variants.forEach(v => {
-            // They provide the local Price and Stock. The weight/sku is locked to the master.
             addVariantRow(v.weightOrVolume, '', '0', v.sku || '', '5', '', true); 
         });
     }
@@ -270,7 +263,6 @@ window.startScannerForSku = function(btnElement) {
         window.currentSkuInputTarget.value = decodedText; 
         if (typeof showToast === 'function') showToast(`SKU Captured: ${decodedText}`); 
         
-        // --- AGGREGATOR UPDATE: If they scan a barcode while adding a product, search the master catalog instantly
         if (document.getElementById('add-product-modal').classList.contains('active')) {
             document.getElementById('catalog-search-input').value = decodedText;
             searchMasterCatalog(decodedText);
@@ -305,14 +297,13 @@ window.closeAuditMode = function() {
     document.getElementById('audit-modal').classList.remove('active');
 };
 
-// Modified to accept a 'readOnlyMaster' flag so users don't overwrite the global EAN/Weight
 window.addVariantRow = function(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '', readOnlyMaster = false) {
     const container = document.getElementById('variants-container');
     const row = document.createElement('div');
     row.classList.add('variant-row');
     row.innerHTML = `
         <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" ${readOnlyMaster ? 'readonly' : 'required'} style="min-width: 90px; ${readOnlyMaster ? 'background: #f1f5f9;' : ''}">
-        <input type="number" placeholder="Local Price (₹)" class="var-price" value="${price}" required style="width: 90px; flex: none; background: #e0f2fe; border-color: #7dd3fc;">
+        <input type="number" placeholder="Local Price (Rs)" class="var-price" value="${price}" required style="width: 90px; flex: none; background: #e0f2fe; border-color: #7dd3fc;">
         <input type="number" placeholder="Local Stock" class="var-stock" value="${stock}" required style="width: 80px; flex: none; background: #e0f2fe; border-color: #7dd3fc;">
         <input type="number" placeholder="Alert At" class="var-threshold" value="${threshold}" title="Low Stock Alert Threshold" required style="width: 65px; flex: none;">
         <input type="date" class="var-expiry" value="${expiry ? new Date(expiry).toISOString().split('T')[0] : ''}" title="Expiry Date" style="width: 110px; flex: none;">
@@ -331,7 +322,6 @@ window.openAddProductModal = function(prefillSku = '') {
     document.getElementById('edit-product-id').value = '';
     document.getElementById('modal-form-title').innerText = 'Add Inventory from Catalog';
     
-    // Un-hide the search inputs
     const searchWrapper = document.getElementById('catalog-search-wrapper');
     if(searchWrapper) searchWrapper.style.display = 'block';
     
@@ -354,19 +344,17 @@ window.openEditProductModal = function(id, e) {
     document.getElementById('edit-product-id').value = p._id;
     document.getElementById('modal-form-title').innerText = 'Edit Local Details';
     
-    // Hide the master search since they are editing an existing link
     const searchWrapper = document.getElementById('catalog-search-wrapper');
     if(searchWrapper) searchWrapper.style.display = 'none';
     
     document.getElementById('new-name').value = p.name;
-    document.getElementById('new-name').readOnly = true; // Cannot rename Master Catalog
+    document.getElementById('new-name').readOnly = true; 
     document.getElementById('custom-product-details').style.display = 'none';
 
     const container = document.getElementById('variants-container');
     container.innerHTML = '';
     
     if (p.variants && p.variants.length > 0) {
-        // They can only edit the price, stock, and threshold. The rest is readOnly.
         p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, (typeof getDisplayStock === 'function' ? getDisplayStock(v) : v.stock), v.sku, v.lowStockThreshold || 5, v.expiryDate || '', true));
     } else { 
         addVariantRow(p.weightOrVolume || '', p.price || '', 0, '', 5, ''); 
@@ -381,8 +369,6 @@ window.closeAddProductModal = function() {
     document.getElementById('catalog-search-status').innerText = '';
 };
 
-// ... [Restock, Margin, and RTV functions remain entirely unchanged from original] ...
-
 window.openRestockModal = function() { 
     if (typeof currentDistributors !== 'undefined' && currentDistributors.length === 0) {
         return showToast("Create a Distributor first!"); 
@@ -391,7 +377,7 @@ window.openRestockModal = function() {
     document.getElementById('restock-form').reset(); 
     document.getElementById('restock-selected-item').classList.add('hidden'); 
     document.getElementById('restock-search-results').innerHTML = ''; 
-    document.getElementById('margin-display').innerText = 'Margin: --% | Profit: ₹--';
+    document.getElementById('margin-display').innerText = 'Margin: --% | Profit: Rs --';
     window.restockSelectedVariant = null; 
     document.getElementById('submit-restock-btn').disabled = true; 
     document.getElementById('restock-modal').classList.add('active'); 
@@ -437,7 +423,7 @@ window.calculateMargin = function() {
     if (cost > 0 && sell > 0) {
         const profit = sell - cost;
         const margin = ((profit / sell) * 100).toFixed(1);
-        display.innerText = `Margin: ${margin}% | Profit: ₹${profit.toFixed(2)}`;
+        display.innerText = `Margin: ${margin}% | Profit: Rs ${profit.toFixed(2)}`;
         if (profit < 0) {
             display.style.color = '#991b1b';
             display.style.background = '#fef2f2';
@@ -446,7 +432,7 @@ window.calculateMargin = function() {
             display.style.background = '#e0f2fe';
         }
     } else {
-        display.innerText = `Margin: --% | Profit: ₹--`;
+        display.innerText = `Margin: --% | Profit: Rs --`;
         display.style.color = '#0c4a6e';
         display.style.background = '#e0f2fe';
     }
@@ -545,7 +531,7 @@ window.openRestockHistory = function(productId, variantId, event) {
                 <div class="history-icon">📦</div>
                 <div class="history-details">
                     <h4>+${h.addedQuantity} Units (Inv: ${h.invoiceNumber})</h4>
-                    <p>${dateStr} • Cost: ₹${h.purchasingPrice} • Sold For: ₹${h.sellingPrice}</p>
+                    <p>${dateStr} • Cost: Rs ${h.purchasingPrice} • Sold For: Rs ${h.sellingPrice}</p>
                 </div>
             `;
             container.appendChild(item);
