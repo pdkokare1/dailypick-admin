@@ -4,7 +4,7 @@ window.printReceipt = function() {
     if (typeof activeOrder === 'undefined' || !activeOrder) return;
     const pContainer = document.getElementById('print-receipt-container');
     
-    let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
+    let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "THE GAMUT.";
     let sAddress = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeAddress) ? globalStoreSettings.storeAddress : "";
     let sGstin = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.gstin) ? `<p style="margin:0; font-size:10px;">GSTIN: ${globalStoreSettings.gstin}</p>` : "";
     let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
@@ -24,10 +24,10 @@ window.printReceipt = function() {
         
         const subtotal = activeOrder.totalAmount - tax + discount + pts; 
         
-        extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Subtotal: ₹${subtotal.toFixed(2)}</div>`;
-        if (discount > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal; color:#10b981;">Discount: -₹${discount.toFixed(2)}</div>`;
-        if (pts > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal; color:#8b5cf6;">Loyalty Redeemed: -₹${pts.toFixed(2)}</div>`;
-        if (tax > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Tax (GST): ₹${tax.toFixed(2)}</div>`;
+        extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Subtotal: Rs ${subtotal.toFixed(2)}</div>`;
+        if (discount > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal; color:#10b981;">Discount: -Rs ${discount.toFixed(2)}</div>`;
+        if (pts > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal; color:#8b5cf6;">Loyalty Redeemed: -Rs ${pts.toFixed(2)}</div>`;
+        if (tax > 0) extraTotalsHtml += `<div style="font-size:12px; font-weight:normal;">Tax (GST): Rs ${tax.toFixed(2)}</div>`;
         extraTotalsHtml += `<hr style="border: 0; border-top: 1px dashed black; margin: 4px 0;">`;
     }
 
@@ -56,7 +56,7 @@ window.printReceipt = function() {
         </div>
         <div style="text-align: right; font-weight: bold; font-size: 14px;">
             ${extraTotalsHtml}
-            TOTAL: ₹${activeOrder.totalAmount.toFixed(2)}<br>
+            TOTAL: Rs ${activeOrder.totalAmount.toFixed(2)}<br>
             PAYMENT: ${activeOrder.paymentMethod}
         </div>
         ${pointsHtml}
@@ -74,17 +74,19 @@ window.sendWhatsAppReceipt = function() {
         return;
     }
 
-    let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DailyPick";
+    let sName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "The Gamut";
     let sFooter = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.receiptFooterMessage) ? globalStoreSettings.receiptFooterMessage : "Thank you for shopping with us!";
     let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
 
     const earnedPoints = Math.floor(activeOrder.totalAmount / loyaltyConv);
-    const ptsText = (activeOrder.pointsRedeemed && activeOrder.pointsRedeemed > 0) ? `%0A*Pts Redeemed: -₹${activeOrder.pointsRedeemed.toFixed(2)}*` : '';
+    const ptsText = (activeOrder.pointsRedeemed && activeOrder.pointsRedeemed > 0) ? `\n*Pts Redeemed: -Rs ${activeOrder.pointsRedeemed.toFixed(2)}*` : '';
     
-    const itemsText = activeOrder.items.map(i => `${i.qty}x ${i.name} - ₹${(i.price * i.qty).toFixed(2)}`).join('%0A');
+    const itemsText = activeOrder.items.map(i => `${i.qty}x ${i.name} - Rs ${(i.price * i.qty).toFixed(2)}`).join('\n');
     const orderDisplayId = activeOrder.orderNumber || activeOrder._id.toString().slice(-4).toUpperCase();
     
-    const text = `*${sName} Receipt*%0AOrder ID: #${orderDisplayId}%0A%0A*Items:*%0A${itemsText}%0A%0A*Total: ₹${activeOrder.totalAmount.toFixed(2)}*${ptsText}%0APayment: ${activeOrder.paymentMethod}%0A%0A⭐ You earned ${earnedPoints} Points!%0A%0A${sFooter}`;
+    // Proper plaintext template that relies on encodeURIComponent rather than raw %0A hacks
+    const rawText = `*${sName} Receipt*\nOrder ID: #${orderDisplayId}\n\n*Items:*\n${itemsText}\n\n*Total: Rs ${activeOrder.totalAmount.toFixed(2)}*${ptsText}\nPayment: ${activeOrder.paymentMethod}\n\n⭐ You earned ${earnedPoints} Points!\n\n${sFooter}`;
 
-    window.open(`https://wa.me/91${phone}?text=${text}`, '_blank');
+    const encodedText = encodeURIComponent(rawText);
+    window.open(`https://wa.me/91${phone}?text=${encodedText}`, '_blank');
 };
