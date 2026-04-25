@@ -9,7 +9,7 @@ window.renderInventory = function(isLastPage = true) {
     }
     
     if (typeof currentInventory === 'undefined' || currentInventory.length === 0) { 
-        invFeedEl.innerHTML = '<p class="empty-state">No products found.</p>'; 
+        invFeedEl.innerHTML = '<p class="empty-state">No mapped inventory found in your store.</p>'; 
         const loadBtn = document.getElementById('load-more-btn');
         if (loadBtn) loadBtn.classList.add('hidden'); 
         return; 
@@ -32,10 +32,17 @@ window.renderInventory = function(isLastPage = true) {
             const card = document.createElement('div'); 
             card.classList.add('inventory-card');
             
-            if (!p.isActive) card.classList.add('inactive');
+            // --- AGGREGATOR UPDATE: The root level 'p' now represents the MasterProduct, 
+            // but the activity is tracked via the local StoreInventory variants ---
+            let isLocalActive = true;
+            if (p.variants && p.variants.length > 0) {
+                isLocalActive = p.variants.some(v => v.isActive !== false);
+            }
+            if (!isLocalActive) card.classList.add('inactive');
             
             const checkboxHtml = `<input type="checkbox" class="order-checkbox" ${typeof selectedInventory !== 'undefined' && selectedInventory.has(p._id) ? 'checked' : ''} onclick="if(typeof toggleInventorySelection === 'function') toggleInventorySelection('${p._id}', event)">`;
             
+            // Image comes from Master Catalog
             const thumb = p.imageUrl 
                 ? `<img src="${p.imageUrl}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; margin-right:12px;">` 
                 : `<div style="width:40px; height:40px; border-radius:8px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">📦</div>`;
@@ -46,6 +53,7 @@ window.renderInventory = function(isLastPage = true) {
             
             if (p.variants) {
                 p.variants.forEach(v => {
+                    // Stock is now inherently local to this specific Store's tenant ID
                     const dStock = typeof getDisplayStock === 'function' ? getDisplayStock(v) : v.stock; 
                     totalStock += dStock;
                     if (dStock <= 0) {
@@ -105,10 +113,10 @@ window.renderInventory = function(isLastPage = true) {
                     <span>${v.weightOrVolume} ${expiryHtml} ${runwayHtml}</span>
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <span style="color: var(--text-muted);">₹</span>
-                        <input class="inline-edit-input" type="number" value="${v.price}" onkeydown="if(typeof saveInlineEdit === 'function') saveInlineEdit('${p._id}', '${v._id}', 'price', this, event)" title="Press Enter to save">
+                        <input class="inline-edit-input" type="number" value="${v.price}" onkeydown="if(typeof saveInlineEdit === 'function') saveInlineEdit('${p._id}', '${v.inventoryId || v._id}', 'price', this, event)" title="Press Enter to save">
                         ${marginHtml}
                         <span style="color: var(--text-muted); margin-left: 8px;">Qty:</span>
-                        <input class="inline-edit-input" type="number" value="${dStock}" onkeydown="if(typeof saveInlineEdit === 'function') saveInlineEdit('${p._id}', '${v._id}', 'stock', this, event)" title="Press Enter to save">
+                        <input class="inline-edit-input" type="number" value="${dStock}" onkeydown="if(typeof saveInlineEdit === 'function') saveInlineEdit('${p._id}', '${v.inventoryId || v._id}', 'stock', this, event)" title="Press Enter to save">
                         <button class="quick-restock-btn" onclick="if(typeof openRestockHistory === 'function') openRestockHistory('${p._id}', '${v._id}', event)" title="Restock History">🕒</button>
                         <button class="quick-restock-btn" onclick="if(typeof quickRestock === 'function') quickRestock('${p._id}', '${v._id}', event)" title="Quick Restock">📦</button>
                         <button class="quick-restock-btn" style="color: #dc2626; border-color: #fca5a5; background: #fef2f2;" onclick="if(typeof openRTVModal === 'function') openRTVModal('${p._id}', '${v._id}', event)" title="Return to Vendor (RTV)">🔙</button>
@@ -127,26 +135,19 @@ window.renderInventory = function(isLastPage = true) {
                             <div style="display:flex; align-items:center;">
                                 <span class="inv-meta" style="font-size: 11px; color: var(--text-muted);">${vCount} Variant${vCount !== 1 ? 's' : ''}</span>
                                 ${stockBadge}
-                                ${vCount > 0 ? `<button class="variant-collapse-btn" onclick="if(typeof toggleVariantView === 'function') toggleVariantView('${p._id}', event)">▼ Edit Inline</button>` : ''}
+                                ${vCount > 0 ? `<button class="variant-collapse-btn" onclick="if(typeof toggleVariantView === 'function') toggleVariantView('${p._id}', event)">▼ Edit Local Price/Stock</button>` : ''}
                             </div>
                         </div>
                     </div>
                     <div style="display:flex; align-items:center;">
-                        <button class="edit-btn" onclick="if(typeof openEditProductModal === 'function') openEditProductModal('${p._id}', event)">Full Edit</button>
-                        <button class="toggle-switch ${p.isActive ? 'active' : ''}" onclick="if(typeof toggleProductStatus === 'function') toggleProductStatus('${p._id}', this, event)"></button>
-                        <button class="danger-btn-small" style="margin-left: 8px; padding: 4px 8px; font-size: 10px; border-radius: 4px;" onclick="if(typeof archiveProduct === 'function') archiveProduct('${p._id}', event)" title="Soft Delete Product">🗑️ Archive</button>
+                        <button class="toggle-switch ${isLocalActive ? 'active' : ''}" onclick="if(typeof toggleProductStatus === 'function') toggleProductStatus('${p._id}', this, event)"></button>
+                        <button class="danger-btn-small" style="margin-left: 8px; padding: 4px 8px; font-size: 10px; border-radius: 4px;" onclick="if(typeof archiveProduct === 'function') archiveProduct('${p._id}', event)" title="Hide Product from local store">🚫 Delist</button>
                     </div>
                 </div>
                 <div style="width: 100%; margin-top: 10px; display: none;" id="variants-${p._id}">
                     ${variantsHtml}
                 </div>
             `;
-            
-            card.onclick = (e) => {
-                if(e.target.tagName !== 'BUTTON' && !e.target.classList.contains('toggle-switch') && e.target.tagName !== 'INPUT') {
-                    if (typeof openEditProductModal === 'function') openEditProductModal(p._id, e);
-                }
-            };
 
             fragment.appendChild(card);
         }
@@ -156,7 +157,6 @@ window.renderInventory = function(isLastPage = true) {
         if (index < itemsToRender.length) {
             requestAnimationFrame(renderNextChunk);
         } else {
-            // Execution block for the final chunk rendering
             const loadBtn = document.getElementById('load-more-btn');
             if (loadBtn) {
                 if (isLastPage || (typeof isLowStockFilterActive !== 'undefined' && isLowStockFilterActive) || (typeof isOutStockFilterActive !== 'undefined' && isOutStockFilterActive) || (typeof isDeadStockFilterActive !== 'undefined' && isDeadStockFilterActive)) {
@@ -218,7 +218,7 @@ window.updateInventoryBulkUI = function() {
     const printBtn = document.getElementById('inv-bulk-print-btn'); 
     
     if (typeof selectedInventory !== 'undefined' && selectedInventory.size > 0) {
-        if(btn) { btn.innerText = `Deactivate Selected (${selectedInventory.size})`; btn.style.display = 'inline-flex'; }
+        if(btn) { btn.innerText = `Delist Selected (${selectedInventory.size})`; btn.style.display = 'inline-flex'; }
         if(priceBtn) { priceBtn.innerText = `Edit Prices (${selectedInventory.size})`; priceBtn.style.display = 'inline-flex'; }
         if(assignBtn) { assignBtn.innerText = `Move (${selectedInventory.size})`; assignBtn.style.display = 'inline-flex'; }
         if(printBtn) { printBtn.innerText = `🖨️ Labels (${selectedInventory.size})`; printBtn.style.display = 'inline-flex'; }
