@@ -474,11 +474,15 @@ async function submitNewProduct(e) {
 
     try {
         const editId = document.getElementById('edit-product-id').value;
+        const masterIdEl = document.getElementById('master-product-id');
+        const masterId = masterIdEl ? masterIdEl.value : '';
+
         const fileInput = document.getElementById('new-image');
         let finalImageUrl = undefined; 
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const BACKEND_URL = typeof CONFIG !== 'undefined' ? CONFIG.BACKEND_URL : window.BACKEND_URL;
 
-        if (fileInput.files.length > 0) {
+        if (fileInput && fileInput.files.length > 0) {
             const compressedFile = await compressImage(fileInput.files[0]);
             const formData = new FormData();
             formData.append('file', compressedFile);
@@ -500,7 +504,9 @@ async function submitNewProduct(e) {
         
         variantRows.forEach(row => {
             let expiryInput = row.querySelector('.var-expiry').value;
+            let varIdEl = row.querySelector('.var-id');
             let variantObj = { 
+                variantId: varIdEl ? varIdEl.value : '',
                 weightOrVolume: row.querySelector('.var-weight').value, 
                 price: Number(row.querySelector('.var-price').value), 
                 stock: Number(row.querySelector('.var-stock').value),
@@ -513,30 +519,55 @@ async function submitNewProduct(e) {
             variants.push(variantObj);
         });
 
-        const p = { 
-            name: document.getElementById('new-name').value, 
-            category: document.getElementById('new-category').value, 
-            brand: document.getElementById('new-brand').value,
-            distributorName: document.getElementById('new-distributor').value,
-            searchTags: document.getElementById('new-tags').value.trim(), 
-            variants: variants 
-        };
-        
-        if (finalImageUrl !== undefined) p.imageUrl = finalImageUrl;
+        // --- NEW: B2B OMNICHANNEL ROUTING ---
+        if (masterId) {
+            // Initiate a map to concurrently onboard multiple variants of a master product if available
+            const onboardPromises = variants.map(v => {
+                return fetchFn(`${BACKEND_URL}/api/b2b/onboard`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        masterProductId: masterId,
+                        variantId: v.variantId,
+                        sellingPrice: v.price,
+                        stock: v.stock,
+                        lowStockThreshold: v.lowStockThreshold
+                    })
+                });
+            });
 
-        const method = editId ? 'PUT' : 'POST';
-        const url = editId ? `${BACKEND_URL}/api/products/${editId}` : `${BACKEND_URL}/api/products`;
+            await Promise.all(onboardPromises);
 
-        await fetchFn(url, { 
-            method: method, 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(p) 
-        });
+        } else {
+            // --- LEGACY ROUTING FOR CUSTOM LOCAL STORE ITEMS ---
+            const p = { 
+                name: document.getElementById('new-name').value, 
+                category: document.getElementById('new-category').value, 
+                brand: document.getElementById('new-brand').value,
+                distributorName: document.getElementById('new-distributor').value,
+                searchTags: document.getElementById('new-tags').value.trim(), 
+                variants: variants 
+            };
+            
+            if (finalImageUrl !== undefined) p.imageUrl = finalImageUrl;
+
+            const method = editId ? 'PUT' : 'POST';
+            const url = editId ? `${BACKEND_URL}/api/products/${editId}` : `${BACKEND_URL}/api/products`;
+
+            await fetchFn(url, { 
+                method: method, 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(p) 
+            });
+        }
         
         if (typeof closeAddProductModal === 'function') closeAddProductModal(); 
         if (typeof inventoryPage !== 'undefined') window.inventoryPage = 1; 
         if (typeof fetchInventory === 'function') fetchInventory(); 
-        if (typeof showToast === 'function') showToast(editId ? 'Product Updated!' : 'Product Added!');
+        
+        const successMsg = editId ? 'Product Updated!' : (masterId ? 'Catalog Items Synced!' : 'Product Added!');
+        if (typeof showToast === 'function') showToast(successMsg);
+        
     } catch (err) { 
         console.error("Save Product Error:", err); 
         if (typeof showToast === 'function') showToast('Error saving product.'); 
