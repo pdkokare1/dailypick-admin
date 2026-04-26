@@ -188,7 +188,7 @@ window.startScanner = function(onSuccessCallback) {
     }); 
 };
 
-// --- NEW: AGGREGATOR CATALOG SEARCH INTERCEPTOR ---
+// --- OMNICHANNEL B2B: AGGREGATOR CATALOG SEARCH INTERCEPTOR ---
 let catalogSearchTimeout = null;
 
 window.searchMasterCatalog = async function(query) {
@@ -199,9 +199,11 @@ window.searchMasterCatalog = async function(query) {
     clearTimeout(catalogSearchTimeout);
     catalogSearchTimeout = setTimeout(async () => {
         try {
-            const res = await fetch(`${apiBaseUrl}/products/autocomplete?q=${encodeURIComponent(query)}&global=true`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            // NEW: Secure routing via the B2B endpoint
+            const BACKEND_URL = typeof CONFIG !== 'undefined' ? CONFIG.BACKEND_URL : window.BACKEND_URL;
+            const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+
+            const res = await fetchFn(`${BACKEND_URL}/api/b2b/catalog?search=${encodeURIComponent(query)}`);
             const result = await res.json();
             
             if (result.success && result.data.length > 0) {
@@ -212,6 +214,7 @@ window.searchMasterCatalog = async function(query) {
             }
         } catch (e) {
             console.error(e);
+            document.getElementById('catalog-search-status').innerText = "Error searching catalog.";
         }
     }, 400);
 };
@@ -247,12 +250,23 @@ window.selectMasterProduct = function(masterProduct) {
     document.getElementById('new-name').value = masterProduct.name;
     document.getElementById('new-name').readOnly = true;
     
+    // NEW: Inject tracking ID to enforce the bridge 
+    let masterIdEl = document.getElementById('master-product-id');
+    if (!masterIdEl) {
+        masterIdEl = document.createElement('input');
+        masterIdEl.type = 'hidden';
+        masterIdEl.id = 'master-product-id';
+        document.getElementById('add-product-form').appendChild(masterIdEl);
+    }
+    masterIdEl.value = masterProduct._id;
+    
     document.getElementById('custom-product-details').style.display = 'none'; 
     document.getElementById('variants-container').innerHTML = '';
     
     if (masterProduct.variants && masterProduct.variants.length > 0) {
         masterProduct.variants.forEach(v => {
-            addVariantRow(v.weightOrVolume, '', '0', v.sku || '', '5', '', true); 
+            // Passing v._id explicitly to the row builder
+            addVariantRow(v.weightOrVolume, '', '0', v.sku || '', '5', '', true, v._id); 
         });
     }
 };
@@ -297,11 +311,13 @@ window.closeAuditMode = function() {
     document.getElementById('audit-modal').classList.remove('active');
 };
 
-window.addVariantRow = function(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '', readOnlyMaster = false) {
+// MODIFIED: Accepts an optional variantId parameter and stores it in a hidden class field
+window.addVariantRow = function(weight = '', price = '', stock = '0', sku = '', threshold = '5', expiry = '', readOnlyMaster = false, variantId = '') {
     const container = document.getElementById('variants-container');
     const row = document.createElement('div');
     row.classList.add('variant-row');
     row.innerHTML = `
+        <input type="hidden" class="var-id" value="${variantId}">
         <input type="text" placeholder="Size (e.g. 500g)" class="var-weight" value="${weight}" ${readOnlyMaster ? 'readonly' : 'required'} style="min-width: 90px; ${readOnlyMaster ? 'background: #f1f5f9;' : ''}">
         <input type="number" placeholder="Local Price (Rs)" class="var-price" value="${price}" required style="width: 90px; flex: none; background: #e0f2fe; border-color: #7dd3fc;">
         <input type="number" placeholder="Local Stock" class="var-stock" value="${stock}" required style="width: 80px; flex: none; background: #e0f2fe; border-color: #7dd3fc;">
@@ -320,6 +336,11 @@ window.openAddProductModal = function(prefillSku = '') {
     
     document.getElementById('add-product-form').reset();
     document.getElementById('edit-product-id').value = '';
+    
+    // NEW: Ensure memory is cleared between modal sessions
+    let masterIdEl = document.getElementById('master-product-id');
+    if(masterIdEl) masterIdEl.value = '';
+
     document.getElementById('modal-form-title').innerText = 'Add Inventory from Catalog';
     
     const searchWrapper = document.getElementById('catalog-search-wrapper');
@@ -342,6 +363,11 @@ window.openEditProductModal = function(id, e) {
 
     document.getElementById('add-product-form').reset();
     document.getElementById('edit-product-id').value = p._id;
+    
+    // NEW: Ensure B2B flow is disabled during local edits
+    let masterIdEl = document.getElementById('master-product-id');
+    if(masterIdEl) masterIdEl.value = '';
+    
     document.getElementById('modal-form-title').innerText = 'Edit Local Details';
     
     const searchWrapper = document.getElementById('catalog-search-wrapper');
@@ -355,6 +381,7 @@ window.openEditProductModal = function(id, e) {
     container.innerHTML = '';
     
     if (p.variants && p.variants.length > 0) {
+        // We do not pass variantId during local edit because that logic is handled by standard backend arrays
         p.variants.forEach(v => addVariantRow(v.weightOrVolume, v.price, (typeof getDisplayStock === 'function' ? getDisplayStock(v) : v.stock), v.sku, v.lowStockThreshold || 5, v.expiryDate || '', true));
     } else { 
         addVariantRow(p.weightOrVolume || '', p.price || '', 0, '', 5, ''); 
