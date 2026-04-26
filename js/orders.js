@@ -193,7 +193,7 @@ async function bulkDispatchOrders() {
     try {
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
         await Promise.all(idsToDispatch.map(id => fetchFn(`${BACKEND_URL}/api/orders/${id}/dispatch`, { method: 'PUT' })));
-        if (typeof showToast === 'function') showToast(`Dispatched ${idsToDispatch.length} orders! 📦`);
+        if (typeof showToast === 'function') showToast(`Dispatched ${idsToDispatch.length} orders successfully!`);
         
         idsToDispatch.forEach(id => {
             const o = currentOrders.find(ord => ord._id === id);
@@ -230,7 +230,16 @@ async function updateOrderStatus(orderId, newStatus, event) {
         localOrder.status = newStatus;
     }
     updateDashboard();
-    if (typeof showToast === 'function') showToast(`Order marked as ${newStatus}`);
+
+    // --- MODIFIED: OMNICHANNEL TOAST AWARENESS ---
+    if (newStatus === 'Dispatched') {
+        const dispatchMsg = (localOrder && localOrder.fulfillmentType === 'STORE_DELIVERY') 
+            ? 'Handing over to Store Fleet...' 
+            : 'Dispatching to Gamut Rider... 🛵';
+        if (typeof showToast === 'function') showToast(dispatchMsg);
+    } else {
+        if (typeof showToast === 'function') showToast(`Order marked as ${newStatus}`);
+    }
 
     try {
         const endpoint = newStatus === 'Dispatched' ? 'dispatch' : 'status';
@@ -326,7 +335,12 @@ async function markOrderDispatched() {
     if (typeof selectedOrders !== 'undefined') selectedOrders.delete(targetOrderId);
     if (typeof closeOrderModal === 'function') closeOrderModal(); 
     updateDashboard(); 
-    if (typeof showToast === 'function') showToast('Dispatching to rider... 📦');
+
+    // --- MODIFIED: OMNICHANNEL TOAST AWARENESS ---
+    const dispatchMsg = (localOrder && localOrder.fulfillmentType === 'STORE_DELIVERY') 
+        ? 'Handing over to Store Fleet...' 
+        : 'Dispatching to Gamut Rider... 🛵';
+    if (typeof showToast === 'function') showToast(dispatchMsg);
     
     try {
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
