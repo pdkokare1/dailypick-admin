@@ -228,3 +228,79 @@ window.exportPnLReport = async function() {
         if (typeof showToast === 'function') showToast("Error generating P&L.");
     }
 };
+
+// --- NEW: VENDOR SETTLEMENT UI GENERATOR ---
+window.openVendorLedgerModal = async function() {
+    let modal = document.getElementById('vendor-ledger-modal');
+    
+    // Dynamically inject the modal if it doesn't exist yet
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'vendor-ledger-modal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h2>Gamut Settlements & Payouts</h2>
+                    <button class="close-btn" onclick="document.getElementById('vendor-ledger-modal').classList.remove('active')">&times;</button>
+                </div>
+                <div class="modal-body" id="vendor-ledger-container" style="max-height: 400px; overflow-y: auto;">
+                    <p class="empty-state">Loading your financial ledger...</p>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    modal.classList.add('active');
+    const container = document.getElementById('vendor-ledger-container');
+    container.innerHTML = '<p class="empty-state">Loading your financial ledger...</p>';
+
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const BACKEND_URL = typeof CONFIG !== 'undefined' ? CONFIG.BACKEND_URL : window.BACKEND_URL;
+        
+        // Fetch settlements specific to this logged-in store
+        const res = await fetchFn(`${BACKEND_URL}/api/settlements`);
+        const result = await res.json();
+        
+        if (result.success && result.data && result.data.length > 0) {
+            let html = '';
+            let totalOwed = 0;
+
+            result.data.forEach(s => {
+                if (s.status === 'Pending') totalOwed += s.netPayoutToStore;
+
+                const statusColor = s.status === 'Pending' ? '#f59e0b' : (s.status === 'Paid' ? '#10b981' : '#ef4444');
+                
+                html += `
+                    <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 12px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom: 6px;">
+                            <strong style="font-size: 14px;">Order #${s.orderNumber}</strong>
+                            <span style="color:${statusColor}; font-weight:800; font-size:12px;">${s.status}</span>
+                        </div>
+                        <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">
+                            Gamut Commission Deducted: Rs ${s.platformCommission}
+                        </div>
+                        <div style="font-size: 14px; font-weight: 800; color: #0f172a;">
+                            Net Payout to You: Rs ${s.netPayoutToStore}
+                        </div>
+                    </div>
+                `;
+            });
+
+            const headerHtml = `
+                <div style="background: #e0e7ff; padding: 16px; border-radius: 8px; border: 1px solid #c7d2fe; margin-bottom: 16px; text-align: center;">
+                    <p style="font-size: 12px; color: #3730a3; font-weight: 600;">Total Pending Payout from Gamut</p>
+                    <h2 style="font-size: 24px; color: #312e81; margin: 4px 0 0 0;">Rs ${totalOwed.toFixed(2)}</h2>
+                </div>
+            `;
+
+            container.innerHTML = headerHtml + html;
+        } else {
+            container.innerHTML = '<p class="empty-state">No settlement data found. You have no pending payouts.</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p class="empty-state" style="color:#ef4444;">Network error while fetching ledger.</p>';
+    }
+};
