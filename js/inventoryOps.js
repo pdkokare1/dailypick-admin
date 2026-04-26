@@ -667,10 +667,10 @@ async function openAccountsPayable() {
                     <div style="background: #fef2f2; padding: 16px; border-radius: 8px; border: 1px solid #fecaca; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <h4 style="color:#991b1b; margin-bottom:4px;">${d.name}</h4>
-                            <p style="font-size:12px; color:#b91c1c; font-weight:600;">Total Paid Lifetime: ₹${d.totalPaidAmount.toFixed(2)}</p>
+                            <p style="font-size:12px; color:#b91c1c; font-weight:600;">Total Paid Lifetime: Rs ${d.totalPaidAmount.toFixed(2)}</p>
                         </div>
                         <div style="text-align: right;">
-                            <div style="font-size:18px; font-weight:800; color:#dc2626; margin-bottom:8px;">₹${d.totalPendingAmount.toFixed(2)}</div>
+                            <div style="font-size:18px; font-weight:800; color:#dc2626; margin-bottom:8px;">Rs ${d.totalPendingAmount.toFixed(2)}</div>
                             <button class="primary-btn-small" style="background:#dc2626;" onclick="if(typeof promptDistributorPayment === 'function') promptDistributorPayment('${d._id}', '${d.name.replace(/'/g, "\\'")}', ${d.totalPendingAmount})">Log Payment</button>
                         </div>
                     </div>
@@ -683,7 +683,7 @@ async function openAccountsPayable() {
 }
 
 function promptDistributorPayment(id, name, maxAmount) {
-    const amountStr = prompt(`Logging payment to ${name}.\nOutstanding Balance: ₹${maxAmount}\n\nEnter amount paid (₹):`, maxAmount);
+    const amountStr = prompt(`Logging payment to ${name}.\nOutstanding Balance: Rs ${maxAmount}\n\nEnter amount paid (Rs):`, maxAmount);
     if (!amountStr) return;
     
     const amount = parseFloat(amountStr);
@@ -814,4 +814,66 @@ async function saveInlineEdit(productId, variantId, field, element, event) {
     } catch(e) {
         if (typeof showToast === 'function') showToast('Error saving inline edit.');
     }
+}
+
+// --- NEW: GEMINI 2.5 AI FORECASTING LOGIC ---
+
+async function openAIForecastModal() {
+    const modal = document.getElementById('ai-forecast-modal');
+    const container = document.getElementById('ai-forecast-container');
+    
+    if (modal) modal.classList.add('active');
+    
+    if (container) {
+        container.innerHTML = `
+            <div class="skeleton" style="height: 60px; background: #E2E8F0; border-radius: 8px; margin-bottom: 12px;"></div>
+            <div class="skeleton" style="height: 60px; background: #E2E8F0; border-radius: 8px; margin-bottom: 12px;"></div>
+            <div class="skeleton" style="height: 60px; background: #E2E8F0; border-radius: 8px; margin-bottom: 12px;"></div>
+        `;
+    }
+
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/ai/forecast`);
+        const result = await res.json();
+        
+        if (result.success && result.data) {
+            container.innerHTML = '';
+            result.data.forEach(item => {
+                let urgencyColor = '#10b981'; 
+                let bg = '#f0fdf4';
+                let border = '#bbf7d0';
+                
+                if (item.urgency === 'High') {
+                    urgencyColor = '#ef4444';
+                    bg = '#fef2f2';
+                    border = '#fecaca';
+                } else if (item.urgency === 'Medium') {
+                    urgencyColor = '#f59e0b';
+                    bg = '#fffbeb';
+                    border = '#fef3c7';
+                }
+
+                container.innerHTML += `
+                    <div style="background: ${bg}; padding: 16px; border-radius: 12px; border: 1px solid ${border}; margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                            <h4 style="margin: 0; color: #0f172a; font-size: 15px;">${item.itemName}</h4>
+                            <span style="background: ${urgencyColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 800; text-transform: uppercase;">${item.urgency}</span>
+                        </div>
+                        <p style="font-size: 14px; font-weight: 700; color: ${urgencyColor}; margin-bottom: 4px;">${item.action}</p>
+                        <p style="font-size: 12px; color: #475569; line-height: 1.4;">${item.reason}</p>
+                    </div>
+                `;
+            });
+        } else {
+            container.innerHTML = `<p class="empty-state">Failed to generate AI Forecast: ${result.message}</p>`;
+        }
+    } catch (error) {
+        if (container) container.innerHTML = `<p class="empty-state">Network error communicating with Gemini API.</p>`;
+    }
+}
+
+function closeAIForecastModal() {
+    const modal = document.getElementById('ai-forecast-modal');
+    if (modal) modal.classList.remove('active');
 }
