@@ -42,9 +42,15 @@ window.renderListView = function(orders) {
 
             const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
 
+            // --- NEW: OMNICHANNEL FULFILLMENT BADGE ---
+            const isStoreDelivery = order.fulfillmentType === 'STORE_DELIVERY';
+            const fulfillmentBadge = isStoreDelivery 
+                ? `<span style="background:#fef08a; color:#854d0e; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px; font-weight:800;">🏪 Store Truck</span>`
+                : `<span style="background:#e0e7ff; color:#3730a3; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:8px; font-weight:800;">🛵 Gamut Rider</span>`;
+
             card.innerHTML = `
                 <div class="order-info">
-                    <h4>Order #${orderDisplayId}</h4>
+                    <h4>Order #${orderDisplayId} ${fulfillmentBadge}</h4>
                     <p class="order-meta">${order.customerName || 'Guest'} • ${isRoutine ? '📅 Routine' : '⚡ Instant'} ${isPacking ? '• 📦 Packing' : ''}</p>
                 </div>
                 <div class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</div>
@@ -104,11 +110,14 @@ window.renderKanbanView = function(orders) {
             };
 
             let actionHtml = '';
+            // --- MODIFIED: CONTEXTUAL DISPATCH BUTTON TEXT ---
+            const dispatchBtnText = order.fulfillmentType === 'STORE_DELIVERY' ? 'Dispatch Own Truck' : 'Hand to Gamut Rider';
+
             if (order.status === 'Order Placed') {
                 actionHtml = `<div class="kanban-actions"><button class="kanban-btn btn-pack" onclick="if(typeof updateOrderStatus === 'function') updateOrderStatus('${order._id}', 'Packing', event)">Start Packing</button></div>`;
                 countNew++;
             } else if (order.status === 'Packing') {
-                actionHtml = `<div class="kanban-actions"><button class="kanban-btn btn-dispatch" onclick="if(typeof updateOrderStatus === 'function') updateOrderStatus('${order._id}', 'Dispatched', event)">Dispatch Now</button></div>`;
+                actionHtml = `<div class="kanban-actions"><button class="kanban-btn btn-dispatch" onclick="if(typeof updateOrderStatus === 'function') updateOrderStatus('${order._id}', 'Dispatched', event)">${dispatchBtnText}</button></div>`;
                 countPack++;
             } else if (order.status === 'Dispatched') {
                 actionHtml = `<span style="font-size: 11px; font-weight: 700; color: #16A34A;">🚚 Out for Delivery</span>`;
@@ -118,9 +127,18 @@ window.renderKanbanView = function(orders) {
             const itemsPreview = order.items.map(i => `${i.qty}x ${i.name}`).join(', ').substring(0, 30) + '...';
             const orderDisplayId = order.orderNumber || order._id.toString().slice(-4).toUpperCase();
 
+            // --- NEW: OMNICHANNEL FULFILLMENT BADGE ---
+            const isStoreDelivery = order.fulfillmentType === 'STORE_DELIVERY';
+            const fulfillmentBadge = isStoreDelivery 
+                ? `<span style="background:#fef08a; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px; font-weight:800;">🏪 Store Fleet</span>`
+                : `<span style="background:#e0e7ff; color:#3730a3; padding:2px 4px; border-radius:4px; font-size:9px; font-weight:800;">🛵 Gamut Fleet</span>`;
+
             card.innerHTML = `
                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <h4>#${orderDisplayId}</h4>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                        <h4>#${orderDisplayId}</h4>
+                        ${fulfillmentBadge}
+                    </div>
                     <span class="type-badge ${isRoutine ? 'type-routine' : 'type-instant'}">${isRoutine ? 'Routine' : 'Instant'}</span>
                 </div>
                 <p style="margin-bottom: 4px; font-weight: 600; color: var(--text-main);">${order.customerName || 'Guest'}</p>
@@ -164,10 +182,13 @@ window.openOrderModal = function(order) {
     
     const driverDisplayEl = document.getElementById('modal-driver-display');
     if (driverDisplayEl) {
-        if (order.deliveryDriverName && order.deliveryDriverName !== 'Unassigned') {
-            driverDisplayEl.innerHTML = `<p style="margin-top: 8px; font-size: 13px; color: #10b981; font-weight: 600;"><i data-lucide="truck" class="icon-sm"></i> Assigned to: ${order.deliveryDriverName} ${order.driverPhone ? `(${order.driverPhone})` : ''}</p>`;
+        // --- MODIFIED: RIDER AWARENESS ---
+        if (order.fulfillmentType === 'STORE_DELIVERY') {
+             driverDisplayEl.innerHTML = `<p style="margin-top: 8px; font-size: 13px; color: #854d0e; font-weight: 600; background:#fef08a; padding:4px 8px; border-radius:4px;"><i data-lucide="building" class="icon-sm"></i> Fulfilled by Store Fleet</p>`;
+        } else if (order.deliveryDriverName && order.deliveryDriverName !== 'Unassigned') {
+            driverDisplayEl.innerHTML = `<p style="margin-top: 8px; font-size: 13px; color: #10b981; font-weight: 600;"><i data-lucide="truck" class="icon-sm"></i> Assigned to Gamut Rider: ${order.deliveryDriverName} ${order.driverPhone ? `(${order.driverPhone})` : ''}</p>`;
         } else {
-            driverDisplayEl.innerHTML = `<p style="margin-top: 8px; font-size: 13px; color: #f59e0b; font-weight: 600;"><i data-lucide="truck" class="icon-sm"></i> Driver: Unassigned</p>`;
+            driverDisplayEl.innerHTML = `<p style="margin-top: 8px; font-size: 13px; color: #f59e0b; font-weight: 600;"><i data-lucide="truck" class="icon-sm"></i> Gamut Rider: Pending Assignment</p>`;
         }
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
