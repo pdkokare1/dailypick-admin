@@ -55,6 +55,18 @@ window.setupRealtimeConnection = function() {
                     if (data.type === 'INVENTORY_UPDATE') {
                         if (typeof fetchInventory === 'function') fetchInventory();
                     }
+                    
+                    // --- NEW: FINANCIAL SETTLEMENT PUSH NOTIFICATION ---
+                    if (data.type === 'SETTLEMENT_PAID') {
+                        if (typeof showToast === 'function') {
+                            showToast(`💰 Payment Received! Gamut just wired Rs ${data.amount} to your account.`);
+                        }
+                        // Live refresh the ledger if the user is currently looking at it
+                        const ledgerModal = document.getElementById('vendor-ledger-modal');
+                        if (ledgerModal && ledgerModal.classList.contains('active')) {
+                            if (typeof openVendorLedgerModal === 'function') openVendorLedgerModal();
+                        }
+                    }
                 });
             } catch (e) {
                 console.warn("WebSocket message error", e);
