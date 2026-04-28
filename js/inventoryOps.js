@@ -519,11 +519,9 @@ async function submitNewProduct(e) {
             variants.push(variantObj);
         });
 
-        // --- NEW: B2B OMNICHANNEL ROUTING ---
         if (masterId) {
-            // Initiate a map to concurrently onboard multiple variants of a master product if available
             const onboardPromises = variants.map(v => {
-                return fetchFn(`${BACKEND_URL}/api/b2b/onboard`, {
+                return fetchFn(`${BACKEND_URL}/api/enterprise/onboard`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -539,7 +537,6 @@ async function submitNewProduct(e) {
             await Promise.all(onboardPromises);
 
         } else {
-            // --- LEGACY ROUTING FOR CUSTOM LOCAL STORE ITEMS ---
             const p = { 
                 name: document.getElementById('new-name').value, 
                 category: document.getElementById('new-category').value, 
@@ -847,8 +844,6 @@ async function saveInlineEdit(productId, variantId, field, element, event) {
     }
 }
 
-// --- NEW: GEMINI 2.5 AI FORECASTING LOGIC ---
-
 async function openAIForecastModal() {
     const modal = document.getElementById('ai-forecast-modal');
     const container = document.getElementById('ai-forecast-container');
@@ -907,4 +902,42 @@ async function openAIForecastModal() {
 function closeAIForecastModal() {
     const modal = document.getElementById('ai-forecast-modal');
     if (modal) modal.classList.remove('active');
+}
+
+// --- NEW: PHASE 2 ONE-CLICK CATALOG ONBOARDING ---
+async function searchMasterCatalog(query) {
+    if (!query || query.length < 3) return;
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/enterprise/catalog?search=${encodeURIComponent(query)}`);
+        const result = await res.json();
+        
+        // Displays results in modal where manager clicks "Sync to Store"
+        if (result.success && result.data.length > 0) {
+            let msg = `Found ${result.data.length} Master Items:\n`;
+            result.data.slice(0, 5).forEach(m => msg += `- ${m.name} [SKU: ${m.variants[0]?.sku || 'N/A'}]\n`);
+            alert(msg + "\n(In production, clicking an item injects the Master ID into the submit form)");
+        } else {
+            if (typeof showToast === 'function') showToast("Item not found in Global Catalog");
+        }
+    } catch(e) { 
+        console.error("Master Search Error", e); 
+    }
+}
+
+// --- NEW: PHASE 2 DISTRIBUTOR WHOLESALE PROCUREMENT ---
+async function fetchDistributorWholesale(distributorId) {
+    if (typeof showToast === 'function') showToast("Fetching live supplier catalog...");
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        // Allows local shop owners to browse dynamic wholesale prices from local suppliers
+        const res = await fetchFn(`${BACKEND_URL}/api/distributors/${distributorId}/catalog`);
+        const result = await res.json();
+        
+        if (result.success && result.data) {
+            alert(`Distributor Catalog Loaded. Bulk ordering is available for ${result.data.wholesaleCatalog.length} items.`);
+        }
+    } catch(e) { 
+        console.warn("Wholesale fetch unavailable on this route currently.", e); 
+    }
 }
