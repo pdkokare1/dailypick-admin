@@ -85,7 +85,7 @@
                     </button>
                     <button onclick="selectPartnerRole('Enterprise')" style="background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px 16px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: transform 0.2s;">
                         <span style="font-size: 32px; display: block; margin-bottom: 12px;">🏢</span>
-                        <strong style="color: var(--text-main); font-size: 14px;">Hypermart</strong>
+                        <strong style="color: var(--text-main); font-size: 14px;">Enterprise</strong>
                     </button>
                     <button onclick="selectPartnerRole('Distributor')" style="background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px 16px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: transform 0.2s;">
                         <span style="font-size: 32px; display: block; margin-bottom: 12px;">📦</span>
@@ -191,15 +191,15 @@
                             <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Search <kbd style="background: #e2e8f0; padding: 3px 6px; border-radius: 4px; font-weight:bold; color: var(--text-main);">Ctrl+K</kbd></div>
                         </div>
                         <div class="scrollable-actions">
-                            <button class="primary-btn-small" style="background:#D4AF37; color: white; border: none;" onclick="openShiftModal()"><i data-lucide="store" class="icon-sm"></i> Register Cash</button>
-                            <button class="primary-btn-small" style="background:#ef4444; color: white; border: none;" onclick="openExpenseModal()"><i data-lucide="receipt" class="icon-sm"></i> Log Expense</button>
-                            <button id="eod-report-btn" class="primary-btn-small" style="background:#062C1E; color: white; border: none;" onclick="openEodReport()"><i data-lucide="flag" class="icon-sm"></i> End of Day</button>
-                            <button class="primary-btn-small admin-only" style="background:#8b5cf6; color: white; border: none;" onclick="openStaffModal()"><i data-lucide="users" class="icon-sm"></i> Staff</button>
-                            <button class="primary-btn-small admin-only" style="background:#ec4899; color: white; border: none;" onclick="openPromotionsModal()"><i data-lucide="tag" class="icon-sm"></i> Promos</button>
-                            <button class="primary-btn-small admin-only" style="background:#3b82f6; color: white; border: none;" onclick="openStoreManagementModal()"><i data-lucide="map" class="icon-sm"></i> Manage Stores</button>
-                            <button class="primary-btn-small admin-only" style="background:#0ea5e9; color: white; border: none;" onclick="openDeveloperPortal()"><i data-lucide="terminal" class="icon-sm"></i> Developer API</button>
-                            <button class="primary-btn-small admin-only" style="background:#475569; color: white; border: none;" onclick="openSecurityAuditModal()"><i data-lucide="shield" class="icon-sm"></i> Audits</button>
-                            <button class="primary-btn-small admin-only" style="background:#0f172a; color: white; border: none;" onclick="openSettingsModal()"><i data-lucide="settings" class="icon-sm"></i> Settings</button>
+                            <button class="primary-btn-small" onclick="openShiftModal()"><i data-lucide="store" class="icon-sm"></i> Register Cash</button>
+                            <button class="secondary-btn-small" onclick="openExpenseModal()"><i data-lucide="receipt" class="icon-sm"></i> Log Expense</button>
+                            <button id="eod-report-btn" class="secondary-btn-small" onclick="openEodReport()"><i data-lucide="flag" class="icon-sm"></i> End of Day</button>
+                            <button class="secondary-btn-small admin-only" onclick="openStaffModal()"><i data-lucide="users" class="icon-sm"></i> Staff</button>
+                            <button class="secondary-btn-small admin-only" onclick="openPromotionsModal()"><i data-lucide="tag" class="icon-sm"></i> Promos</button>
+                            <button class="secondary-btn-small admin-only" onclick="openStoreManagementModal()"><i data-lucide="map" class="icon-sm"></i> Stores</button>
+                            <button class="secondary-btn-small admin-only" onclick="openDeveloperPortal()"><i data-lucide="terminal" class="icon-sm"></i> API</button>
+                            <button class="secondary-btn-small admin-only" onclick="openSecurityAuditModal()"><i data-lucide="shield" class="icon-sm"></i> Audits</button>
+                            <button class="secondary-btn-small admin-only" onclick="openSettingsModal()"><i data-lucide="settings" class="icon-sm"></i> Settings</button>
                         </div>
                     </div>
                 </div>
@@ -210,15 +210,15 @@
                         <span id="ov-progress-text" style="font-size: 14px; font-weight: 800; color: var(--primary);">0%</span>
                     </div>
                     <div style="width: 100%; background: #E2E8F0; border-radius: 20px; height: 12px; overflow: hidden;">
-                        <div id="ov-progress-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);"></div>
+                        <div id="ov-progress-bar" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);"></div>
                     </div>
                 </div>
 
                 <div class="overview-grid">
-                    <div class="stat-card" style="background: linear-gradient(135deg, #062C1E, #0D4530); color: white; border: none;">
+                    <div class="stat-card" style="background: var(--primary); color: white; border: none;">
                         <h3 style="color: rgba(255,255,255,0.7);">Pending Dispatches</h3>
                         <p id="ov-pending-count" style="color: white; font-size: 36px;">0</p>
-                        <button class="primary-btn-small" style="margin-top: 16px; background: rgba(255,255,255,0.15); color: white; border: none;" onclick="switchView('orders')">Go to Orders</button>
+                        <button class="secondary-btn-small" style="margin-top: 16px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2);" onclick="switchView('orders')">Go to Orders</button>
                     </div>
                     
                     <div class="stat-card" style="cursor: pointer;" onclick="jumpToInventoryWithFilter('low')">
@@ -331,9 +331,9 @@
                     <div style="margin-bottom: 24px;">
                         <h2 style="font-size: 18px; margin-bottom: 12px;">Current Order</h2>
                         <div class="scrollable-actions">
-                            <button class="primary-btn-small" style="background: #062C1E; color: white;" onclick="addCustomPosItem()"><i data-lucide="plus" class="icon-sm"></i> Custom</button>
-                            <button class="primary-btn-small" style="background: #8b5cf6; color: white; border: none;" onclick="holdCurrentCart()"><i data-lucide="pause" class="icon-sm"></i> Hold</button>
-                            <button class="primary-btn-small" style="background: #3b82f6; color: white; border: none;" onclick="openHeldCartsModal()"><i data-lucide="clipboard-list" class="icon-sm"></i> Carts</button>
+                            <button class="primary-btn-small" onclick="addCustomPosItem()"><i data-lucide="plus" class="icon-sm"></i> Custom</button>
+                            <button class="secondary-btn-small" onclick="holdCurrentCart()"><i data-lucide="pause" class="icon-sm"></i> Hold</button>
+                            <button class="secondary-btn-small" onclick="openHeldCartsModal()"><i data-lucide="clipboard-list" class="icon-sm"></i> Carts</button>
                             <button class="danger-btn-small" onclick="clearPosCart()" title="Shortcut: F4">Clear (F4)</button>
                         </div>
                     </div>
@@ -370,8 +370,8 @@
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                             <button class="primary-btn" style="background: #10b981; padding: 16px; font-size: 13px;" onclick="processPosCheckout('Cash')" title="Shortcut: F1"><i data-lucide="banknote" class="icon-sm"></i> Cash (F1)</button>
                             <button class="primary-btn" style="background: #0ea5e9; padding: 16px; font-size: 13px;" onclick="processPosCheckout('UPI')" title="Shortcut: F2"><i data-lucide="smartphone" class="icon-sm"></i> UPI (F2)</button>
-                            <button class="primary-btn" style="background: #6366f1; padding: 16px; font-size: 13px;" onclick="openSplitPaymentModal()"><i data-lucide="scissors" class="icon-sm"></i> Split</button>
-                            <button class="primary-btn" style="background: #D4AF37; padding: 16px; font-size: 13px;" onclick="processPosCheckout('Pay Later')"><i data-lucide="clock" class="icon-sm"></i> Pay Later</button>
+                            <button class="secondary-btn-small" style="padding: 16px; font-size: 13px;" onclick="openSplitPaymentModal()"><i data-lucide="scissors" class="icon-sm"></i> Split</button>
+                            <button class="secondary-btn-small" style="padding: 16px; font-size: 13px;" onclick="processPosCheckout('Pay Later')"><i data-lucide="clock" class="icon-sm"></i> Pay Later</button>
                         </div>
                     </div>
                 </div>
@@ -384,19 +384,19 @@
                 <div class="section-header" style="flex-direction: column; align-items: flex-start; gap: 16px; margin-bottom: 32px;">
                     <h2 style="margin-bottom: 0;">Live Catalog</h2>
                     <div class="scrollable-actions" style="width: 100%;">
-                        <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportInventoryCSV()"><i data-lucide="download" class="icon-sm"></i> Export</button>
-                        <button class="primary-btn-small" style="background: #14b8a6; color: white; border: none;" onclick="openBulkImportModal()"><i data-lucide="upload" class="icon-sm"></i> Bulk Import</button>
-                        <button class="primary-btn-small admin-only" style="background: #f59e0b; color: white; border: none;" onclick="openStockTransferModal()"><i data-lucide="arrow-right-left" class="icon-sm"></i> Transfer Stock</button>
-                        <button class="primary-btn-small admin-only" style="background: #8b5cf6; color: white; border: none;" onclick="openAIForecastModal()"><i data-lucide="brain" class="icon-sm"></i> AI Forecast</button>
-                        <button class="primary-btn-small" style="background: #ef4444; color: white; border: none;" onclick="openAuditMode()"><i data-lucide="clipboard-check" class="icon-sm"></i> Audit Mode</button>
-                        <button class="primary-btn-small" style="background: #dc2626; color: white; border: none; margin-right: 8px;" onclick="openAccountsPayable()"><i data-lucide="wallet" class="icon-sm"></i> Pay Suppliers</button>
+                        <button class="secondary-btn-small" onclick="exportInventoryCSV()"><i data-lucide="download" class="icon-sm"></i> Export</button>
+                        <button class="secondary-btn-small" onclick="openBulkImportModal()"><i data-lucide="upload" class="icon-sm"></i> Bulk Import</button>
+                        <button class="secondary-btn-small admin-only" onclick="openStockTransferModal()"><i data-lucide="arrow-right-left" class="icon-sm"></i> Transfer Stock</button>
+                        <button class="secondary-btn-small admin-only" onclick="openAIForecastModal()"><i data-lucide="brain" class="icon-sm"></i> AI Forecast</button>
+                        <button class="secondary-btn-small" onclick="openAuditMode()"><i data-lucide="clipboard-check" class="icon-sm"></i> Audit Mode</button>
+                        <button class="secondary-btn-small" onclick="openAccountsPayable()"><i data-lucide="wallet" class="icon-sm"></i> Pay Suppliers</button>
                         
-                        <button class="primary-btn-small" style="background: #25D366; color: white; border: none;" onclick="openSourcingModal()"><i data-lucide="truck" class="icon-sm"></i> Sourcing</button>
-                        <button class="primary-btn-small" onclick="openAddCategoryModal()">+ Category</button>
-                        <button class="primary-btn-small" onclick="openAddBrandModal()">+ Brand</button>
-                        <button class="primary-btn-small" onclick="openAddDistributorModal()">+ Dist.</button>
-                        <button class="primary-btn-small" style="border-color: var(--primary); color: var(--primary);" onclick="openAddProductModal()">+ Add Item</button>
-                        <button class="primary-btn-small" style="background: #D4AF37; color: white; border: none;" onclick="openRestockModal()"><i data-lucide="package-plus" class="icon-sm"></i> Receive Shipment</button>
+                        <button class="secondary-btn-small" onclick="openSourcingModal()"><i data-lucide="truck" class="icon-sm"></i> Sourcing</button>
+                        <button class="secondary-btn-small" onclick="openAddCategoryModal()">+ Category</button>
+                        <button class="secondary-btn-small" onclick="openAddBrandModal()">+ Brand</button>
+                        <button class="secondary-btn-small" onclick="openAddDistributorModal()">+ Dist.</button>
+                        <button class="primary-btn-small" onclick="openAddProductModal()">+ Add Item</button>
+                        <button class="primary-btn-small" onclick="openRestockModal()"><i data-lucide="package-plus" class="icon-sm"></i> Receive Shipment</button>
                     </div>
                 </div>
 
@@ -440,10 +440,10 @@
                         </select>
                         <button id="low-stock-btn" class="inv-filter" style="background: #FEF2F2; color: #DC2626; border-color: #FECACA; font-weight: 800; cursor: pointer;" onclick="toggleLowStockFilter()"><i data-lucide="alert-triangle" class="icon-sm"></i> Low Stock</button>
                         
-                        <button id="inv-bulk-assign-btn" class="primary-btn-small" onclick="openBulkAssignModal()" style="background: #8b5cf6; color: white; border: none; display:none;">Move (0)</button>
-                        <button id="inv-bulk-price-btn" class="primary-btn-small" onclick="openBulkPriceModal()" style="background: #0ea5e9; color: white; border: none; display:none;">Edit Prices (0)</button>
-                        <button id="inv-bulk-print-btn" class="primary-btn-small" onclick="generateBulkShelfLabels()" style="background: #10b981; color: white; border: none; display:none;"><i data-lucide="printer" class="icon-sm"></i> Labels (0)</button>
-                        <button id="inv-bulk-btn" class="primary-btn-small" onclick="bulkDeactivateInventory()" style="background: var(--accent); color: white; border: none; display:none;">Deactivate Selected (0)</button>
+                        <button id="inv-bulk-assign-btn" class="secondary-btn-small" onclick="openBulkAssignModal()" style="display:none;">Move (0)</button>
+                        <button id="inv-bulk-price-btn" class="secondary-btn-small" onclick="openBulkPriceModal()" style="display:none;">Edit Prices (0)</button>
+                        <button id="inv-bulk-print-btn" class="secondary-btn-small" onclick="generateBulkShelfLabels()" style="display:none;"><i data-lucide="printer" class="icon-sm"></i> Labels (0)</button>
+                        <button id="inv-bulk-btn" class="secondary-btn-small" onclick="bulkDeactivateInventory()" style="display:none;">Deactivate Selected (0)</button>
                     </div>
                 </div>
 
@@ -527,13 +527,10 @@
                     <h2>Data Export Hub</h2>
                 </div>
                 <div class="scrollable-actions" style="margin-bottom: 32px;">
-                    <button class="primary-btn-small" style="background: #2563EB; color: white; border: none;" onclick="exportPnLReport()"><i data-lucide="file-text" class="icon-sm"></i> Export P&L Report</button>
-                    <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportOrdersCSV()"><i data-lucide="package" class="icon-sm"></i> Export Orders</button>
-                    <button class="primary-btn-small" style="background: #062C1E; color: white; border: none;" onclick="exportCustomersCSV()"><i data-lucide="users" class="icon-sm"></i> Export Customers</button>
-                    <button class="primary-btn-small" style="background: #10b981; color: white; border: none;" onclick="exportFinancialsCSV('Daily')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Daily Rev</button>
-                    <button class="primary-btn-small" style="background: #059669; color: white; border: none;" onclick="exportFinancialsCSV('Monthly')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Monthly Rev</button>
-                    <button class="primary-btn-small" style="background: #047857; color: white; border: none;" onclick="exportFinancialsCSV('Quarterly')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Quarterly Rev</button>
-                    <button class="primary-btn-small" style="background: #065f46; color: white; border: none;" onclick="exportFinancialsCSV('Annual')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Annual Rev</button>
+                    <button class="secondary-btn-small" onclick="exportPnLReport()"><i data-lucide="file-text" class="icon-sm"></i> Export P&L Report</button>
+                    <button class="secondary-btn-small" onclick="exportOrdersCSV()"><i data-lucide="package" class="icon-sm"></i> Export Orders</button>
+                    <button class="secondary-btn-small" onclick="exportCustomersCSV()"><i data-lucide="users" class="icon-sm"></i> Export Customers</button>
+                    <button class="secondary-btn-small" onclick="exportFinancialsCSV('Daily')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Daily Rev</button>
                 </div>
             </main>
         </article>
@@ -543,7 +540,7 @@
                 <div class="section-header">
                     <h2>Customer Directory</h2>
                     <div style="display: flex; gap: 12px;">
-                        <button class="primary-btn-small" style="background: #D4AF37; color: white; border: none;" onclick="openKhataReminders()"><i data-lucide="megaphone" class="icon-sm"></i> Khata Reminders</button>
+                        <button class="primary-btn-small" onclick="openKhataReminders()"><i data-lucide="megaphone" class="icon-sm"></i> Khata Reminders</button>
                         <button class="refresh-btn" aria-label="Refresh Customers" onclick="fetchCustomers()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
                     </div>
                 </div>
@@ -557,8 +554,8 @@
             <div class="form-card" style="max-width: 550px; text-align: center;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <h2 style="color: #0ea5e9;">Enterprise Developer API</h2>
-                        <span style="background:#e0f2fe; color:#0369a1; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Secure Sandbox</span>
+                        <h2 style="color: var(--primary);">Enterprise Developer API</h2>
+                        <span style="background:var(--border-soft); color:var(--text-main); padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Secure Sandbox</span>
                     </div>
                     <button aria-label="Close Modal" class="close-btn" onclick="document.getElementById('developer-portal-modal').classList.remove('active')" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
                 </div>
@@ -573,7 +570,7 @@
                         <input type="text" id="dev-api-key-box" readonly value="****************************************" style="width: 100%; padding: 16px; font-family: monospace; font-size: 14px; background: #E2E8F0; border: 1px solid #CBD5E1; border-radius: 8px; text-align: center; color: #475569; font-weight: bold;">
                     </div>
                     
-                    <button id="generate-key-btn" class="primary-btn" style="background: #0ea5e9; width: 100%;" onclick="generatePartnerKey()">Generate New API Key</button>
+                    <button id="generate-key-btn" class="primary-btn" style="width: 100%;" onclick="generatePartnerKey()">Generate New API Key</button>
                     
                     <p style="font-size: 11px; color: #ef4444; margin-top: 12px; font-weight: 600;">
                         ⚠️ Warning: Generating a new key will instantly invalidate your old key. All active ERP integrations will disconnect until updated.
@@ -591,8 +588,8 @@
             <div class="form-card drawer-content" style="max-width: 650px; overflow-y: auto;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <h2 style="color: #8b5cf6;">AI Demand Forecast</h2>
-                        <span style="background:#ede9fe; color:#6d28d9; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Gemini 2.5</span>
+                        <h2>AI Demand Forecast</h2>
+                        <span style="background:var(--border-soft); color:var(--text-main); padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Gemini 2.5</span>
                     </div>
                     <button aria-label="Close Modal" class="close-btn" onclick="closeAIForecastModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
                 </div>
@@ -627,7 +624,7 @@
                     <div class="input-group" style="display: flex; gap: 12px; text-align: left;">
                         <input type="text" aria-label="Expense Description" id="expense-desc" placeholder="e.g. Petrol, Tape" required style="flex: 2; margin-bottom: 0;">
                         <input type="number" aria-label="Expense Amount" id="expense-amount" placeholder="Rs" required min="1" step="0.01" style="flex: 1; margin-bottom: 0;">
-                        <button type="submit" class="primary-btn" style="background: #ef4444; width: auto; padding: 0 24px;">Add</button>
+                        <button type="submit" class="primary-btn" style="width: auto; padding: 0 24px;">Add</button>
                     </div>
                 </form>
                 <div id="expense-list-container" style="margin-top: 24px; text-align: left; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
@@ -648,7 +645,7 @@
                         <label>Starting Float / Change (Rs)</label>
                         <input type="number" id="shift-starting-float" placeholder="e.g. 500" required min="0">
                     </div>
-                    <button class="primary-btn" style="background: #10b981;" onclick="submitOpenShift()">Open Register</button>
+                    <button class="primary-btn" onclick="submitOpenShift()">Open Register</button>
                 </div>
 
                 <div id="shift-close-view" class="hidden">
@@ -658,13 +655,13 @@
                         Started with: <span style="color: var(--text-main); font-weight: 700;">Rs <span id="shift-display-float">0</span></span>
                     </div>
                     
-                    <button class="primary-btn-small" style="background: #3b82f6; margin-bottom:16px; width:100%; color: white; border: none;" onclick="printXReport()"><i data-lucide="printer" class="icon-sm"></i> Print X-Report (Mid-Shift)</button>
+                    <button class="secondary-btn-small" style="margin-bottom:16px; width:100%;" onclick="printXReport()"><i data-lucide="printer" class="icon-sm"></i> Print X-Report (Mid-Shift)</button>
 
                     <div class="input-group" style="text-align: left;">
                         <label>Counted Cash in Drawer (Rs)</label>
                         <input type="number" id="shift-actual-cash" placeholder="Enter total physical cash..." required min="0">
                     </div>
-                    <button class="primary-btn" style="background: #ef4444;" onclick="submitCloseShift()">Close Register</button>
+                    <button class="primary-btn" onclick="submitCloseShift()">Close Register</button>
                 </div>
             </div>
         </div>
@@ -681,17 +678,17 @@
                     <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-weight: 600;"><span>Expected UPI:</span> <strong style="color:var(--primary);">Rs <span id="eod-expected-upi">0</span></strong></div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-weight: 600;"><span>Expected Pay Later:</span> <strong style="color:var(--primary);">Rs <span id="eod-expected-paylater">0</span></strong></div>
                     <hr style="border: 0; border-top: 1px dashed #CBD5E1; margin: 16px 0;">
-                    <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: 800;"><span>Gross Revenue:</span> <strong style="color:#10b981;">Rs <span id="eod-total-revenue">0</span></strong></div>
-                    <div style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 15px; color: var(--text-muted); font-weight: 700;"><span>Total Expenses:</span> <strong style="color:#ef4444;">-Rs <span id="eod-total-expenses">0</span></strong></div>
+                    <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: 800;"><span>Gross Revenue:</span> <strong style="color:var(--primary);">Rs <span id="eod-total-revenue">0</span></strong></div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 15px; color: var(--text-muted); font-weight: 700;"><span>Total Expenses:</span> <strong style="color:var(--text-main);">-Rs <span id="eod-total-expenses">0</span></strong></div>
                     <hr style="border: 0; border-top: 1px dashed #CBD5E1; margin: 16px 0;">
-                    <div style="display: flex; justify-content: space-between; font-size: 22px; font-weight: 800;"><span>Net Profit:</span> <strong style="color:#3b82f6;">Rs <span id="eod-net-profit">0</span></strong></div>
+                    <div style="display: flex; justify-content: space-between; font-size: 22px; font-weight: 800;"><span>Net Profit:</span> <strong style="color:var(--primary);">Rs <span id="eod-net-profit">0</span></strong></div>
                 </div>
 
                 <div class="input-group" style="text-align: left;">
                     <label>Physical Cash in Drawer (Rs)</label>
                     <div style="display: flex; gap: 12px;">
                         <input type="number" aria-label="Physical Cash" id="eod-actual-cash" placeholder="Enter counted cash..." style="flex: 1;">
-                        <button class="primary-btn" style="background: #0ea5e9; width: auto; padding: 0 24px;" onclick="calculateEodDiscrepancy()">Verify</button>
+                        <button class="primary-btn" style="width: auto; padding: 0 24px;" onclick="calculateEodDiscrepancy()">Verify</button>
                     </div>
                 </div>
                 
@@ -753,7 +750,7 @@
                         </select>
                     </div>
                     
-                    <button type="submit" id="submit-rtv-btn" class="primary-btn" style="background: #dc2626;">Process Return & Print Chalan</button>
+                    <button type="submit" id="submit-rtv-btn" class="primary-btn">Process Return & Print Chalan</button>
                 </form>
             </div>
         </div>
@@ -774,7 +771,7 @@
                         <label>Actual Physical Count</label>
                         <div style="display: flex; gap: 12px; justify-content: center;">
                             <input type="number" aria-label="Actual Physical Count" id="audit-actual-stock" style="width: 120px; text-align: center; font-weight: 800; font-size: 18px;">
-                            <button class="primary-btn" style="background: #10b981; width: auto; padding: 0 24px;" onclick="submitAuditCorrection()">Save</button>
+                            <button class="primary-btn" style="width: auto; padding: 0 24px;" onclick="submitAuditCorrection()">Save</button>
                         </div>
                     </div>
                     <input type="hidden" id="audit-pid"><input type="hidden" id="audit-vid">
@@ -808,7 +805,7 @@
                     <label>New Brand (Leave blank to skip)</label>
                     <select aria-label="New Brand" id="bulk-assign-brand"><option value="">-- No Change --</option></select>
                 </div>
-                <button class="primary-btn" onclick="applyBulkAssign()" style="background: #8b5cf6;">Move Items</button>
+                <button class="primary-btn" onclick="applyBulkAssign()">Move Items</button>
             </div>
         </div>
 
@@ -832,7 +829,7 @@
                     <label>Value</label>
                     <input type="number" aria-label="Adjustment Value" id="bulk-price-value" placeholder="e.g. 5 for 5%" required min="0.1" step="0.1">
                 </div>
-                <button class="primary-btn" onclick="applyBulkPriceEdit()" style="background: #0ea5e9;">Apply Changes</button>
+                <button class="primary-btn" onclick="applyBulkPriceEdit()">Apply Changes</button>
             </div>
         </div>
 
@@ -877,7 +874,7 @@
                         <label>Scan or Select Item</label>
                         <div style="display: flex; gap: 12px;">
                             <input type="text" aria-label="Search Item" id="restock-search" placeholder="Type name or scan barcode..." style="flex: 1;" oninput="searchRestockItem()">
-                            <button type="button" class="primary-btn" style="width:auto; padding:0 24px; background:#0ea5e9;" onclick="startScannerForRestock()"><i data-lucide="camera" class="icon-sm"></i> Scan</button>
+                            <button type="button" class="primary-btn" style="width:auto; padding:0 24px;" onclick="startScannerForRestock()"><i data-lucide="camera" class="icon-sm"></i> Scan</button>
                         </div>
                         <div id="restock-search-results" style="margin-top: 12px; max-height: 180px; overflow-y: auto; background: #F9FAFB; border-radius: 12px;"></div>
                     </div>
@@ -948,7 +945,7 @@
                 <div class="packing-list-container">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
                         <h3 style="font-weight: 800; margin: 0;">Packing List</h3>
-                        <button class="primary-btn-small" style="background:#f3f4f6; color:#062c1e;" onclick="showToast('Pack-by-scan scanner integrated here in phase 2')"><i data-lucide="scan" class="icon-sm"></i> Scan to Pack</button>
+                        <button class="secondary-btn-small" onclick="showToast('Pack-by-scan scanner integrated here in phase 2')"><i data-lucide="scan" class="icon-sm"></i> Scan to Pack</button>
                     </div>
                     <ul id="modal-packing-list" class="packing-list" style="list-style: none;"></ul>
                 </div>
@@ -957,11 +954,11 @@
                     <p style="font-size: 14px; font-weight: 600; color: var(--text-muted);">Payment: <span id="modal-payment" style="color: var(--text-main);">COD</span></p>
                 </div>
                 <div class="scrollable-actions" style="margin-top: 24px;">
-                    <button class="primary-btn-small" style="background: #8b5cf6; color: white; border: none;" onclick="openAssignDriverModal()"><i data-lucide="truck" class="icon-sm"></i> Assign Driver</button>
-                    <button class="primary-btn-small" style="background: #f59e0b; color: white; border: none;" onclick="printPackingSlip()"><i data-lucide="box" class="icon-sm"></i> Packing Slip</button>
-                    <button class="primary-btn-small" style="background: #334155; color: white; border: none;" onclick="printReceipt()"><i data-lucide="printer" class="icon-sm"></i> Web Receipt</button>
-                    <button class="primary-btn-small" style="background: #0ea5e9; color: white; border: none;" onclick="printHardwareReceipt()"><i data-lucide="printer" class="icon-sm"></i> POS Printer</button>
-                    <button class="primary-btn-small" style="background: #25D366; color: white; border: none;" onclick="sendWhatsAppReceipt()"><i data-lucide="message-circle" class="icon-sm"></i> WhatsApp</button>
+                    <button class="secondary-btn-small" onclick="openAssignDriverModal()"><i data-lucide="truck" class="icon-sm"></i> Assign Driver</button>
+                    <button class="secondary-btn-small" onclick="printPackingSlip()"><i data-lucide="box" class="icon-sm"></i> Packing Slip</button>
+                    <button class="secondary-btn-small" onclick="printReceipt()"><i data-lucide="printer" class="icon-sm"></i> Web Receipt</button>
+                    <button class="secondary-btn-small" onclick="printHardwareReceipt()"><i data-lucide="printer" class="icon-sm"></i> POS Printer</button>
+                    <button class="secondary-btn-small" onclick="sendWhatsAppReceipt()"><i data-lucide="message-circle" class="icon-sm"></i> WhatsApp</button>
                     <button class="danger-btn-small" onclick="cancelOrder()"><i data-lucide="x-circle" class="icon-sm"></i> Cancel</button>
                 </div>
                 <button class="primary-btn" style="margin-top: 16px;" onclick="markOrderDispatched()">Mark as Dispatched</button>
@@ -983,7 +980,7 @@
                         <label>Driver Phone (Optional)</label>
                         <input type="tel" id="assign-driver-phone" placeholder="e.g., 9876543210">
                     </div>
-                    <button type="submit" class="primary-btn" style="background: #8b5cf6; margin-top: 16px;">Assign Driver</button>
+                    <button type="submit" class="primary-btn" style="margin-top: 16px;">Assign Driver</button>
                 </form>
             </div>
         </div>
@@ -1000,7 +997,7 @@
                     <label>Quantity to Remove</label>
                     <input type="number" id="refund-qty" required min="1" value="1">
                 </div>
-                <button type="button" class="primary-btn" style="background: #ef4444; margin-top: 16px;" onclick="submitPartialRefund()">Confirm Refund</button>
+                <button type="button" class="primary-btn" style="margin-top: 16px;" onclick="submitPartialRefund()">Confirm Refund</button>
             </div>
         </div>
 
@@ -1015,7 +1012,7 @@
                     <h3 style="font-size: 14px; font-weight: 800; color: var(--primary); margin-bottom: 12px;">Step 1: Search Global Catalog</h3>
                     <div class="input-group" style="margin-bottom: 12px; display: flex; gap: 8px;">
                         <input type="text" id="catalog-search-input" placeholder="Type product name, brand, or scan barcode..." style="flex: 1; font-weight: 600; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" oninput="searchMasterCatalog(this.value)">
-                        <button type="button" class="primary-btn" style="background: #0ea5e9; width: auto; padding: 0 16px; border-radius: 8px;" onclick="startScannerForSku(this)"><i data-lucide="camera" class="icon-sm"></i> Scan</button>
+                        <button type="button" class="primary-btn" style="width: auto; padding: 0 16px; border-radius: 8px;" onclick="startScannerForSku(this)"><i data-lucide="camera" class="icon-sm"></i> Scan</button>
                     </div>
                     <div id="catalog-search-status" style="font-size: 13px; font-weight: 600; color: #64748b; margin-bottom: 8px;"></div>
                     <div id="catalog-results-container" style="display: flex; flex-direction: column; max-height: 250px; overflow-y: auto; gap: 8px;"></div>
@@ -1030,7 +1027,7 @@
                         <label>Product Name</label>
                         <div style="display: flex; gap: 8px;">
                             <input type="text" aria-label="Product Name" id="new-name" required placeholder="e.g., Almond Milk" style="flex: 1; margin-bottom: 0; font-weight: 700; background: white;">
-                            <button type="button" class="primary-btn" id="btn-autofill" style="background: #8b5cf6; width: auto; padding: 0 16px;" onclick="autoFillProduct()"><i data-lucide="sparkles" class="icon-sm"></i> Auto-Fill</button>
+                            <button type="button" class="secondary-btn-small" id="btn-autofill" onclick="autoFillProduct()"><i data-lucide="sparkles" class="icon-sm"></i> Auto-Fill</button>
                         </div>
                     </div>
 
@@ -1055,12 +1052,12 @@
                     <div class="input-group" style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #E5E7EB;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <label style="margin: 0;">Local Pricing & Stock</label>
-                            <button type="button" class="primary-btn-small" style="background: #F3F4F6; color: var(--text-main);" onclick="addVariantRow()"><i data-lucide="plus" class="icon-sm"></i> Add Size</button>
+                            <button type="button" class="secondary-btn-small" onclick="addVariantRow()"><i data-lucide="plus" class="icon-sm"></i> Add Size</button>
                         </div>
                         <div id="variants-container"></div>
                     </div>
 
-                    <button type="submit" id="submit-product-btn" class="primary-btn" style="margin-top: 16px; background: #10b981;">Save to My Store</button>
+                    <button type="submit" id="submit-product-btn" class="primary-btn" style="margin-top: 16px;">Save to My Store</button>
                 </form>
             </div>
         </div>
@@ -1146,7 +1143,7 @@
                             <label>Record Customer Payment</label>
                             <div style="display: flex; gap: 12px;">
                                 <input type="number" aria-label="Payment Amount" id="payment-amount-input" placeholder="Amount (Rs)" style="font-weight: 700;">
-                                <button class="primary-btn" style="background: #10b981; width:auto; padding: 0 24px;" onclick="submitPayment()">Receive Funds</button>
+                                <button class="primary-btn" style="width:auto; padding: 0 24px;" onclick="submitPayment()">Receive Funds</button>
                             </div>
                         </div>
                     </div>
@@ -1189,7 +1186,7 @@
                     <button type="button" class="quick-cash-btn" onclick="addQuickCash(100)">+Rs 100</button>
                     <button type="button" class="quick-cash-btn" onclick="addQuickCash(500)">+Rs 500</button>
                     <button type="button" class="quick-cash-btn" onclick="addQuickCash(2000)">+Rs 2000</button>
-                    <button type="button" class="quick-cash-btn" style="background:#10b981; color:white; border:none;" onclick="setExactCash()">Exact</button>
+                    <button type="button" class="quick-cash-btn" style="background:var(--primary); color:white; border:none;" onclick="setExactCash()">Exact</button>
                 </div>
                 
                 <div class="input-group" style="text-align: left;">
@@ -1198,10 +1195,10 @@
                 </div>
                 
                 <div style="margin-top: 24px; margin-bottom: 24px; padding: 16px; background: #F9FAFB; border-radius: 12px; border: 1px solid #E5E7EB;">
-                    <strong id="split-balance-display" style="font-size: 18px; color: #f59e0b;">Rs 0.00 Remaining</strong>
+                    <strong id="split-balance-display" style="font-size: 18px; color: var(--primary);">Rs 0.00 Remaining</strong>
                 </div>
                 
-                <button class="primary-btn" style="background: #6366f1;" onclick="processSplitPayment()">Confirm & Checkout</button>
+                <button class="primary-btn" onclick="processSplitPayment()">Confirm & Checkout</button>
             </div>
         </div>
 
@@ -1236,7 +1233,7 @@
                                     <option value="Admin">Admin</option>
                                 </select>
                             </div>
-                            <button type="submit" class="primary-btn" style="background: #8b5cf6;">Create User</button>
+                            <button type="submit" class="primary-btn">Create User</button>
                         </div>
                     </form>
                 </div>
@@ -1266,7 +1263,7 @@
                                 <input type="number" aria-label="Promo Value" id="promo-value" placeholder="Discount % (e.g. 10)" required style="flex: 1;">
                                 <input type="number" aria-label="Minimum Order Value" id="promo-min-order" placeholder="Min Order Value (Rs)" required style="flex: 1;">
                             </div>
-                            <button type="submit" class="primary-btn" style="background: #ec4899;">Launch Promo</button>
+                            <button type="submit" class="primary-btn">Launch Promo</button>
                         </div>
                     </form>
                 </div>
@@ -1286,14 +1283,14 @@
                 <div style="background: #F0FDFA; padding: 16px; border-radius: 12px; border: 1px solid #CCFBF1; margin-bottom: 24px;">
                     <h3 style="margin-bottom: 8px; font-size: 15px; color: #0F766E;">Step 1: Download Template</h3>
                     <p style="font-size: 12px; color: #115E59; margin-bottom: 12px;">Ensure your data matches the exact format required before uploading.</p>
-                    <button type="button" class="primary-btn-small" style="background: white; border-color: #5EEAD4; color: #0F766E;" onclick="downloadSampleCSV()"><i data-lucide="download" class="icon-sm"></i> Download Sample CSV</button>
+                    <button type="button" class="secondary-btn-small" style="background: white; border-color: #5EEAD4; color: #0F766E;" onclick="downloadSampleCSV()"><i data-lucide="download" class="icon-sm"></i> Download Sample CSV</button>
                 </div>
                 <div style="background: #F9FAFB; padding: 16px; border-radius: 12px; border: 1px solid #E5E7EB;">
                     <h3 style="margin-bottom: 8px; font-size: 15px;">Step 2: Upload Data</h3>
                     <form onsubmit="submitBulkImport(event)">
                         <div class="input-group">
                             <input aria-label="Upload CSV" type="file" id="bulk-csv-upload" accept=".csv" required style="margin-bottom: 12px; padding: 8px; border: 1px dashed #cbd5e1; border-radius: 8px; width: 100%;">
-                            <button type="submit" id="bulk-import-submit-btn" class="primary-btn" style="background: #14b8a6;"><i data-lucide="upload-cloud" class="icon-sm"></i> Start Import</button>
+                            <button type="submit" id="bulk-import-submit-btn" class="primary-btn"><i data-lucide="upload-cloud" class="icon-sm"></i> Start Import</button>
                         </div>
                     </form>
                 </div>
@@ -1344,7 +1341,7 @@
                         <label>Loyalty Conversion (Rs X = 1 Point)</label>
                         <input type="number" aria-label="Loyalty Conversion" id="settings-loyalty-value" min="1" required>
                     </div>
-                    <button type="submit" class="primary-btn" style="background: #0f172a;">Save Settings</button>
+                    <button type="submit" class="primary-btn">Save Settings</button>
                 </form>
             </div>
         </div>
@@ -1383,7 +1380,7 @@
                         <label>Quantity to Move</label>
                         <input type="number" aria-label="Transfer Quantity" id="transfer-qty" required min="1" placeholder="0">
                     </div>
-                    <button type="submit" id="submit-transfer-btn" class="primary-btn" style="background: #f59e0b;" disabled>Transfer Stock</button>
+                    <button type="submit" id="submit-transfer-btn" class="primary-btn" disabled>Transfer Stock</button>
                 </form>
             </div>
         </div>
