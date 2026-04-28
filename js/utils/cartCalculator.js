@@ -3,6 +3,7 @@
 export const CartCalculator = {
     calculate: function(posCart, currentInventory, currentPromotions, currentCustomerProfile, appliedLoyaltyPoints) {
         // OPTIMIZATION: Enterprise Integer Math (Paise/Cents) to prevent floating-point calculation drift
+        // Perfect parity with the Rs standardization in the backend Ledger workflows.
         let subtotalPaise = 0;
         let totalTaxPaise = 0;
         let totalDiscountPaise = 0;
