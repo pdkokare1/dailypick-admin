@@ -75,9 +75,31 @@
     <div id="pin-login-container" class="login-container" style="display: none;">
         <div class="login-content-wrapper">
             <h1 style="color: var(--primary); font-size: 36px; font-weight: 800; margin-bottom: 12px; letter-spacing: 1px; text-align: center;">DAILYPICK.</h1>
-            <p style="color: var(--text-muted); font-size: 15px; margin-bottom: 40px; font-weight: 600; text-align: center;">Staff Terminal Lock</p>
             
-            <div id="pin-entry-step">
+            <div id="partner-gateway-step" style="text-align: center;">
+                <p style="color: var(--text-muted); font-size: 15px; margin-bottom: 32px; font-weight: 600;">Partner Gateway</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 320px; margin: 0 auto 16px auto;">
+                    <button onclick="selectPartnerRole('Shop')" style="background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px 16px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: transform 0.2s;">
+                        <span style="font-size: 32px; display: block; margin-bottom: 12px;">🏪</span>
+                        <strong style="color: var(--text-main); font-size: 14px;">Local Shop</strong>
+                    </button>
+                    <button onclick="selectPartnerRole('Enterprise')" style="background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px 16px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: transform 0.2s;">
+                        <span style="font-size: 32px; display: block; margin-bottom: 12px;">🏢</span>
+                        <strong style="color: var(--text-main); font-size: 14px;">Hypermart</strong>
+                    </button>
+                    <button onclick="selectPartnerRole('Distributor')" style="background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px 16px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: transform 0.2s;">
+                        <span style="font-size: 32px; display: block; margin-bottom: 12px;">📦</span>
+                        <strong style="color: var(--text-main); font-size: 14px;">Distributor</strong>
+                    </button>
+                    <button onclick="selectPartnerRole('Delivery_Agent')" style="background: white; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px 16px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); transition: transform 0.2s;">
+                        <span style="font-size: 32px; display: block; margin-bottom: 12px;">🛵</span>
+                        <strong style="color: var(--text-main); font-size: 14px;">Fleet Rider</strong>
+                    </button>
+                </div>
+            </div>
+
+            <div id="pin-entry-step" style="display: none;">
+                <p id="login-role-title" style="color: var(--text-muted); font-size: 15px; margin-bottom: 40px; font-weight: 600; text-align: center;">Staff Terminal Lock</p>
                 <div class="input-group" style="width: 280px; margin: 0 auto 24px auto;">
                     <input type="text" id="login-username" placeholder="Username" aria-label="Username" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="padding: 16px; border-radius: 12px; border: 1px solid #E5E7EB; width: 100%; text-align: center; font-size: 16px; background: var(--surface); color: var(--text-main); font-weight: 700; box-shadow: var(--shadow-opulent);">
                 </div>
@@ -102,6 +124,10 @@
                     <div></div>
                     <button class="pin-btn" onclick="handlePinInput('0')">0</button>
                     <button class="pin-btn" onclick="clearPinInput()" aria-label="Clear PIN" style="color: #ef4444;"><i data-lucide="delete" class="icon-md"></i></button>
+                </div>
+
+                <div style="text-align: center; margin-top: 32px;">
+                    <button onclick="backToGateway()" style="background: none; border: none; color: var(--text-muted); font-size: 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;"><i data-lucide="arrow-left" class="icon-sm"></i> Back to Gateway</button>
                 </div>
             </div>
 
