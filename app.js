@@ -159,9 +159,12 @@ const DailyPickApp = (function() {
             // Expose initializeApp globally as before to ensure other scripts don't break
             window.initializeApp = function() {
                 
-                // --- NEW: RIDER DASHBOARD ISOLATION ---
-                // If the user is a rider, kill the heavy data fetching and UI to save mobile battery
-                if (window.currentUser && window.currentUser.role === 'Delivery_Agent') {
+                if (!window.currentUser) return;
+
+                // --- NEW: STRICT ROLE-BASED DATA FENCING ---
+                
+                // 1. Rider Dashboard Isolation (Saves Mobile Battery & Data)
+                if (window.currentUser.role === 'Delivery_Agent') {
                     const nav = document.querySelector('.bottom-nav');
                     const headerSearch = document.querySelector('.header-search-container');
                     
@@ -175,27 +178,35 @@ const DailyPickApp = (function() {
                     return; 
                 }
 
+                // 2. Global Startup Configuration (Applies to Cashier, Admin, Enterprise)
                 if (typeof window.fetchGlobalSettings === 'function') window.fetchGlobalSettings(); 
-                
-                if (typeof window.fetchBootstrapData === 'function') {
-                    window.fetchBootstrapData();
-                } else {
-                    if (typeof fetchCategories === 'function') fetchCategories(); 
-                    if (typeof fetchBrands === 'function') fetchBrands();
-                    if (typeof fetchDistributors === 'function') fetchDistributors();
-                    if (typeof fetchPromotions === 'function') fetchPromotions(); 
-                }
-                
-                if (typeof fetchOrders === 'function') fetchOrders();
-                
                 if (typeof window.setupRealtimeConnection === 'function') window.setupRealtimeConnection();
                 requestWakeLock(); 
+                if (typeof checkCurrentShift === 'function') checkCurrentShift();
 
-                if (window.currentUser && window.currentUser.role === 'Admin') {
+                // 3. Fenced Data Fetching
+                if (window.currentUser.role === 'Admin' || window.currentUser.role === 'StoreAdmin') {
+                    // Full access fetch
+                    if (typeof window.fetchBootstrapData === 'function') {
+                        window.fetchBootstrapData();
+                    } else {
+                        if (typeof fetchCategories === 'function') fetchCategories(); 
+                        if (typeof fetchBrands === 'function') fetchBrands();
+                        if (typeof fetchDistributors === 'function') fetchDistributors();
+                        if (typeof fetchPromotions === 'function') fetchPromotions(); 
+                    }
+                    if (typeof fetchOrders === 'function') fetchOrders();
+                    if (typeof renderOverview === 'function') renderOverview(); 
+                } 
+                else if (window.currentUser.role === 'Cashier') {
+                    // Cashiers only fetch what is strictly necessary to run the POS register
+                    if (typeof fetchCategories === 'function') fetchCategories(); 
+                    // INTENTIONALLY OMITTED: fetchOrders(), fetchAnalytics(), fetchCustomers().
+                }
+                else if (window.currentUser.role === 'Enterprise' || window.currentUser.role === 'Distributor') {
+                    // Specific partner fetches will initialize their dedicated portlets.
                     if (typeof renderOverview === 'function') renderOverview(); 
                 }
-                
-                if (typeof checkCurrentShift === 'function') checkCurrentShift();
             };
         }
     };
