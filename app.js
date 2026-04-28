@@ -24,7 +24,6 @@ const DailyPickApp = (function() {
 
     function setupEventListeners() {
         
-        // --- NEW: PARTNER GATEWAY ROUTING ---
         window.selectPartnerRole = function(role) {
             const gateway = document.getElementById('partner-gateway-step');
             const pinEntry = document.getElementById('pin-entry-step');
@@ -156,14 +155,13 @@ const DailyPickApp = (function() {
         init: function() {
             setupEventListeners();
             
-            // Expose initializeApp globally as before to ensure other scripts don't break
             window.initializeApp = function() {
                 
                 if (!window.currentUser) return;
 
-                // --- NEW: STRICT ROLE-BASED DATA FENCING ---
+                // --- PHASE 3: STRICT DATA FENCING FOR OPERATIONAL ENGINES ---
                 
-                // 1. Rider Dashboard Isolation (Saves Mobile Battery & Data)
+                // 1. Last Mile Fleet Engine
                 if (window.currentUser.role === 'Delivery_Agent') {
                     const nav = document.querySelector('.bottom-nav');
                     const headerSearch = document.querySelector('.header-search-container');
@@ -174,17 +172,43 @@ const DailyPickApp = (function() {
                     document.getElementById('header-subtitle').textContent = 'Fleet Operations';
                     if (typeof showToast === 'function') showToast("Rider Mode Active (GPS Tracking Initiated)");
                     
-                    // Bail early so POS/Inventory fetchers do not run for riders
+                    // Route strictly to the platform delivery queue via the backend
+                    if (typeof fetchOrders === 'function') {
+                        // In production, this would append `?fulfillmentType=PLATFORM_DELIVERY` to the API call
+                        fetchOrders(); 
+                    }
+                    if (typeof window.switchView === 'function') window.switchView('orders');
                     return; 
                 }
 
-                // 2. Global Startup Configuration (Applies to Cashier, Admin, Enterprise)
+                // 2. B2B Wholesale Portal Engine
+                if (window.currentUser.role === 'Distributor') {
+                    const nav = document.querySelector('.bottom-nav');
+                    const headerSearch = document.querySelector('.header-search-container');
+                    
+                    if (nav) nav.style.display = 'none';
+                    if (headerSearch) headerSearch.style.display = 'none';
+
+                    document.getElementById('header-subtitle').textContent = 'B2B Wholesale Portal';
+                    if (typeof showToast === 'function') showToast("Supplier Dashboard Active");
+                    
+                    // Ensure Distributors only fetch their own POs, bypassing B2C logic
+                    if (typeof fetchOrders === 'function') {
+                        // Uses the newly created B2B route
+                        window.currentFetchOrderUrlOverride = `${window.BACKEND_URL}/api/distributors/${window.currentUser.distributorId || window.currentUser._id}/orders`;
+                        fetchOrders();
+                    }
+                    if (typeof window.switchView === 'function') window.switchView('orders');
+                    return;
+                }
+
+                // 3. Global Startup Configuration (Applies to Cashier, Admin, Enterprise)
                 if (typeof window.fetchGlobalSettings === 'function') window.fetchGlobalSettings(); 
                 if (typeof window.setupRealtimeConnection === 'function') window.setupRealtimeConnection();
                 requestWakeLock(); 
                 if (typeof checkCurrentShift === 'function') checkCurrentShift();
 
-                // 3. Fenced Data Fetching
+                // 4. Fenced Data Fetching
                 if (window.currentUser.role === 'Admin' || window.currentUser.role === 'StoreAdmin') {
                     // Full access fetch
                     if (typeof window.fetchBootstrapData === 'function') {
@@ -201,10 +225,8 @@ const DailyPickApp = (function() {
                 else if (window.currentUser.role === 'Cashier') {
                     // Cashiers only fetch what is strictly necessary to run the POS register
                     if (typeof fetchCategories === 'function') fetchCategories(); 
-                    // INTENTIONALLY OMITTED: fetchOrders(), fetchAnalytics(), fetchCustomers().
                 }
-                else if (window.currentUser.role === 'Enterprise' || window.currentUser.role === 'Distributor') {
-                    // Specific partner fetches will initialize their dedicated portlets.
+                else if (window.currentUser.role === 'Enterprise') {
                     if (typeof renderOverview === 'function') renderOverview(); 
                 }
             };
