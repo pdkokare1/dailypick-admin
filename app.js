@@ -23,6 +23,36 @@ const DailyPickApp = (function() {
     }
 
     function setupEventListeners() {
+        
+        // --- NEW: PARTNER GATEWAY ROUTING ---
+        window.selectPartnerRole = function(role) {
+            const gateway = document.getElementById('partner-gateway-step');
+            const pinEntry = document.getElementById('pin-entry-step');
+            if (gateway && pinEntry) {
+                gateway.style.display = 'none';
+                pinEntry.style.display = 'block';
+            }
+            
+            const titleEl = document.getElementById('login-role-title');
+            if (titleEl) {
+                if (role === 'Shop') titleEl.textContent = 'Local Shop Terminal';
+                else if (role === 'Enterprise') titleEl.textContent = 'Enterprise Hub Login';
+                else if (role === 'Distributor') titleEl.textContent = 'Distributor Portal';
+                else if (role === 'Delivery_Agent') titleEl.textContent = 'Fleet Rider Login';
+            }
+            window.intendedLoginRole = role;
+        };
+
+        window.backToGateway = function() {
+            const gateway = document.getElementById('partner-gateway-step');
+            const pinEntry = document.getElementById('pin-entry-step');
+            if (gateway && pinEntry) {
+                pinEntry.style.display = 'none';
+                gateway.style.display = 'block';
+            }
+            window.intendedLoginRole = null;
+        };
+
         document.addEventListener('visibilitychange', async () => {
             if (wakeLock === null && document.visibilityState === 'visible') {
                 await requestWakeLock();
@@ -57,34 +87,30 @@ const DailyPickApp = (function() {
                 try {
                     const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/auth/verify?id=${window.currentUser._id || window.currentUser.id}`);
                     
-                    // FIX: Explicitly intercept dead tokens before attempting to parse JSON to prevent ghost sessions
                     if (res.status === 401 || res.status === 403) {
                         console.warn("Session definitively invalid. Forcing logout.");
                         if (typeof window.logoutUser === 'function') window.logoutUser();
-                        return; // Stop initialization
+                        return; 
                     }
 
                     const result = await res.json();
                     
-                    // FIX: Added safe check for !result.data to prevent TypeError null pointer crashes
                     if (!res.ok || !result.success || !result.data || result.data.role !== window.currentUser.role) {
                         console.warn("Session verification failed. Role mismatch or invalid user. Forcing logout.");
                         if (typeof window.logoutUser === 'function') window.logoutUser();
                         if (typeof showToast === 'function') showToast("Session invalid. Please log in again.");
-                        return; // Stop initialization
+                        return; 
                     }
 
-                    // Only initialize the app data after verifying the session is 100% valid
                     window.initializeApp();
 
                 } catch (e) {
                     console.warn("Could not reach background verification endpoint. Trusting local session temporarily.", e);
-                    // Safe to boot app here because we only hit this if the server is literally unreachable (offline PWA mode)
                     window.initializeApp(); 
                 }
                 
             } else {
-                console.log("No session found. Showing PIN login.");
+                console.log("No session found. Showing Partner Gateway.");
                 if (loginContainer) loginContainer.style.display = 'flex';
                 if (appContainer) appContainer.style.display = 'none';
             }
@@ -132,13 +158,28 @@ const DailyPickApp = (function() {
             
             // Expose initializeApp globally as before to ensure other scripts don't break
             window.initializeApp = function() {
+                
+                // --- NEW: RIDER DASHBOARD ISOLATION ---
+                // If the user is a rider, kill the heavy data fetching and UI to save mobile battery
+                if (window.currentUser && window.currentUser.role === 'Delivery_Agent') {
+                    const nav = document.querySelector('.bottom-nav');
+                    const headerSearch = document.querySelector('.header-search-container');
+                    
+                    if (nav) nav.style.display = 'none';
+                    if (headerSearch) headerSearch.style.display = 'none';
+                    
+                    document.getElementById('header-subtitle').textContent = 'Fleet Operations';
+                    if (typeof showToast === 'function') showToast("Rider Mode Active (GPS Tracking Initiated)");
+                    
+                    // Bail early so POS/Inventory fetchers do not run for riders
+                    return; 
+                }
+
                 if (typeof window.fetchGlobalSettings === 'function') window.fetchGlobalSettings(); 
                 
-                // OPTIMIZATION: Trigger the single master Bootstrap payload instead of 4 separate fetches
                 if (typeof window.fetchBootstrapData === 'function') {
                     window.fetchBootstrapData();
                 } else {
-                    // Fail-safe fallback in case api.js hasn't loaded yet
                     if (typeof fetchCategories === 'function') fetchCategories(); 
                     if (typeof fetchBrands === 'function') fetchBrands();
                     if (typeof fetchDistributors === 'function') fetchDistributors();
@@ -147,7 +188,6 @@ const DailyPickApp = (function() {
                 
                 if (typeof fetchOrders === 'function') fetchOrders();
                 
-                // Now calls the decoupled service
                 if (typeof window.setupRealtimeConnection === 'function') window.setupRealtimeConnection();
                 requestWakeLock(); 
 
