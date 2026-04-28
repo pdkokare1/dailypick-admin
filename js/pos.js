@@ -216,7 +216,7 @@ function renderPosQuickTap() {
         card.appendChild(title);
 
         const priceSpan = document.createElement('span');
-        priceSpan.textContent = `₹${item.variant.price}`;
+        priceSpan.textContent = `Rs ${item.variant.price}`;
         card.appendChild(priceSpan);
 
         fragment.appendChild(card);
@@ -315,10 +315,10 @@ function renderPosCart() {
         emptyMsg.innerHTML = 'Cart is empty.<br><span style="font-size: 12px;">Scan or tap an item to begin.</span>';
         container.appendChild(emptyMsg);
 
-        totalEl.innerText = '₹0.00';
-        if(subtotalEl) subtotalEl.innerText = '₹0.00';
-        if(discountEl) discountEl.innerText = '-₹0.00';
-        if(taxEl) taxEl.innerText = '₹0.00';
+        totalEl.innerText = 'Rs 0.00';
+        if(subtotalEl) subtotalEl.innerText = 'Rs 0.00';
+        if(discountEl) discountEl.innerText = '-Rs 0.00';
+        if(taxEl) taxEl.innerText = 'Rs 0.00';
         
         let loyaltyLine = document.getElementById('pos-loyalty-line');
         if(loyaltyLine) loyaltyLine.style.display = 'none';
@@ -364,7 +364,7 @@ function renderPosCart() {
         const subtitle = document.createElement('p');
         subtitle.style.fontSize = '11px';
         subtitle.style.color = 'var(--text-muted)';
-        subtitle.innerHTML = `${item.selectedVariant} • ₹${item.price} ${tRate > 0 ? `<span style="color:#10b981; font-size:9px;">(GST ${tRate}%)</span>` : ''}`;
+        subtitle.innerHTML = `${item.selectedVariant} • Rs ${item.price} ${tRate > 0 ? `<span style="color:#10b981; font-size:9px;">(GST ${tRate}%)</span>` : ''}`;
 
         infoDiv.appendChild(headerRow);
         infoDiv.appendChild(subtitle);
@@ -398,7 +398,7 @@ function renderPosCart() {
         totalDiv.style.fontSize = '14px';
         totalDiv.style.minWidth = '60px';
         totalDiv.style.textAlign = 'right';
-        totalDiv.textContent = `₹${itemTotal.toFixed(2)}`;
+        totalDiv.textContent = `Rs ${itemTotal.toFixed(2)}`;
 
         div.appendChild(infoDiv);
         div.appendChild(controls);
@@ -408,13 +408,13 @@ function renderPosCart() {
 
     container.appendChild(fragment);
 
-    if(subtotalEl) subtotalEl.innerText = `₹${totals.subtotal.toFixed(2)}`;
+    if(subtotalEl) subtotalEl.innerText = `Rs ${totals.subtotal.toFixed(2)}`;
     
     if(discountEl) {
-        discountEl.innerHTML = `-₹${totals.totalDiscount.toFixed(2)} ${totals.tierDiscountAmount > 0 ? `<br><span style="font-size:10px; color:#8b5cf6; font-weight:800;">(Incl. ${totals.tierName})</span>` : ''}`;
+        discountEl.innerHTML = `-Rs ${totals.totalDiscount.toFixed(2)} ${totals.tierDiscountAmount > 0 ? `<br><span style="font-size:10px; color:#8b5cf6; font-weight:800;">(Incl. ${totals.tierName})</span>` : ''}`;
     }
     
-    if(taxEl) taxEl.innerText = `₹${totals.totalTax.toFixed(2)}`;
+    if(taxEl) taxEl.innerText = `Rs ${totals.totalTax.toFixed(2)}`;
 
     let loyaltyLine = document.getElementById('pos-loyalty-line');
     if (!loyaltyLine && taxEl) {
@@ -431,7 +431,7 @@ function renderPosCart() {
         lbl.textContent = 'Loyalty Redeemed:';
         const val = document.createElement('span');
         val.id = 'pos-cart-loyalty';
-        val.textContent = '-₹0.00';
+        val.textContent = '-Rs 0.00';
         
         loyaltyLine.appendChild(lbl);
         loyaltyLine.appendChild(val);
@@ -441,13 +441,13 @@ function renderPosCart() {
     if (loyaltyLine) {
         if (appliedLoyaltyPoints > 0) {
             loyaltyLine.style.display = 'flex';
-            document.getElementById('pos-cart-loyalty').innerText = `-₹${appliedLoyaltyPoints.toFixed(2)}`;
+            document.getElementById('pos-cart-loyalty').innerText = `-Rs ${appliedLoyaltyPoints.toFixed(2)}`;
         } else {
             loyaltyLine.style.display = 'none';
         }
     }
 
-    totalEl.innerText = `₹${totals.grandTotal.toFixed(2)}`;
+    totalEl.innerText = `Rs ${totals.grandTotal.toFixed(2)}`;
     
     broadcastCFDUpdate(totals.subtotal);
 }
@@ -455,7 +455,7 @@ function renderPosCart() {
 function addCustomPosItem() {
     const name = prompt("Enter Custom Item Name:");
     if (!name) return;
-    const priceRaw = prompt("Enter Price (₹):");
+    const priceRaw = prompt("Enter Price (Rs):");
     if (!priceRaw) return;
     const price = parseFloat(priceRaw);
     if (isNaN(price)) return showToast("Invalid Price");
@@ -508,7 +508,7 @@ function openPosQuickView(productId) {
 
             const btn = document.createElement('button');
             btn.className = 'primary-btn-small';
-            btn.textContent = `Add ₹${v.price}`;
+            btn.textContent = `Add Rs ${v.price}`;
             btn.onclick = () => {
                 addToPosCart({_id: product._id, name: product.name, taxRate: product.taxRate || 0, taxType: product.taxType || 'Inclusive', hsnCode: product.hsnCode || ''}, {_id: v._id, weightOrVolume: v.weightOrVolume, price: v.price});
                 closePosQuickView();
@@ -570,7 +570,7 @@ function openHeldCartsModal() {
             const h4 = document.createElement('h4');
             h4.style.fontSize = '14px';
             h4.style.marginBottom = '4px';
-            h4.textContent = `${cart.phone} - ₹${cart.total.toFixed(2)}`;
+            h4.textContent = `${cart.phone} - Rs ${cart.total.toFixed(2)}`;
 
             const p = document.createElement('p');
             p.style.fontSize = '11px';
@@ -645,7 +645,7 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
                 const potentialNewDebt = profile.creditUsed + currentGrandTotal;
                 if (potentialNewDebt > profile.creditLimit) {
                     isProcessingCheckout = false;
-                    return showToast(`Limit Exceeded! Current: ₹${profile.creditUsed}, Max: ₹${profile.creditLimit}`);
+                    return showToast(`Limit Exceeded! Current: Rs ${profile.creditUsed}, Max: Rs ${profile.creditLimit}`);
                 }
             }
         } catch (e) {
@@ -727,10 +727,10 @@ async function processPosCheckout(paymentMethod, splitDetails = null) {
 
 function openSplitPaymentModal() {
     if (posCart.length === 0) return showToast('Cart is empty.');
-    document.getElementById('split-total-display').innerText = `₹${currentGrandTotal.toFixed(2)}`;
+    document.getElementById('split-total-display').innerText = `Rs ${currentGrandTotal.toFixed(2)}`;
     document.getElementById('split-cash-input').value = '';
     document.getElementById('split-upi-input').value = '';
-    document.getElementById('split-balance-display').innerText = `₹${currentGrandTotal.toFixed(2)} Remaining`;
+    document.getElementById('split-balance-display').innerText = `Rs ${currentGrandTotal.toFixed(2)} Remaining`;
     document.getElementById('split-balance-display').style.color = '#f59e0b';
     document.getElementById('split-payment-modal').classList.add('active');
 }
@@ -753,13 +753,13 @@ function calculateSplit() {
     
     const balanceEl = document.getElementById('split-balance-display');
     if (balance === 0) {
-        balanceEl.innerText = '₹0.00 (Perfect)';
+        balanceEl.innerText = 'Rs 0.00 (Perfect)';
         balanceEl.style.color = '#10b981';
     } else if (balance > 0) {
-        balanceEl.innerText = `₹${balance.toFixed(2)} Remaining`;
+        balanceEl.innerText = `Rs ${balance.toFixed(2)} Remaining`;
         balanceEl.style.color = '#f59e0b';
     } else {
-        balanceEl.innerText = `-₹${Math.abs(balance).toFixed(2)} (Overpaid)`;
+        balanceEl.innerText = `-Rs ${Math.abs(balance).toFixed(2)} (Overpaid)`;
         balanceEl.style.color = '#ef4444';
     }
 }
@@ -798,6 +798,4 @@ function processSplitPayment() {
     
     closeSplitPaymentModal();
     processPosCheckout('Split', { cash: cash, upi: upi });
-}
-
 }
