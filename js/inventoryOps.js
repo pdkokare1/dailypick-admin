@@ -431,6 +431,92 @@ async function autoFillProduct() {
     }
 }
 
+// --- NEW: PHASE 2 SNAP & SYNC AI ---
+// Attach this to a file input in your Add Product modal via `<input type="file" onchange="snapAndSyncAI(this)">`
+window.snapAndSyncAI = async function(inputElement) {
+    const file = inputElement.files[0];
+    if (!file) return;
+
+    const btn = document.getElementById('btn-autofill');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader" class="icon-sm"></i> Analyzing Image...';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    btn.disabled = true;
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+        const base64 = reader.result.split(',')[1];
+        try {
+            const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+            const BACKEND_URL = typeof CONFIG !== 'undefined' ? CONFIG.BACKEND_URL : window.BACKEND_URL;
+            
+            const res = await fetchFn(`${BACKEND_URL}/api/ai/scan-product`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: base64 })
+            });
+            
+            const result = await res.json();
+            
+            if (result.success && result.data) {
+                if (document.getElementById('new-name')) document.getElementById('new-name').value = result.data.name || '';
+                if (document.getElementById('new-tags')) document.getElementById('new-tags').value = result.data.searchTags || '';
+                
+                // Pre-fill variants table if possible
+                const weightInputs = document.querySelectorAll('.var-weight');
+                if (weightInputs.length > 0 && result.data.weightOrVolume) {
+                    weightInputs[0].value = result.data.weightOrVolume;
+                }
+                
+                // Select Category
+                if (result.data.category) {
+                    const catSelect = document.getElementById('new-category');
+                    if (catSelect) {
+                        for (let i = 0; i < catSelect.options.length; i++) {
+                            if (catSelect.options[i].value.toLowerCase().includes(result.data.category.toLowerCase())) {
+                                catSelect.selectedIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Select Brand
+                if (result.data.brand) {
+                    const brandSelect = document.getElementById('new-brand');
+                    if (brandSelect) {
+                        let brandFound = false;
+                        for (let i = 0; i < brandSelect.options.length; i++) {
+                            if (brandSelect.options[i].value.toLowerCase() === result.data.brand.toLowerCase()) {
+                                brandSelect.selectedIndex = i;
+                                brandFound = true;
+                                break;
+                            }
+                        }
+                        if (!brandFound) {
+                            const newOption = new Option(result.data.brand, result.data.brand);
+                            brandSelect.add(newOption);
+                            brandSelect.value = result.data.brand;
+                        }
+                    }
+                }
+
+                if (typeof showToast === 'function') showToast("📸 Product Data Extracted via Gemini!");
+            } else {
+                if (typeof showToast === 'function') showToast("Could not extract data from image.");
+            }
+        } catch(e) { 
+            console.error(e); 
+            if (typeof showToast === 'function') showToast("Image processing failed.");
+        } finally {
+            btn.innerHTML = originalText;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            btn.disabled = false;
+        }
+    };
+};
+
 function compressImage(file, maxWidth = 800, maxHeight = 800) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -904,7 +990,6 @@ function closeAIForecastModal() {
     if (modal) modal.classList.remove('active');
 }
 
-// --- NEW: PHASE 2 ONE-CLICK CATALOG ONBOARDING ---
 async function searchMasterCatalog(query) {
     if (!query || query.length < 3) return;
     try {
@@ -912,7 +997,6 @@ async function searchMasterCatalog(query) {
         const res = await fetchFn(`${BACKEND_URL}/api/enterprise/catalog?search=${encodeURIComponent(query)}`);
         const result = await res.json();
         
-        // Displays results in modal where manager clicks "Sync to Store"
         if (result.success && result.data.length > 0) {
             let msg = `Found ${result.data.length} Master Items:\n`;
             result.data.slice(0, 5).forEach(m => msg += `- ${m.name} [SKU: ${m.variants[0]?.sku || 'N/A'}]\n`);
@@ -925,12 +1009,10 @@ async function searchMasterCatalog(query) {
     }
 }
 
-// --- NEW: PHASE 2 DISTRIBUTOR WHOLESALE PROCUREMENT ---
 async function fetchDistributorWholesale(distributorId) {
     if (typeof showToast === 'function') showToast("Fetching live supplier catalog...");
     try {
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        // Allows local shop owners to browse dynamic wholesale prices from local suppliers
         const res = await fetchFn(`${BACKEND_URL}/api/distributors/${distributorId}/catalog`);
         const result = await res.json();
         
