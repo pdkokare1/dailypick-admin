@@ -196,18 +196,9 @@ const AuthManager = (function() {
         window.currentStoreId = null;
         window.currentRegisterId = null;
         
-        const loginContainer = document.getElementById('pin-login-container');
-        const appContainer = document.getElementById('app-container');
-        
-        if (loginContainer) loginContainer.style.display = 'flex';
-        if (appContainer) appContainer.style.display = 'none';
-        
-        const pinStep = document.getElementById('pin-entry-step');
-        const locStep = document.getElementById('location-selection-step');
-        if (pinStep) pinStep.style.display = 'block';
-        if (locStep) locStep.style.display = 'none';
-
-        clearPinInput();
+        // SECURE HARD RESET: Force a full page reload to rebuild the DOM for the next user
+        // This is necessary because applyRoleRestrictions() completely deletes unauthorized DOM nodes.
+        window.location.reload();
     };
 
     const applyRoleRestrictions = function() {
@@ -229,20 +220,27 @@ const AuthManager = (function() {
             const navAnalytics = document.getElementById('nav-analytics');
             const navCustomers = document.getElementById('nav-customers');
             
-            if (navOverview) navOverview.style.display = 'none';
-            if (navInventory) navInventory.style.display = 'none';
-            if (navAnalytics) navAnalytics.style.display = 'none';
-            if (navCustomers) navCustomers.style.display = 'none';
+            // SECURITY UPGRADE: Hard DOM Removal to prevent developer tools bypass
+            if (navOverview) navOverview.remove();
+            if (navInventory) navInventory.remove();
+            if (navAnalytics) navAnalytics.remove();
+            if (navCustomers) navCustomers.remove();
             
             const eodBtn = document.getElementById('eod-report-btn');
-            if (eodBtn) eodBtn.style.display = 'none';
+            if (eodBtn) eodBtn.remove();
 
-            adminOnlyElements.forEach(el => el.style.display = 'none');
+            adminOnlyElements.forEach(el => el.remove());
+
+            // Empty the data-sensitive views physically from the DOM
+            const analyticsView = document.getElementById('analytics-view');
+            if (analyticsView) analyticsView.innerHTML = '';
+            const customersView = document.getElementById('customers-view');
+            if (customersView) customersView.innerHTML = '';
 
             if (typeof window.switchView === 'function') window.switchView('pos'); 
             
         } else {
-            // Standard StoreAdmin (or higher)
+            // Standard StoreAdmin (or higher) keeps the standard layout
             const navOverview = document.getElementById('nav-overview');
             const navInventory = document.getElementById('nav-inventory');
             const navAnalytics = document.getElementById('nav-analytics');
