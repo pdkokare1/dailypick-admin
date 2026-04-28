@@ -164,6 +164,41 @@ async function archiveProduct(id, event) {
     }
 }
 
+// --- NEW: PHASE 4 CATALOG APPROVAL (SUPERADMIN) ---
+async function approveMasterProduct(masterProductId) {
+    if (!confirm("Approve this product for the Global Gamut Catalog?")) return;
+    const idempotencyKey = 'APPROVE-' + Date.now();
+    try {
+        const res = await window.adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/master-catalog/${masterProductId}/approve`, {
+            method: 'PUT',
+            headers: { 'Idempotency-Key': idempotencyKey }
+        });
+        const result = await res.json();
+        if (result.success) {
+            if(typeof showToast === 'function') showToast("Product Approved! Now available to all stores.");
+        } else {
+            if(typeof showToast === 'function') showToast(result.message || 'Error approving.');
+        }
+    } catch(e) {
+        console.error(e);
+    }
+}
+
+// --- NEW: PHASE 4 ENTERPRISE MANUAL SYNC ---
+async function triggerEnterpriseSync() {
+    const idempotencyKey = 'SYNC-' + Date.now();
+    try {
+        const res = await window.adminFetchWithAuth(`${CONFIG.BACKEND_URL}/api/enterprise/inventory/sync`, {
+            method: 'POST',
+            headers: { 'Idempotency-Key': idempotencyKey }
+        });
+        const result = await res.json();
+        if(typeof showToast === 'function') showToast(result.message || "Sync command sent.");
+    } catch(e) {
+        console.error(e);
+    }
+}
+
 // BRIDGE: Exposing all API repository functions to global scope
 window.populateDropdowns = populateDropdowns;
 window.fetchDropdownData = fetchDropdownData;
@@ -176,3 +211,5 @@ window.exportOrdersCSV = exportOrdersCSV;
 window.exportCustomersCSV = exportCustomersCSV;
 window.exportInventoryCSV = exportInventoryCSV;
 window.archiveProduct = archiveProduct;
+window.approveMasterProduct = approveMasterProduct;
+window.triggerEnterpriseSync = triggerEnterpriseSync;
