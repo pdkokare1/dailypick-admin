@@ -227,6 +227,15 @@ const DailyPickApp = (function() {
                     if (typeof fetchCategories === 'function') fetchCategories(); 
                 }
                 else if (window.currentUser.role === 'Enterprise') {
+                    // 5. Strict RBAC & Conditional UI for Enterprise
+                    const navPos = document.getElementById('nav-pos');
+                    const navCust = document.getElementById('nav-customers');
+                    const shiftBtn = document.querySelector('button[onclick="openShiftModal()"]');
+                    
+                    if (navPos) navPos.classList.add('hidden');
+                    if (navCust) navCust.classList.add('hidden');
+                    if (shiftBtn) shiftBtn.classList.add('hidden');
+
                     if (typeof renderOverview === 'function') renderOverview(); 
                 }
             };
