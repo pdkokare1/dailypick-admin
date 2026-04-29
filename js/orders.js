@@ -480,7 +480,6 @@ async function submitPartialRefund() {
 // ============================================================================
 // --- NEW: PHASE 4 FLEET RIDER APPLICATION ROUTING ---
 // ============================================================================
-// Intercept the orders feed to ensure Delivery Agents only see Platform-managed orders
 const originalFetchOrdersPhase4 = fetchOrders;
 window.fetchOrders = async function() {
     await originalFetchOrdersPhase4();
@@ -523,6 +522,49 @@ window.fetchOrders = async function() {
         
         updateDashboard(document.getElementById('load-more-orders-btn')?.classList.contains('hidden'));
         if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+};
+
+// ============================================================================
+// --- NEW: PHASE 7 GEOSPATIAL FLEET ROUTING ALGORITHM ---
+// ============================================================================
+const originalFetchOrdersPhase7 = window.fetchOrders;
+window.fetchOrders = async function() {
+    await originalFetchOrdersPhase7();
+
+    // If the user is a rider, optimize their route locally based on GPS
+    if (window.currentUser && window.currentUser.role === 'Delivery_Agent') {
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                const riderLat = position.coords.latitude;
+                const riderLng = position.coords.longitude;
+                
+                // Sort active platform orders by Manhattan distance proxy
+                currentOrders.sort((a, b) => {
+                    // Fallback to Pune/Pimpri-Chinchwad operational center if exact coord missing
+                    const aLat = a.location ? a.location.lat : 18.6298; 
+                    const aLng = a.location ? a.location.lng : 73.7997;
+                    const bLat = b.location ? b.location.lat : 18.6298;
+                    const bLng = b.location ? b.location.lng : 73.7997;
+                    
+                    const distA = Math.abs(aLat - riderLat) + Math.abs(aLng - riderLng);
+                    const distB = Math.abs(bLat - riderLat) + Math.abs(bLng - riderLng);
+                    
+                    return distA - distB; // Shortest distance first
+                });
+                
+                // Refresh UI with the optimized array
+                updateDashboard(document.getElementById('load-more-orders-btn')?.classList.contains('hidden'));
+                
+                // Add a visual indicator to the UI that route is optimized
+                const header = document.querySelector('.orders-section h2');
+                if (header && !header.innerHTML.includes('Optimized')) {
+                    header.innerHTML += ' <span style="background:#10b981; color:white; font-size:10px; padding:2px 6px; border-radius:4px; vertical-align:middle; margin-left:8px;">Route Optimized 📍</span>';
+                }
+            }, (err) => {
+                console.warn("Rider location access denied. Falling back to chronological sorting.");
+            });
+        }
     }
 };
 
