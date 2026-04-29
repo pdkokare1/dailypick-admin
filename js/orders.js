@@ -568,4 +568,98 @@ window.fetchOrders = async function() {
     }
 };
 
+// ============================================================================
+// --- NEW: PHASE 9 AUTOMATED B2B TAX INVOICE GENERATOR & PROOF OF DELIVERY ---
+// ============================================================================
+window.generateB2BTaxInvoicePDF = function(orderId) {
+    const order = currentOrders.find(o => o._id === orderId);
+    if (!order) return;
+    
+    if (typeof showToast === 'function') showToast("Generating B2B Tax Invoice PDF...");
+    
+    // Using jsPDF which is already imported in index.html
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    doc.setFontSize(22);
+    doc.text("B2B TAX INVOICE", 14, 20);
+    
+    doc.setFontSize(10);
+    doc.text(`Invoice Number: ${order.orderNumber || order._id}`, 14, 30);
+    doc.text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`, 14, 35);
+    doc.text(`Billed To: ${order.customerName} (${order.customerPhone})`, 14, 40);
+    
+    let yPos = 50;
+    
+    const tableData = order.items.map(item => [
+        item.name || 'Wholesale Item',
+        item.qty,
+        `Rs ${item.price.toFixed(2)}`,
+        `Rs ${(item.price * item.qty).toFixed(2)}`
+    ]);
+    
+    doc.autoTable({
+        startY: yPos,
+        head: [['Item Description', 'Qty', 'Unit Price', 'Total']],
+        body: tableData,
+    });
+    
+    yPos = doc.lastAutoTable.finalY + 10;
+    
+    if (order.taxBreakdown) {
+        doc.setFontSize(11);
+        doc.text(`Subtotal: Rs ${(order.totalAmount - order.taxBreakdown.totalTaxRs).toFixed(2)}`, 14, yPos);
+        doc.text(`CGST: Rs ${order.taxBreakdown.cgstRs.toFixed(2)}`, 14, yPos + 6);
+        doc.text(`SGST: Rs ${order.taxBreakdown.sgstRs.toFixed(2)}`, 14, yPos + 12);
+        doc.setFontSize(14);
+        doc.text(`Grand Total: Rs ${order.totalAmount.toFixed(2)}`, 14, yPos + 22);
+    } else {
+        doc.setFontSize(14);
+        doc.text(`Grand Total: Rs ${order.totalAmount.toFixed(2)}`, 14, yPos);
+    }
+    
+    doc.setFontSize(8);
+    doc.text("This is a computer generated invoice and does not require a signature.", 14, 280);
+    
+    doc.save(`B2B_Invoice_${order.orderNumber || order._id}.pdf`);
+};
+
+// Intercept updateOrderStatus to inject OTP requirement for riders BEFORE database commit
+const originalUpdateOrderStatusPhase9 = window.updateOrderStatus;
+window.updateOrderStatus = async function(orderId, newStatus, event) {
+    if (newStatus === 'Delivered' && window.currentUser && window.currentUser.role === 'Delivery_Agent') {
+        const otp = prompt("PROOF OF DELIVERY: Please enter the 4-digit PIN provided by the customer:");
+        if (!otp) {
+            if (typeof showToast === 'function') showToast("Delivery cancelled. OTP is mandatory.");
+            return;
+        }
+        
+        // Temporarily hijack the adminFetch logic to inject the OTP into the PUT body safely
+        const originalFetch = window.adminFetchWithAuth || window.fetch;
+        const tempFetch = async (url, options) => {
+            if (options && options.body && options.method === 'PUT') {
+                try {
+                    let bodyObj = JSON.parse(options.body);
+                    bodyObj.otp = otp;
+                    options.body = JSON.stringify(bodyObj);
+                } catch(e) {}
+            }
+            return await originalFetch(url, options);
+        };
+        
+        if (typeof window.adminFetchWithAuth !== 'undefined') window.adminFetchWithAuth = tempFetch;
+        else window.fetch = tempFetch;
+        
+        await originalUpdateOrderStatusPhase9(orderId, newStatus, event);
+        
+        // Restore normal fetch behavior
+        if (typeof window.adminFetchWithAuth !== 'undefined') window.adminFetchWithAuth = originalFetch;
+        else window.fetch = originalFetch;
+        
+        return;
+    }
+    
+    return await originalUpdateOrderStatusPhase9(orderId, newStatus, event);
+};
+
 fetchOrders = window.fetchOrders;
