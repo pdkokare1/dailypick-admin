@@ -497,4 +497,33 @@ window.fetchOrders = async function() {
     }
 };
 
+// ============================================================================
+// --- NEW: PHASE 5 DISTRIBUTOR FULFILLMENT DASHBOARD ---
+// ============================================================================
+const originalFetchOrdersPhase5 = window.fetchOrders;
+window.fetchOrders = async function() {
+    await originalFetchOrdersPhase5();
+
+    if (window.currentUser && window.currentUser.role === 'Distributor') {
+        // Distributors only see B2B Purchase Orders assigned to them
+        currentOrders = currentOrders.filter(o => 
+            o.distributorId === window.currentUser.distributorId || 
+            o.distributorId === window.currentUser.tenantId || 
+            o.status === 'DRAFT'
+        );
+
+        // Dynamically transform the B2C headers into B2B Dashboard titles
+        const sectionHeader = document.querySelector('.orders-section h2');
+        if (sectionHeader) {
+            sectionHeader.innerHTML = '<i data-lucide="truck" class="icon-sm"></i> Wholesale B2B Fulfillment';
+        }
+        
+        const revHeader = document.querySelector('.stats-grid h3');
+        if (revHeader) revHeader.textContent = "Accounts Receivable";
+        
+        updateDashboard(document.getElementById('load-more-orders-btn')?.classList.contains('hidden'));
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+};
+
 fetchOrders = window.fetchOrders;
