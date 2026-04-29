@@ -476,3 +476,25 @@ async function submitPartialRefund() {
         if (typeof showToast === 'function') showToast('Network error.');
     }
 }
+
+// ============================================================================
+// --- NEW: PHASE 4 FLEET RIDER APPLICATION ROUTING ---
+// ============================================================================
+// Intercept the orders feed to ensure Delivery Agents only see Platform-managed orders
+const originalFetchOrdersPhase4 = fetchOrders;
+window.fetchOrders = async function() {
+    await originalFetchOrdersPhase4();
+    
+    // Post-fetch filter ensuring enterprise orders are removed from rider views securely
+    if (window.currentUser && window.currentUser.role === 'Delivery_Agent') {
+        const originalCount = currentOrders.length;
+        currentOrders = currentOrders.filter(o => o.fulfillmentType !== 'STORE_DELIVERY'); 
+        
+        if (currentOrders.length !== originalCount) {
+            // Silently update the dashboard array after removing cross-vendor leakages
+            updateDashboard(document.getElementById('load-more-orders-btn')?.classList.contains('hidden'));
+        }
+    }
+};
+
+fetchOrders = window.fetchOrders;
