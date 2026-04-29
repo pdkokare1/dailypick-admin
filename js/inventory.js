@@ -223,3 +223,143 @@ if (invSentinel) {
     }, { rootMargin: '200px' });
     observer.observe(invSentinel);
 }
+
+// ============================================================================
+// --- NEW: PILLAR A - LOCAL SHOP GLOBAL CATALOG IMPORT ---
+// ============================================================================
+
+window.openGlobalCatalogImporter = function() {
+    const modal = document.getElementById('global-catalog-importer-modal');
+    if(modal) modal.classList.add('active');
+    const results = document.getElementById('global-catalog-search-results');
+    if (results) results.innerHTML = '<p class="empty-state">Search the Master Catalog to add items instantly.</p>';
+};
+
+window.closeGlobalCatalogImporter = function() {
+    const modal = document.getElementById('global-catalog-importer-modal');
+    if(modal) modal.classList.remove('active');
+};
+
+window.searchGlobalCatalog = async function(query) {
+    const resultsContainer = document.getElementById('global-catalog-search-results');
+    if (!query || query.length < 3) {
+        resultsContainer.innerHTML = '<p class="empty-state">Type at least 3 characters...</p>';
+        return;
+    }
+
+    resultsContainer.innerHTML = '<p class="empty-state">Searching Single Source of Truth...</p>';
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/b2b/catalog?search=${encodeURIComponent(query)}`);
+        const result = await res.json();
+
+        if (result.success && result.data && result.data.length > 0) {
+            let html = '';
+            result.data.forEach(p => {
+                html += `
+                    <div style="background: white; border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4 style="margin:0; font-size: 14px; color: var(--primary);">${p.name}</h4>
+                            <p style="margin:4px 0 0 0; font-size: 12px; color: var(--text-muted);">${p.category} | ${p.variants ? p.variants.length : 0} Variants</p>
+                        </div>
+                        <button class="primary-btn-small" onclick='importGlobalItem(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Import</button>
+                    </div>
+                `;
+            });
+            resultsContainer.innerHTML = html;
+        } else {
+            resultsContainer.innerHTML = '<p class="empty-state">No master products found. Consider submitting a request.</p>';
+        }
+    } catch (e) {
+        resultsContainer.innerHTML = '<p class="empty-state" style="color:red;">Error searching catalog.</p>';
+    }
+};
+
+window.importGlobalItem = function(masterProduct) {
+    closeGlobalCatalogImporter();
+    if (typeof openAddProductModal === 'function') {
+        openAddProductModal();
+        // Pre-fill the form with Master Product data securely without overriding existing state
+        setTimeout(() => {
+            const nameInput = document.getElementById('new-name');
+            const catInput = document.getElementById('new-category');
+            
+            if(nameInput) nameInput.value = masterProduct.name;
+            if(catInput) {
+                const optionExists = Array.from(catInput.options).some(opt => opt.value === masterProduct.category);
+                if (optionExists) catInput.value = masterProduct.category;
+            }
+            
+            // Show a visual lock banner indicating it's an imported product
+            const detailsSection = document.getElementById('custom-product-details');
+            if(detailsSection) {
+                detailsSection.insertAdjacentHTML('afterbegin', `
+                    <div style="background: #ECFDF5; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #A7F3D0;">
+                        <p style="font-size: 12px; color: #065F46; font-weight: 600;">✅ Locked to Master Catalog ID: ${masterProduct._id}</p>
+                    </div>
+                `);
+            }
+            
+            if (typeof showToast === 'function') showToast("Master product details loaded. Please set your local stock and price.");
+        }, 300);
+    }
+};
+
+// ============================================================================
+// --- NEW: PILLAR B - DISTRIBUTOR WHOLESALE SUBMISSION ---
+// ============================================================================
+
+window.openDistributorSubmissionModal = function() {
+    const modal = document.getElementById('distributor-submission-modal');
+    if(modal) modal.classList.add('active');
+};
+
+window.closeDistributorSubmissionModal = function() {
+    const modal = document.getElementById('distributor-submission-modal');
+    if(modal) modal.classList.remove('active');
+};
+
+window.submitWholesaleItem = async function(event) {
+    event.preventDefault();
+    const btn = document.getElementById('submit-wholesale-btn');
+    if (btn) { btn.innerText = 'Submitting...'; btn.disabled = true; }
+
+    const name = document.getElementById('wholesale-name').value;
+    const category = document.getElementById('wholesale-category').value;
+    const hsnCode = document.getElementById('wholesale-hsn').value;
+    const bulkPriceRs = document.getElementById('wholesale-bulk-price').value;
+    const minOrderQty = document.getElementById('wholesale-moq').value;
+
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/b2b/distributor-submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name,
+                category,
+                isActive: false,
+                variants: [{
+                    weightOrVolume: 'Wholesale Unit',
+                    hsnCode: hsnCode,
+                    price: bulkPriceRs,
+                    stock: 9999 // High threshold for wholesale dropship logic
+                }],
+                wholesaleMeta: { minOrderQty, bulkPriceRs }
+            })
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            if (typeof showToast === 'function') showToast("Item submitted to HQ for verification.");
+            closeDistributorSubmissionModal();
+            event.target.reset();
+        } else {
+            if (typeof showToast === 'function') showToast(result.message || "Submission failed.");
+        }
+    } catch (e) {
+        if (typeof showToast === 'function') showToast("Network error during submission.");
+    } finally {
+        if (btn) { btn.innerText = 'Submit to Global Catalog'; btn.disabled = false; }
+    }
+};
