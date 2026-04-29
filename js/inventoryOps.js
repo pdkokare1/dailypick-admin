@@ -1023,3 +1023,90 @@ async function fetchDistributorWholesale(distributorId) {
         console.warn("Wholesale fetch unavailable on this route currently.", e); 
     }
 }
+
+// ============================================================================
+// --- NEW: PHASE 3 B2B PROCUREMENT DASHBOARD ---
+// ============================================================================
+
+window.openB2BMarketplace = function() {
+    const modal = document.getElementById('b2b-marketplace-modal');
+    if (!modal) {
+        if (typeof showToast === 'function') showToast("B2B Marketplace UI initialized in background. Render container required.");
+        return;
+    }
+    modal.classList.add('active');
+    window.fetchB2BCatalog();
+};
+
+window.fetchB2BCatalog = async function() {
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const BACKEND_URL = typeof CONFIG !== 'undefined' ? CONFIG.BACKEND_URL : window.BACKEND_URL;
+        
+        const res = await fetchFn(`${BACKEND_URL}/api/b2b/catalog`);
+        const result = await res.json();
+        
+        const container = document.getElementById('b2b-catalog-container');
+        if (container && result.success && result.data) {
+            let html = '';
+            result.data.forEach(item => {
+                const wholesaleMeta = item.wholesaleMeta || { bulkPriceRs: item.variants[0]?.price || 0, minOrderQty: 10 };
+                html += `
+                    <div class="b2b-item-card" style="border: 1px solid #E2E8F0; padding: 16px; border-radius: 8px; margin-bottom: 12px; background: white;">
+                        <h4 style="margin: 0 0 8px 0; color: #0F172A;">${item.name}</h4>
+                        <p style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Category: ${item.category} | MOQ: ${wholesaleMeta.minOrderQty}</p>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 16px; font-weight: 800; color: #059669;">Rs ${wholesaleMeta.bulkPriceRs} / unit</span>
+                            <button class="primary-btn-small" onclick="draftB2BPurchaseOrder('${item._id}', '${item.variants[0]?._id}', ${wholesaleMeta.minOrderQty})">Create PO</button>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+    } catch (e) {
+        console.error("B2B Catalog Fetch Error", e);
+    }
+};
+
+window.draftB2BPurchaseOrder = async function(masterProductId, variantId, minQty) {
+    const qtyStr = prompt(`Enter Purchase Quantity (Minimum required: ${minQty}):`, minQty);
+    if (!qtyStr) return;
+    
+    const requestedQty = parseInt(qtyStr);
+    if (isNaN(requestedQty) || requestedQty < minQty) {
+        if (typeof showToast === 'function') showToast(`Quantity must be at least ${minQty}.`);
+        return;
+    }
+
+    const deliveryPincode = prompt("Enter your Shop's Pincode (Used to route your order to the nearest active distributor):", "400001");
+    if (!deliveryPincode) return;
+
+    if (typeof showToast === 'function') showToast("Routing Purchase Order...");
+
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const BACKEND_URL = typeof CONFIG !== 'undefined' ? CONFIG.BACKEND_URL : window.BACKEND_URL;
+        
+        const res = await fetchFn(`${BACKEND_URL}/api/enterprise/procurement/create-po`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null,
+                masterProductId,
+                variantId,
+                requestedQty,
+                deliveryPincode
+            })
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            alert(`Purchase Order Drafted Successfully!\n\nPO Number: ${result.data.poNumber}\nRouted to Distributor: ${result.data.distributorName}\nTotal Invoice Value: Rs ${result.data.totalValueRs}\n\nPlease proceed to the supplier ledger to settle this PO.`);
+        } else {
+            if (typeof showToast === 'function') showToast(result.message || "Failed to draft PO.");
+        }
+    } catch (e) {
+        if (typeof showToast === 'function') showToast("Network error creating PO.");
+    }
+};
