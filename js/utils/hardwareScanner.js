@@ -85,3 +85,83 @@ document.addEventListener('keydown', (e) => {
         }, 30);
     }
 });
+
+// ============================================================================
+// --- NEW: PHASE 13 HTML5 NATIVE POS CAMERA SCANNER ---
+// ============================================================================
+
+window.POSCameraScanner = (function() {
+    let videoElement = null;
+    let stream = null;
+    let scanInterval = null;
+    let onDetectCallback = null;
+
+    async function startScanner(videoContainerId, callback) {
+        onDetectCallback = callback;
+        
+        const container = document.getElementById(videoContainerId);
+        if (!container) return alert("Scanner UI container not found.");
+
+        videoElement = document.createElement('video');
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = 'cover';
+        videoElement.setAttribute('autoplay', '');
+        videoElement.setAttribute('playsinline', '');
+        
+        container.innerHTML = '';
+        container.appendChild(videoElement);
+
+        try {
+            // Request the rear-facing camera specifically for barcode scanning
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment" } 
+            });
+            videoElement.srcObject = stream;
+
+            // If the browser natively supports the modern BarcodeDetector API (Chrome/Android)
+            if ('BarcodeDetector' in window) {
+                const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'qr_code', 'upc_a'] });
+                
+                scanInterval = setInterval(async () => {
+                    if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                        try {
+                            const barcodes = await detector.detect(videoElement);
+                            if (barcodes.length > 0) {
+                                // Trigger callback and pause scanner briefly to prevent duplicate rings
+                                stopScanner();
+                                if (onDetectCallback) onDetectCallback(barcodes[0].rawValue);
+                            }
+                        } catch (e) {
+                            console.warn("Barcode detection error", e);
+                        }
+                    }
+                }, 300);
+            } else {
+                console.warn("Native BarcodeDetector API not supported in this browser. Fallback ZXing required.");
+                container.innerHTML = '<p style="color: #ef4444; padding: 20px; text-align: center;">Browser lacks native scanning API. Please use Bluetooth Scanner.</p>';
+                stopScanner();
+            }
+        } catch (err) {
+            console.error("Camera access denied or hardware error.", err);
+            container.innerHTML = '<p style="color: #ef4444; padding: 20px; text-align: center;">Camera Access Denied.</p>';
+        }
+    }
+
+    function stopScanner() {
+        if (scanInterval) clearInterval(scanInterval);
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        if (videoElement) {
+            videoElement.srcObject = null;
+            videoElement.remove();
+        }
+    }
+
+    // Expose public methods safely
+    return {
+        start: startScanner,
+        stop: stopScanner
+    };
+})();
