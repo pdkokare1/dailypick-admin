@@ -77,3 +77,62 @@ window.addEventListener('online', () => {
         syncOfflinePOS();
     }
 });
+
+// ============================================================================
+// --- NEW: TRUE OFFLINE-FIRST INDEXEDDB IMPLEMENTATION ---
+// ============================================================================
+const DB_NAME = 'DailyPickAdminDB';
+const STORE_NAME = 'offline_queue';
+
+function initIDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+window.getAllFromIDB = async function() {
+    try {
+        const db = await initIDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) { return []; }
+};
+
+window.deleteFromIDB = async function(id) {
+    try {
+        const db = await initIDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.delete(id);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {}
+};
+
+window.addToOfflineQueue = async function(payload) {
+    try {
+        const db = await initIDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.add(payload);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject();
+        });
+    } catch (e) {}
+};
