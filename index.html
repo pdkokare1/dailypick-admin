@@ -397,6 +397,9 @@
                         <button class="secondary-btn-small" onclick="openAddDistributorModal()">+ Dist.</button>
                         <button class="primary-btn-small" onclick="openAddProductModal()">+ Add Item</button>
                         <button class="primary-btn-small" onclick="openRestockModal()"><i data-lucide="package-plus" class="icon-sm"></i> Receive Shipment</button>
+                        
+                        <button class="primary-btn-small" style="background:#0369A1;" onclick="openGlobalCatalogImporter()"><i data-lucide="globe" class="icon-sm"></i> Global Catalog</button>
+                        <button class="primary-btn-small" style="background:#B45309;" onclick="openDistributorSubmissionModal()"><i data-lucide="upload-cloud" class="icon-sm"></i> B2B Wholesale Submission</button>
                     </div>
                 </div>
 
@@ -1393,6 +1396,74 @@
         </div>
 
         <div id="toast-container"></div>
+
+        <div id="global-catalog-importer-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 360;">
+            <div class="form-card" style="max-width: 550px; text-align: center;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <h2 style="color: var(--primary);">Global Catalog Search</h2>
+                        <span style="background:#E0F2FE; color:#0369A1; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Single Source of Truth</span>
+                    </div>
+                    <button aria-label="Close Modal" class="close-btn" onclick="closeGlobalCatalogImporter()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                
+                <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px; text-align: left; line-height: 1.6;">
+                    Search the global master database to instantly import verified product details, standard imagery, and tax codes into your local shop's inventory.
+                </p>
+                
+                <div class="input-group" style="display: flex; gap: 12px; margin-bottom: 24px;">
+                    <input type="text" id="global-search-input" placeholder="Type product name, brand, or barcode..." style="flex: 1; font-weight: 600; padding: 14px; border-radius: 8px; border: 1px solid #CBD5E1;" oninput="searchGlobalCatalog(this.value)">
+                    <button class="primary-btn" style="width: auto; padding: 0 24px;"><i data-lucide="search" class="icon-sm"></i></button>
+                </div>
+
+                <div id="global-catalog-search-results" style="max-height: 300px; overflow-y: auto; text-align: left; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px;">
+                    <p class="empty-state">Search the Master Catalog to add items instantly.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="distributor-submission-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 360;">
+            <div class="form-card" style="max-width: 550px;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2>Submit Wholesale Item</h2>
+                    <button aria-label="Close Modal" class="close-btn" onclick="closeDistributorSubmissionModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px; font-weight: 600;">Submitted items will be reviewed by DailyPick HQ before appearing in the Global Master Catalog for local shops to purchase.</p>
+                
+                <form id="distributor-wholesale-form" onsubmit="submitWholesaleItem(event)">
+                    <div class="input-group">
+                        <label>Master Product Name</label>
+                        <input type="text" id="wholesale-name" required placeholder="e.g. Bulk Basmati Rice (25kg)">
+                    </div>
+                    <div class="input-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <label>Category</label>
+                            <select id="wholesale-category" required>
+                                <option value="Groceries">Groceries</option>
+                                <option value="Beverages">Beverages</option>
+                                <option value="Electronics">Electronics</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Tax HSN Code</label>
+                            <input type="text" id="wholesale-hsn" required placeholder="e.g. 100630">
+                        </div>
+                    </div>
+                    <div class="input-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <label>Bulk Price (Rs)</label>
+                            <input type="number" id="wholesale-bulk-price" required placeholder="0.00" step="0.01">
+                        </div>
+                        <div>
+                            <label>Minimum Order Qty (MOQ)</label>
+                            <input type="number" id="wholesale-moq" required placeholder="10" min="1">
+                        </div>
+                    </div>
+                    <button type="submit" id="submit-wholesale-btn" class="primary-btn" style="margin-top: 16px;">Submit to Global Catalog</button>
+                </form>
+            </div>
+        </div>
 
         <nav class="bottom-nav">
             <button aria-label="Overview View" id="nav-overview" class="nav-item active" onclick="switchView('overview')">
