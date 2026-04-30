@@ -200,6 +200,9 @@
                             <button class="secondary-btn-small admin-only" onclick="openDeveloperPortal()"><i data-lucide="terminal" class="icon-sm"></i> API</button>
                             <button class="secondary-btn-small admin-only" onclick="openSecurityAuditModal()"><i data-lucide="shield" class="icon-sm"></i> Audits</button>
                             <button class="secondary-btn-small admin-only" onclick="openSettingsModal()"><i data-lucide="settings" class="icon-sm"></i> Settings</button>
+                            
+                            <!-- B2B Procurement Bridge Anchor -->
+                            <button class="secondary-btn-small admin-only" onclick="openB2BMarketplace()"><i data-lucide="shopping-cart" class="icon-sm"></i> Wholesale Order</button>
                         </div>
                     </div>
                 </div>
@@ -398,7 +401,7 @@
                         <button class="primary-btn-small" onclick="openAddProductModal()">+ Add Item</button>
                         <button class="primary-btn-small" onclick="openRestockModal()"><i data-lucide="package-plus" class="icon-sm"></i> Receive Shipment</button>
                         
-                        <button class="primary-btn-small" style="background:#0369A1;" onclick="openGlobalCatalogImporter()"><i data-lucide="globe" class="icon-sm"></i> Global Catalog</button>
+                        <button class="primary-btn-small" style="background:#0369A1; display:block !important;" onclick="openGlobalCatalogImporter()"><i data-lucide="globe" class="icon-sm"></i> Global Catalog</button>
                         <button class="primary-btn-small" style="background:#B45309;" onclick="openDistributorSubmissionModal()"><i data-lucide="upload-cloud" class="icon-sm"></i> B2B Wholesale Submission</button>
                     </div>
                 </div>
@@ -1011,7 +1014,7 @@
                     <button aria-label="Close Modal" class="close-btn" onclick="closeAddProductModal()" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
                 </div>
 
-                <div id="catalog-search-wrapper" style="background: #F8FAFC; padding: 16px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #E2E8F0; display: none;">
+                <div id="catalog-search-wrapper" style="background: #F8FAFC; padding: 16px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #E2E8F0; display: block !important;">
                     <h3 style="font-size: 14px; font-weight: 800; color: var(--primary); margin-bottom: 12px;">Step 1: Search Global Catalog</h3>
                     <div class="input-group" style="margin-bottom: 12px; display: flex; gap: 8px;">
                         <input type="text" id="catalog-search-input" placeholder="Type product name, brand, or scan barcode..." style="flex: 1; font-weight: 600; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" oninput="searchMasterCatalog(this.value)">
@@ -1462,6 +1465,29 @@
                     </div>
                     <button type="submit" id="submit-wholesale-btn" class="primary-btn" style="margin-top: 16px;">Submit to Global Catalog</button>
                 </form>
+            </div>
+        </div>
+
+        <!-- ============================================================================ -->
+        <!-- NEW: PHASE 3 B2B PROCUREMENT MODAL (THE WHOLESALE UI)                        -->
+        <!-- ============================================================================ -->
+        <div id="b2b-marketplace-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 360;">
+            <div class="form-card" style="max-width: 600px; text-align: center; height: 80vh; display: flex; flex-direction: column;">
+                <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <h2 style="color: var(--primary);">B2B Marketplace</h2>
+                        <span style="background:#fef3c7; color:#b45309; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800;">Wholesale Orders</span>
+                    </div>
+                    <button aria-label="Close Modal" class="close-btn" onclick="document.getElementById('b2b-marketplace-modal').classList.remove('active')" style="background:none; border:none; font-size:22px; cursor:pointer;"><i data-lucide="x" class="icon-md"></i></button>
+                </div>
+                
+                <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px; text-align: left;">
+                    Browse verified wholesale items submitted by regional distributors. Creating a PO will automatically route it to the nearest supplier.
+                </p>
+
+                <div id="b2b-catalog-container" style="flex: 1; overflow-y: auto; text-align: left; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px;">
+                    <p class="empty-state">Loading B2B Catalog...</p>
+                </div>
             </div>
         </div>
 
