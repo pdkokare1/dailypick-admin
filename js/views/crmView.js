@@ -145,6 +145,11 @@ window.openDeveloperPortal = async function() {
     
     modal.classList.add('active');
     
+    // Check DLQ health immediately
+    if (typeof window.fetchFailedWebhooks === 'function') {
+        window.fetchFailedWebhooks();
+    }
+    
     try {
         // Automatically fetch the current store's existing integration details
         const res = await window.storeFetchWithAuth(`${window.BACKEND_URL || 'https://dailypick-backend-production-05d6.up.railway.app'}/api/stores/my-store`);
@@ -224,5 +229,146 @@ window.savePartnerWebhook = async function() {
     } finally {
         btn.innerText = ogText;
         btn.disabled = false;
+    }
+};
+
+// ============================================================================
+// --- NEW: PHASE 5 DEAD LETTER QUEUE (DLQ) RETRY ENGINE ---
+// ============================================================================
+
+window.fetchFailedWebhooks = async function() {
+    const container = document.getElementById('dlq-logs-container');
+    if (!container) return;
+    container.innerHTML = '<p class="empty-state">Analyzing logs...</p>';
+    try {
+        const res = await window.storeFetchWithAuth(`${window.BACKEND_URL || 'https://dailypick-backend-production-05d6.up.railway.app'}/api/enterprise/webhooks/failed`);
+        const result = await res.json();
+        
+        if (result.success && result.data && result.data.length > 0) {
+            let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+            result.data.forEach(log => {
+                html += `
+                    <div style="background: #FEF2F2; border: 1px solid #FCA5A5; padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <p style="margin: 0; font-size: 12px; font-weight: 800; color: #7F1D1D;">Error: ${log.error}</p>
+                            <p style="margin: 4px 0 0 0; font-size: 11px; color: #991B1B;">Endpoint: ${log.webhookUrl}</p>
+                        </div>
+                        <button class="primary-btn-small" style="background: #DC2626;" onclick="retryWebhook('${log._id}', this)">Retry</button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<p class="empty-state" style="color: #10B981; margin:0;">✅ System Healthy. No failed webhooks detected.</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p class="empty-state" style="color: #DC2626; margin:0;">Failed to load DLQ status.</p>';
+    }
+};
+
+window.retryWebhook = async function(id, btn) {
+    const ogText = btn.innerText;
+    btn.innerText = 'Retrying...';
+    btn.disabled = true;
+    try {
+        const res = await window.storeFetchWithAuth(`${window.BACKEND_URL || 'https://dailypick-backend-production-05d6.up.railway.app'}/api/enterprise/webhooks/retry/${id}`, { method: 'POST' });
+        const result = await res.json();
+        if (result.success) {
+            if(typeof window.showToast === 'function') window.showToast("Webhook retry successful! 🚀");
+            window.fetchFailedWebhooks(); // Refresh list immediately
+        } else {
+            if(typeof window.showToast === 'function') window.showToast("Retry failed: " + result.message);
+            btn.innerText = 'Failed';
+        }
+    } catch(e) {
+        if(typeof window.showToast === 'function') window.showToast("Network error during retry.");
+        btn.innerText = 'Retry';
+        btn.disabled = false;
+    }
+};
+
+// ============================================================================
+// --- NEW: PHASE 5 B2B WHOLESALE PROCUREMENT ENGINE ---
+// ============================================================================
+
+window.openB2BMarketplace = function() {
+    const modal = document.getElementById('b2b-marketplace-modal');
+    if (modal) {
+        modal.classList.add('active');
+        window.fetchWholesaleCatalog();
+    }
+};
+
+window.fetchWholesaleCatalog = async function() {
+    const container = document.getElementById('b2b-catalog-container');
+    if (!container) return;
+    container.innerHTML = '<p class="empty-state">Loading Wholesale Catalog...</p>';
+    try {
+        // Fetch the master catalog
+        const res = await window.storeFetchWithAuth(`${window.BACKEND_URL || 'https://dailypick-backend-production-05d6.up.railway.app'}/api/enterprise/catalog`);
+        const result = await res.json();
+        
+        if (result.success && result.data && result.data.length > 0) {
+            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px;">';
+            result.data.forEach(item => {
+                const variant = item.variants && item.variants[0] ? item.variants[0] : null;
+                if(!variant) return;
+                
+                html += `
+                    <div style="background: white; border: 1px solid #E2E8F0; padding: 16px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 800; color: var(--text-main);">${item.name}</h4>
+                        <p style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-muted);">SKU: ${variant.sku}</p>
+                        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                            <input type="number" id="b2b-qty-${item._id}" placeholder="Qty" min="1" value="10" style="width: 80px; padding: 8px; border-radius: 6px; border: 1px solid #CBD5E1; font-weight: 700;">
+                            <input type="text" id="b2b-pincode-${item._id}" placeholder="Pincode" value="411033" style="width: 100px; padding: 8px; border-radius: 6px; border: 1px solid #CBD5E1; font-weight: 700;">
+                        </div>
+                        <button class="primary-btn-small" style="width: 100%; background: #0EA5E9;" onclick="submitB2BOrder('${item._id}', '${variant._id}')">Route PO to Supplier</button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<p class="empty-state">No wholesale items available.</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p class="empty-state" style="color: #DC2626;">Failed to load catalog.</p>';
+    }
+};
+
+window.submitB2BOrder = async function(masterProductId, variantId) {
+    const qtyInput = document.getElementById(`b2b-qty-${masterProductId}`);
+    const pincodeInput = document.getElementById(`b2b-pincode-${masterProductId}`);
+    const qty = qtyInput ? qtyInput.value : null;
+    const pincode = pincodeInput ? pincodeInput.value : null;
+    
+    if(!qty || !pincode) {
+        if(typeof window.showToast === 'function') window.showToast("Please enter Qty and Pincode.");
+        return;
+    }
+
+    try {
+        // The endpoint we built in Phase 1
+        const res = await window.storeFetchWithAuth(`${window.BACKEND_URL || 'https://dailypick-backend-production-05d6.up.railway.app'}/api/enterprise/procurement/create-po`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                storeId: 'DUMMY_STORE_IF_NOT_IN_TOKEN', // Fallback, backend relies on JWT tenantId first
+                masterProductId,
+                variantId,
+                requestedQty: Number(qty),
+                deliveryPincode: pincode
+            })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            if(typeof window.showToast === 'function') window.showToast(`🎉 PO Drafted: Route found via ${result.data.distributorName} at Rs ${result.data.unitPriceRs}/unit.`);
+        } else {
+            if(typeof window.showToast === 'function') window.showToast(result.message || "Failed to draft Purchase Order.");
+        }
+    } catch(e) {
+        if(typeof window.showToast === 'function') window.showToast("Network error while submitting PO.");
     }
 };
