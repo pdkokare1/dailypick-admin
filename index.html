@@ -201,7 +201,6 @@
                             <button class="secondary-btn-small admin-only" onclick="openSecurityAuditModal()"><i data-lucide="shield" class="icon-sm"></i> Audits</button>
                             <button class="secondary-btn-small admin-only" onclick="openSettingsModal()"><i data-lucide="settings" class="icon-sm"></i> Settings</button>
                             
-                            <!-- B2B Procurement Bridge Anchor -->
                             <button class="secondary-btn-small admin-only" onclick="openB2BMarketplace()"><i data-lucide="shopping-cart" class="icon-sm"></i> Wholesale Order</button>
                         </div>
                     </div>
@@ -538,7 +537,6 @@
                     <button class="secondary-btn-small" onclick="exportCustomersCSV()"><i data-lucide="users" class="icon-sm"></i> Export Customers</button>
                     <button class="secondary-btn-small" onclick="exportFinancialsCSV('Daily')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Daily Rev</button>
                     
-                    <!-- --- NEW: PHASE 18 GSTR TAX COMPLIANCE EXPORT --- -->
                     <button class="secondary-btn-small" onclick="exportGSTR()"><i data-lucide="file-spreadsheet" class="icon-sm"></i> Export GSTR-1 / 3B</button>
                 </div>
             </main>
@@ -860,7 +858,8 @@
             </div>
         </div>
 
-        <div id="scanner-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 200;">
+        <!-- RE-USED SCANNER MODAL FOR PACK-BY-SCAN -->
+        <div id="scanner-modal" class="modal-overlay hidden-modal" style="align-items: center; justify-content: center; z-index: 500;">
             <div class="form-card" style="text-align: center; max-width: 500px;">
                 <div class="form-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                     <h2>Scan Barcode</h2>
@@ -972,7 +971,8 @@
                 <div class="packing-list-container">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
                         <h3 style="font-weight: 800; margin: 0;">Packing List</h3>
-                        <button class="secondary-btn-small" onclick="showToast('Pack-by-scan scanner integrated here in phase 2')"><i data-lucide="scan" class="icon-sm"></i> Scan to Pack</button>
+                        <!-- --- CHANGED: PHASE 21 PACK-BY-SCAN BUTTON --- -->
+                        <button class="secondary-btn-small" onclick="openPackByScan()"><i data-lucide="scan" class="icon-sm"></i> Scan to Pack</button>
                     </div>
                     <ul id="modal-packing-list" class="packing-list" style="list-style: none;"></ul>
                 </div>
@@ -1577,7 +1577,7 @@
 
     <script>
         // ============================================================================
-        // --- NEW: PHASE 18 GSTR TAX COMPLIANCE EXPORT ---
+        // --- PHASE 18 GSTR TAX COMPLIANCE EXPORT ---
         // ============================================================================
         window.exportGSTR = async function() {
             try {
@@ -1598,6 +1598,70 @@
             } catch(e) {
                 if(typeof window.showToast === 'function') window.showToast('Failed to export GSTR report. Check network.');
             }
+        };
+
+        // ============================================================================
+        // --- NEW: PHASE 21 PACK-BY-SCAN UI ENGINE ---
+        // ============================================================================
+        let packScanner = null;
+
+        window.openPackByScan = function() {
+            const list = document.getElementById('modal-packing-list');
+            if (!list || list.children.length === 0) return alert("No items to pack.");
+
+            const scannerModal = document.getElementById('scanner-modal');
+            scannerModal.classList.add('active');
+
+            if (!packScanner) {
+                packScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, /* verbose= */ false);
+            }
+
+            packScanner.render((decodedText) => {
+                handlePackScan(decodedText);
+            }, (error) => {
+                // Suppress normal scanning noise
+            });
+        };
+
+        window.handlePackScan = function(barcode) {
+            // Find the item in the packing list visually
+            const listItems = document.querySelectorAll('#modal-packing-list li');
+            let found = false;
+
+            listItems.forEach(li => {
+                // Assuming the barcode or SKU is somewhere in the dataset or innerText
+                if (li.innerText.includes(barcode) && !li.style.textDecoration.includes('line-through')) {
+                    li.style.textDecoration = 'line-through';
+                    li.style.color = '#10b981';
+                    li.innerHTML += ' ✅';
+                    found = true;
+                }
+            });
+
+            if (found) {
+                if(typeof window.showToast === 'function') window.showToast('Item verified and packed! ✅');
+                // Check if all are packed
+                const allPacked = Array.from(listItems).every(li => li.style.textDecoration.includes('line-through'));
+                if (allPacked) {
+                    setTimeout(() => {
+                        alert("🎉 All items packed securely! Ready for dispatch.");
+                        document.getElementById('scanner-modal').classList.remove('active');
+                        packScanner.clear();
+                    }, 500);
+                }
+            } else {
+                if(typeof window.showToast === 'function') window.showToast('⚠️ Scanning error: Item not in order or already packed!');
+            }
+        };
+
+        // Override the closeScannerModal specifically if packScanner is running
+        const originalCloseScanner = window.closeScannerModal;
+        window.closeScannerModal = function() {
+            if (packScanner) {
+                packScanner.clear().catch(e => console.error(e));
+            }
+            if (originalCloseScanner) originalCloseScanner();
+            else document.getElementById('scanner-modal').classList.remove('active');
         };
     </script>
 </body>
