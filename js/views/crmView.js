@@ -134,3 +134,95 @@ window.renderKhataRemindersList = function(debtors) {
     });
     container.innerHTML = htmlStr;
 };
+
+// ============================================================================
+// --- NEW: PHASE 4 ENTERPRISE DEVELOPER PORTAL LOGIC ---
+// ============================================================================
+
+window.openDeveloperPortal = async function() {
+    const modal = document.getElementById('developer-portal-modal');
+    if (!modal) return;
+    
+    modal.classList.add('active');
+    
+    try {
+        // Automatically fetch the current store's existing integration details
+        const res = await window.storeFetchWithAuth(`${window.BACKEND_URL || 'https://dailypick-backend-production-05d6.up.railway.app'}/api/stores/my-store`);
+        const result = await res.json();
+        
+        if (result.success && result.data && result.data.apiIntegration) {
+            const apiBox = document.getElementById('dev-api-key-box');
+            const webhookBox = document.getElementById('dev-webhook-url');
+            
+            if (apiBox && result.data.apiIntegration.apiSecretKey) {
+                apiBox.value = result.data.apiIntegration.apiSecretKey;
+            }
+            if (webhookBox && result.data.apiIntegration.webhookUrl) {
+                webhookBox.value = result.data.apiIntegration.webhookUrl;
+            }
+        }
+    } catch (e) {
+        console.warn('Could not fetch existing enterprise integrations.', e);
+    }
+};
+
+window.generatePartnerKey = async function() {
+    if(!confirm("⚠️ Warning: Generating a new key will instantly invalidate your old key. All active ERP integrations will disconnect until updated. Continue?")) return;
+    
+    const btn = document.getElementById('generate-key-btn');
+    const ogText = btn.innerText;
+    btn.innerText = 'Generating...';
+    btn.disabled = true;
+    
+    try {
+        const res = await window.storeFetchWithAuth(`${window.BACKEND_URL || 'https://dailypick-backend-production-05d6.up.railway.app'}/api/enterprise/generate-key`, { method: 'POST' });
+        const result = await res.json();
+        
+        if (result.success) {
+            document.getElementById('dev-api-key-box').value = result.apiKey;
+            if(typeof window.showToast === 'function') window.showToast("New Enterprise API Key generated successfully! 🎉");
+        } else {
+            if(typeof window.showToast === 'function') window.showToast(result.message || "Failed to generate API key.");
+        }
+    } catch(e) {
+        if(typeof window.showToast === 'function') window.showToast("Network error. Please try again.");
+    } finally {
+        btn.innerText = ogText;
+        btn.disabled = false;
+    }
+};
+
+window.savePartnerWebhook = async function() {
+    const urlInput = document.getElementById('dev-webhook-url');
+    const btn = document.getElementById('save-webhook-btn');
+    const url = urlInput ? urlInput.value.trim() : '';
+    
+    if(!url || !url.startsWith('http')) {
+        if(typeof window.showToast === 'function') window.showToast("Please enter a valid HTTP/HTTPS URL.");
+        return;
+    }
+    
+    const ogText = btn.innerText;
+    btn.innerText = 'Saving...';
+    btn.disabled = true;
+    
+    try {
+        const res = await window.storeFetchWithAuth(`${window.BACKEND_URL || 'https://dailypick-backend-production-05d6.up.railway.app'}/api/enterprise/webhook`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ webhookUrl: url })
+        });
+        const result = await res.json();
+        
+        if(result.success) {
+            if(typeof window.showToast === 'function') window.showToast("Fulfillment Webhook URL saved securely! 🚀");
+        } else {
+            if(typeof window.showToast === 'function') window.showToast(result.message || "Failed to save Webhook URL.");
+        }
+    } catch(e) {
+        if(typeof window.showToast === 'function') window.showToast("Network error. Please try again.");
+    } finally {
+        btn.innerText = ogText;
+        btn.disabled = false;
+    }
+};
