@@ -431,8 +431,6 @@ async function autoFillProduct() {
     }
 }
 
-// --- NEW: PHASE 2 SNAP & SYNC AI ---
-// Attach this to a file input in your Add Product modal via `<input type="file" onchange="snapAndSyncAI(this)">`
 window.snapAndSyncAI = async function(inputElement) {
     const file = inputElement.files[0];
     if (!file) return;
@@ -463,13 +461,11 @@ window.snapAndSyncAI = async function(inputElement) {
                 if (document.getElementById('new-name')) document.getElementById('new-name').value = result.data.name || '';
                 if (document.getElementById('new-tags')) document.getElementById('new-tags').value = result.data.searchTags || '';
                 
-                // Pre-fill variants table if possible
                 const weightInputs = document.querySelectorAll('.var-weight');
                 if (weightInputs.length > 0 && result.data.weightOrVolume) {
                     weightInputs[0].value = result.data.weightOrVolume;
                 }
                 
-                // Select Category
                 if (result.data.category) {
                     const catSelect = document.getElementById('new-category');
                     if (catSelect) {
@@ -482,7 +478,6 @@ window.snapAndSyncAI = async function(inputElement) {
                     }
                 }
 
-                // Select Brand
                 if (result.data.brand) {
                     const brandSelect = document.getElementById('new-brand');
                     if (brandSelect) {
@@ -1024,10 +1019,6 @@ async function fetchDistributorWholesale(distributorId) {
     }
 }
 
-// ============================================================================
-// --- NEW: PHASE 3 B2B PROCUREMENT DASHBOARD ---
-// ============================================================================
-
 window.openB2BMarketplace = function() {
     const modal = document.getElementById('b2b-marketplace-modal');
     if (!modal) {
@@ -1111,26 +1102,6 @@ window.draftB2BPurchaseOrder = async function(masterProductId, variantId, minQty
     }
 };
 
-// ============================================================================
-// --- NEW: PHASE 10 RETAILER CATALOG BRIDGE (BARCODE SCANNER HOOK) ---
-// ============================================================================
-window.startScannerForSku = function(buttonElement) {
-    const inputField = document.getElementById('catalog-search-input');
-    const statusText = document.getElementById('catalog-search-status');
-    if (!inputField || !statusText) return;
-    
-    // Instead of full hardware integration, we simulate a scan drop here
-    const barcodeStr = prompt("Simulated Hardware Scanner (Enter UPC/EAN Barcode):", "8901058862086");
-    if (barcodeStr) {
-        inputField.value = barcodeStr;
-        statusText.textContent = "Scanning Master Database...";
-        statusText.style.color = "#3b82f6";
-        
-        // Push the barcode straight to the API for 1-click discovery
-        fetchMasterProductByBarcode(barcodeStr);
-    }
-};
-
 window.fetchMasterProductByBarcode = async function(barcode) {
     const resultsContainer = document.getElementById('catalog-results-container');
     const statusText = document.getElementById('catalog-search-status');
@@ -1143,7 +1114,6 @@ window.fetchMasterProductByBarcode = async function(barcode) {
             statusText.textContent = "Not found in Global Catalog. You must create it manually.";
             statusText.style.color = "#ef4444";
             resultsContainer.innerHTML = '';
-            // Allows them to proceed with the normal "Add Local Details" form below
             return; 
         }
         
@@ -1166,5 +1136,49 @@ window.fetchMasterProductByBarcode = async function(barcode) {
     } catch (e) {
         statusText.textContent = "Network error reading barcode.";
         statusText.style.color = "#ef4444";
+    }
+};
+
+// ============================================================================
+// --- NEW: PHASE 15 NATIVE CAPACITOR HARDWARE BRIDGE (ADMIN SCANNER)             ---
+// ============================================================================
+window.startScannerForSku = async function(buttonElement) {
+    const inputField = document.getElementById('catalog-search-input');
+    const statusText = document.getElementById('catalog-search-status');
+    if (!inputField || !statusText) return;
+
+    // Check if running as a compiled iOS/Android App
+    if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+        try {
+            const { BarcodeScanner } = window.Capacitor.Plugins;
+            
+            // Native Hardware Camera Scan
+            const result = await BarcodeScanner.startScan();
+            
+            if (result.hasContent) {
+                const barcodeStr = result.content;
+                inputField.value = barcodeStr;
+                statusText.textContent = "Scanning Master Database...";
+                statusText.style.color = "#3b82f6";
+                
+                fetchMasterProductByBarcode(barcodeStr);
+            }
+        } catch(e) {
+            console.error("Native scanner failed, falling back to manual entry", e);
+            fallbackToManualScan();
+        }
+    } else {
+        // Fallback for Web Browser (Legacy simulated prompt)
+        fallbackToManualScan();
+    }
+
+    function fallbackToManualScan() {
+        const barcodeStr = prompt("Simulated Hardware Scanner (Enter UPC/EAN Barcode):", "8901058862086");
+        if (barcodeStr) {
+            inputField.value = barcodeStr;
+            statusText.textContent = "Scanning Master Database...";
+            statusText.style.color = "#3b82f6";
+            fetchMasterProductByBarcode(barcodeStr);
+        }
     }
 };
