@@ -1110,3 +1110,61 @@ window.draftB2BPurchaseOrder = async function(masterProductId, variantId, minQty
         if (typeof showToast === 'function') showToast("Network error creating PO.");
     }
 };
+
+// ============================================================================
+// --- NEW: PHASE 10 RETAILER CATALOG BRIDGE (BARCODE SCANNER HOOK) ---
+// ============================================================================
+window.startScannerForSku = function(buttonElement) {
+    const inputField = document.getElementById('catalog-search-input');
+    const statusText = document.getElementById('catalog-search-status');
+    if (!inputField || !statusText) return;
+    
+    // Instead of full hardware integration, we simulate a scan drop here
+    const barcodeStr = prompt("Simulated Hardware Scanner (Enter UPC/EAN Barcode):", "8901058862086");
+    if (barcodeStr) {
+        inputField.value = barcodeStr;
+        statusText.textContent = "Scanning Master Database...";
+        statusText.style.color = "#3b82f6";
+        
+        // Push the barcode straight to the API for 1-click discovery
+        fetchMasterProductByBarcode(barcodeStr);
+    }
+};
+
+window.fetchMasterProductByBarcode = async function(barcode) {
+    const resultsContainer = document.getElementById('catalog-results-container');
+    const statusText = document.getElementById('catalog-search-status');
+    
+    try {
+        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+        const res = await fetchFn(`${BACKEND_URL}/api/products/barcode/${barcode}`);
+        
+        if (res.status === 404) {
+            statusText.textContent = "Not found in Global Catalog. You must create it manually.";
+            statusText.style.color = "#ef4444";
+            resultsContainer.innerHTML = '';
+            // Allows them to proceed with the normal "Add Local Details" form below
+            return; 
+        }
+        
+        const result = await res.json();
+        if (result.success && result.data) {
+            statusText.textContent = "✅ Match Found in Master Catalog!";
+            statusText.style.color = "#10b981";
+            
+            const p = result.data;
+            resultsContainer.innerHTML = `
+                <div style="background: white; border: 2px solid #10b981; padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h4 style="margin:0; font-size: 14px; color: #020617;">${p.name}</h4>
+                        <p style="margin:4px 0 0 0; font-size: 12px; color: #64748b;">Verified GS1: ${barcode}</p>
+                    </div>
+                    <button class="primary-btn-small" style="background: #10b981;" onclick='importGlobalItem(${JSON.stringify(p).replace(/'/g, "&#39;")})'>1-Click Import</button>
+                </div>
+            `;
+        }
+    } catch (e) {
+        statusText.textContent = "Network error reading barcode.";
+        statusText.style.color = "#ef4444";
+    }
+};
