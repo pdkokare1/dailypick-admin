@@ -537,6 +537,9 @@
                     <button class="secondary-btn-small" onclick="exportOrdersCSV()"><i data-lucide="package" class="icon-sm"></i> Export Orders</button>
                     <button class="secondary-btn-small" onclick="exportCustomersCSV()"><i data-lucide="users" class="icon-sm"></i> Export Customers</button>
                     <button class="secondary-btn-small" onclick="exportFinancialsCSV('Daily')"><i data-lucide="bar-chart-2" class="icon-sm"></i> Daily Rev</button>
+                    
+                    <!-- --- NEW: PHASE 18 GSTR TAX COMPLIANCE EXPORT --- -->
+                    <button class="secondary-btn-small" onclick="exportGSTR()"><i data-lucide="file-spreadsheet" class="icon-sm"></i> Export GSTR-1 / 3B</button>
                 </div>
             </main>
         </article>
@@ -583,7 +586,6 @@
                     </p>
                 </div>
 
-                <!-- --- NEW: PHASE 4 ENTERPRISE WEBHOOK CONFIG --- -->
                 <div style="background: #F0FDF4; padding: 24px; border-radius: 12px; border: 1px solid #BBF7D0; text-align: left;">
                     <h4 style="font-size: 12px; color: #166534; margin-bottom: 8px; text-transform: uppercase; font-weight: 800;">Fulfillment Webhook URL</h4>
                     <p style="font-size: 12px; color: #15803D; margin-bottom: 16px;">Enter your internal ERP endpoint. We will push order details here instantly when a customer checks out.</p>
@@ -591,7 +593,6 @@
                     <button id="save-webhook-btn" class="primary-btn" style="width: 100%; background: #16A34A;" onclick="savePartnerWebhook()">Save Webhook URL</button>
                 </div>
 
-                <!-- --- NEW: PHASE 5 DEAD LETTER QUEUE (DLQ) UI --- -->
                 <div style="background: #FEF2F2; padding: 24px; border-radius: 12px; border: 1px solid #FECACA; text-align: left; margin-top: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h4 style="font-size: 12px; color: #991B1B; margin: 0; text-transform: uppercase; font-weight: 800;">Webhook Health & DLQ</h4>
@@ -1572,6 +1573,32 @@
 
     <script>
         lucide.createIcons();
+    </script>
+
+    <script>
+        // ============================================================================
+        // --- NEW: PHASE 18 GSTR TAX COMPLIANCE EXPORT ---
+        // ============================================================================
+        window.exportGSTR = async function() {
+            try {
+                if(typeof window.showToast === 'function') window.showToast('Generating GSTR Report... Please wait.');
+                const res = await window.storeFetchWithAuth(`${window.BACKEND_URL || 'https://dailypick-backend-production-05d6.up.railway.app'}/api/analytics/export-gstr`);
+                if (!res.ok) throw new Error('Export failed');
+                
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `GSTR_Report_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                if(typeof window.showToast === 'function') window.showToast('GSTR Report exported successfully.');
+            } catch(e) {
+                if(typeof window.showToast === 'function') window.showToast('Failed to export GSTR report. Check network.');
+            }
+        };
     </script>
 </body>
 </html>
