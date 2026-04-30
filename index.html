@@ -582,6 +582,14 @@
                         ⚠️ Warning: Generating a new key will instantly invalidate your old key. All active ERP integrations will disconnect until updated.
                     </p>
                 </div>
+
+                <!-- --- NEW: PHASE 4 ENTERPRISE WEBHOOK CONFIG --- -->
+                <div style="background: #F0FDF4; padding: 24px; border-radius: 12px; border: 1px solid #BBF7D0; text-align: left;">
+                    <h4 style="font-size: 12px; color: #166534; margin-bottom: 8px; text-transform: uppercase; font-weight: 800;">Fulfillment Webhook URL</h4>
+                    <p style="font-size: 12px; color: #15803D; margin-bottom: 16px;">Enter your internal ERP endpoint. We will push order details here instantly when a customer checks out.</p>
+                    <input type="url" id="dev-webhook-url" placeholder="https://api.your-store.com/webhooks/dailypick" style="width: 100%; padding: 16px; font-size: 14px; background: white; border: 1px solid #86EFAC; border-radius: 8px; margin-bottom: 16px; font-weight: 600; color: #14532D;">
+                    <button id="save-webhook-btn" class="primary-btn" style="width: 100%; background: #16A34A;" onclick="savePartnerWebhook()">Save Webhook URL</button>
+                </div>
             </div>
         </div>
 
