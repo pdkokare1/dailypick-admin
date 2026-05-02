@@ -309,7 +309,9 @@ window.renderOverview = async function() {
             }
         });
         
+        // ENTERPRISE OPTIMIZATION: DOM Fragment to eliminate rendering lag on lower-end tablets
         if (criticalTasks.length > 0) {
+            const feedFragment = document.createDocumentFragment();
             criticalTasks.sort((a,b) => a.type === 'error' ? -1 : 1).forEach(task => {
                 const card = document.createElement('div');
                 card.className = 'stat-card';
@@ -321,8 +323,9 @@ window.renderOverview = async function() {
                     <h4 style="color:${task.type === 'error' ? '#ef4444' : '#f59e0b'}; margin-bottom:4px;">${task.title}</h4>
                     <p style="font-size:12px;">${task.msg}</p>
                 `;
-                actionFeed.appendChild(card);
+                feedFragment.appendChild(card);
             });
+            actionFeed.appendChild(feedFragment);
         } else {
             actionFeed.innerHTML = '<p class="empty-state">✅ Your store is healthy. No critical actions required today.</p>';
         }
@@ -486,8 +489,9 @@ window.openEodReport = async function() {
     try {
         const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/expenses?dateStr=${todayStr}`);
         const result = await res.json();
-        if(result.success) {
-            totalExp = result.data.reduce((sum, ex) => sum + ex.amount, 0);
+        // ENTERPRISE FIX: Safe array checking and Number coercion to prevent reduce from throwing TypeErrors
+        if(result.success && Array.isArray(result.data)) {
+            totalExp = result.data.reduce((sum, ex) => sum + (Number(ex.amount) || 0), 0);
         }
     } catch(e) {
         console.error('Failed to fetch expenses for EOD');
