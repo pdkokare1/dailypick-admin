@@ -20,6 +20,9 @@ function getSkuMap() {
     return skuLookupCache;
 }
 
+// OPTIMIZATION: Modal locking flag to prevent stacked confirmations on rapid hardware scans
+let isAddProductConfirmOpen = false;
+
 function handlePosScan(sku) {
     const map = getSkuMap();
     const found = map.get(sku);
@@ -29,7 +32,14 @@ function handlePosScan(sku) {
         addToPosCart(found.product, found.variant);
     } else {
         if (typeof playBeep === 'function') playBeep();
+        
+        if (isAddProductConfirmOpen) return;
+        isAddProductConfirmOpen = true;
+        
         const addNow = confirm(`Barcode ${sku} is not in your inventory. Do you want to add it as a new product?`);
+        
+        isAddProductConfirmOpen = false;
+        
         if (addNow && typeof openAddProductModal === 'function') {
             openAddProductModal(sku); 
         } else if (addNow) {
