@@ -7,8 +7,16 @@
 const DB_NAME = 'DailyPickAdminDB';
 const STORE_NAME = 'offline_queue';
 
+// OPTIMIZATION: Persistent IDB Connection Pool
+let dbInstance = null;
+
 function initIDB() {
     return new Promise((resolve, reject) => {
+        // Return active connection if it exists to save CPU overhead
+        if (dbInstance) {
+            return resolve(dbInstance);
+        }
+
         const request = indexedDB.open(DB_NAME, 1);
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
@@ -16,7 +24,10 @@ function initIDB() {
                 db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
             }
         };
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+            dbInstance = request.result;
+            resolve(dbInstance);
+        };
         request.onerror = () => reject(request.error);
     });
 }
