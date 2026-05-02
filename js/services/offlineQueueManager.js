@@ -138,7 +138,13 @@ setInterval(syncOfflinePOS, 30000);
 window.addEventListener('online', () => {
     if (!isSyncing) {
         if (typeof showToast === 'function') showToast('Network restored. Flushing offline queue...');
+        
         if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            // ENTERPRISE OPTIMIZATION: Feed the service worker the freshest token before syncing
+            const currentToken = localStorage.getItem('dailypick_token');
+            if (currentToken) {
+                navigator.serviceWorker.controller.postMessage({ type: 'UPDATE_TOKEN', token: currentToken });
+            }
             navigator.serviceWorker.controller.postMessage('trigger-sync');
         }
         syncOfflinePOS();
