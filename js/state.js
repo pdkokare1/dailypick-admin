@@ -63,7 +63,8 @@ const GlobalState = (function() {
             Object.keys(state).forEach(key => {
                 window[key] = state[key];
             });
-            window.flushTransientMemory = flushTransientMemory;
+            // SECURITY FIX: Freeze critical state functions to prevent third-party overwrites
+            window.flushTransientMemory = Object.freeze(flushTransientMemory);
         }
     };
 })();
