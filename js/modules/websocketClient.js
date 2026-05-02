@@ -6,6 +6,9 @@ let realtimeReconnectTimeout = null;
 let realtimePingInterval = null; 
 let reconnectAttempts = 0; // OPTIMIZATION: Track attempts for exponential backoff
 
+// ENTERPRISE OPTIMIZATION: Dead Connection Detector flag
+let pongReceived = true; 
+
 window.setupRealtimeConnection = function() {
     if (realtimeSocket && realtimeSocket.readyState <= 1) return; 
 
@@ -20,11 +23,20 @@ window.setupRealtimeConnection = function() {
         realtimeSocket.onopen = () => {
             console.log("Secure Realtime WebSocket Connected");
             reconnectAttempts = 0; // OPTIMIZATION: Reset on successful connection
+            pongReceived = true; // Reset flag on fresh connection
+
             if (realtimeReconnectTimeout) clearTimeout(realtimeReconnectTimeout);
 
             if (realtimePingInterval) clearInterval(realtimePingInterval);
             realtimePingInterval = setInterval(() => {
                 if (realtimeSocket && realtimeSocket.readyState === WebSocket.OPEN) {
+                    // ENTERPRISE OPTIMIZATION: Dead Connection Detector Check
+                    if (!pongReceived) {
+                        console.warn("Dead WebSocket connection detected (No PONG). Forcing reconnect...");
+                        realtimeSocket.close();
+                        return;
+                    }
+                    pongReceived = false; // Require a pong before the next interval
                     realtimeSocket.send(JSON.stringify({ type: 'PONG' }));
                 }
             }, 15000);
@@ -38,6 +50,12 @@ window.setupRealtimeConnection = function() {
                 const eventsToProcess = Array.isArray(parsedData) ? parsedData : [parsedData];
                 
                 eventsToProcess.forEach(data => {
+                    // ENTERPRISE OPTIMIZATION: Acknowledge server PONGs
+                    if (data.type === 'PONG') {
+                        pongReceived = true;
+                        return;
+                    }
+
                     if (data.type === 'PING') {
                         realtimeSocket.send(JSON.stringify({ type: 'PONG' }));
                         return;
