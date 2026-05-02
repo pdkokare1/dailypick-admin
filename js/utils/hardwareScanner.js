@@ -3,6 +3,10 @@
 let globalBarcodeBuffer = '';
 let globalBarcodeTimeout = null;
 
+// ENTERPRISE OPTIMIZATION: Strict Debouncing for jittery hardware scanners
+let lastScanTime = 0;
+let lastScannedSku = '';
+
 document.addEventListener('keydown', (e) => {
     const posView = document.getElementById('pos-view');
     const isPosActive = posView && posView.classList.contains('active');
@@ -29,6 +33,16 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault(); 
         const sku = globalBarcodeBuffer;
         
+        // ENTERPRISE OPTIMIZATION: Prevent stuttering hardware from double-adding items
+        const now = Date.now();
+        if (sku === lastScannedSku && (now - lastScanTime) < 500) {
+            console.warn(`[SCANNER] Ignored double-scan of ${sku} to prevent accidental double charge.`);
+            globalBarcodeBuffer = '';
+            return;
+        }
+        lastScannedSku = sku;
+        lastScanTime = now;
+
         if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
             document.activeElement.value = document.activeElement.value.replace(sku, '');
             document.activeElement.blur();
