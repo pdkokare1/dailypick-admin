@@ -3,6 +3,60 @@ import { CONFIG } from './core/config.js';
 import { adminFetchWithAuth as originalAdminFetch } from './utils/httpClient.js';
 import { connectAdminLiveStream } from './services/liveStreamService.js';
 
+// ENTERPRISE OPTIMIZATION: Exponential Backoff for unstable Store Wi-Fi
+async function adminFetchWithRetry(url, options, maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const res = await originalAdminFetch(url, options);
+            if (res.status >= 500 && i < maxRetries - 1) {
+                const delay = Math.pow(2, i) * 1000;
+                console.warn(`[HTTP] Server error ${res.status}. Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+            return res;
+        } catch (err) {
+            if (i === maxRetries - 1) throw err;
+            const delay = Math.pow(2, i) * 1000;
+            console.warn(`[HTTP] Network drop detected. Retrying in ${delay}ms...`, err.message);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+}
+
+// ENTERPRISE OPTIMIZATION: Token Rotation Interceptor State
+let isAdminRefreshing = false;
+let adminRefreshPromise = null;
+
+async function handleAdminTokenRefresh() {
+    if (isAdminRefreshing) return adminRefreshPromise;
+    isAdminRefreshing = true;
+    
+    adminRefreshPromise = (async () => {
+        try {
+            const refreshToken = localStorage.getItem('dailypick_refreshToken');
+            if (!refreshToken) throw new Error("No refresh token");
+            
+            const res = await fetch(`${CONFIG.BACKEND_URL}/api/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken })
+            });
+            
+            if (!res.ok) throw new Error("Refresh failed");
+            const data = await res.json();
+            
+            localStorage.setItem('dailypick_token', data.token);
+            if (data.refreshToken) localStorage.setItem('dailypick_refreshToken', data.refreshToken);
+            
+            return data.token;
+        } finally {
+            isAdminRefreshing = false;
+        }
+    })();
+    return adminRefreshPromise;
+}
+
 // --- AGGREGATOR GLOBAL SECURITY ---
 // Intercept the base authenticated fetcher to ensure every request 
 // securely broadcasts the Store Owner's Tenant ID to the backend via headers.
@@ -12,7 +66,29 @@ window.adminFetchWithAuth = async function(url, options = {}) {
     if (tenantId) {
         options.headers['x-tenant-id'] = tenantId;
     }
-    return originalAdminFetch(url, options);
+
+    // Ensure the latest token is applied in case of recent background refreshes
+    const token = localStorage.getItem('dailypick_token');
+    if (token) {
+        options.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    let response = await adminFetchWithRetry(url, options);
+
+    // INTERCEPTOR: Handle 401 Unauthorized via Refresh Token
+    if (response && response.status === 401) {
+        try {
+            const newToken = await handleAdminTokenRefresh();
+            options.headers['Authorization'] = `Bearer ${newToken}`;
+            response = await adminFetchWithRetry(url, options);
+        } catch (refreshErr) {
+            console.warn("Session expired.");
+            if (typeof logout === 'function') logout();
+            throw new Error("Unauthorized - Refresh Failed");
+        }
+    }
+
+    return response;
 };
 
 let currentPromotions = []; 
