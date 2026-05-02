@@ -63,7 +63,9 @@ async function writeToPrinter(dataBuffer) {
             await activePrinterPort.transferOut(1, dataBuffer); 
         }
     } catch (e) {
-        console.error("Write error:", e);
+        // ENTERPRISE FIX: Drop the active port if hardware disconnects to prevent silent memory locking
+        console.error("Hardware write error. Cable disconnected?", e);
+        activePrinterPort = null;
     }
 }
 
@@ -74,15 +76,16 @@ async function printThermalReceipt(order) {
         let storeName = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.storeName) ? globalStoreSettings.storeName : "DAILYPICK.";
         let storeAddress = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.storeAddress) ? globalStoreSettings.storeAddress : "Retail & Supermarket";
         let storeFooter = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.receiptFooterMessage) ? globalStoreSettings.receiptFooterMessage : "Thank you for shopping!";
+        // FIX: Ensure clean string defaults to prevent 'undefined' from printing on physical receipts
         let gstin = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.gstin) ? `GSTIN: ${globalStoreSettings.gstin}\n` : "";
-        let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
+        let loyaltyConv = (typeof globalStoreSettings !== 'undefined' && globalStoreSettings && globalStoreSettings.loyaltyPointValue) ? globalStoreSettings.loyaltyPointValue : 100;
 
         let receipt = ESC_CMD.INIT;
         
         // Header
         receipt += ESC_CMD.ALIGN_CENTER + ESC_CMD.DOUBLE_HEIGHT + ESC_CMD.BOLD_ON + `${storeName}\n` + ESC_CMD.NORMAL_SIZE + ESC_CMD.BOLD_OFF;
         receipt += `${storeAddress}\n`;
-        if(gstin) receipt += gstin;
+        if (gstin) receipt += gstin;
         receipt += "--------------------------------\n";
         
         // Metadata
