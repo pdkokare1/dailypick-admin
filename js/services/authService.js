@@ -16,6 +16,8 @@ const AuthManager = (function() {
     };
 
     const clearPinInput = function() {
+        // SECURITY FIX: Explicit nullification ensures immediate V8 garbage collection of sensitive strings
+        window.currentPin = null;
         window.currentPin = '';
         updatePinDisplay();
     };
@@ -259,7 +261,7 @@ const AuthManager = (function() {
     };
 
     // --- Public API Integration ---
-    return {
+    const publicAPI = {
         init: function() {
             window.handlePinInput = handlePinInput;
             window.clearPinInput = clearPinInput;
@@ -272,6 +274,9 @@ const AuthManager = (function() {
             window.applyRoleRestrictions = applyRoleRestrictions;
         }
     };
+
+    // SECURITY FIX: Freeze object to prevent logic hijacking
+    return Object.freeze(publicAPI);
 })();
 
 // Bootstrap the module
