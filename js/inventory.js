@@ -240,39 +240,59 @@ window.closeGlobalCatalogImporter = function() {
     if(modal) modal.classList.remove('active');
 };
 
+// OPTIMIZATION: Debounced Global Catalog Search to prevent API spam
+let globalCatalogSearchTimeout;
 window.searchGlobalCatalog = async function(query) {
+    clearTimeout(globalCatalogSearchTimeout);
+    
     const resultsContainer = document.getElementById('global-catalog-search-results');
     if (!query || query.length < 3) {
-        resultsContainer.innerHTML = '<p class="empty-state">Type at least 3 characters...</p>';
+        if (resultsContainer) resultsContainer.innerHTML = '<p class="empty-state">Type at least 3 characters...</p>';
         return;
     }
 
-    resultsContainer.innerHTML = '<p class="empty-state">Searching Single Source of Truth...</p>';
-    try {
-        const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
-        const res = await fetchFn(`${BACKEND_URL}/api/b2b/catalog?search=${encodeURIComponent(query)}`);
-        const result = await res.json();
+    if (resultsContainer) resultsContainer.innerHTML = '<p class="empty-state">Searching Single Source of Truth...</p>';
+    
+    globalCatalogSearchTimeout = setTimeout(async () => {
+        try {
+            const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
+            const res = await fetchFn(`${BACKEND_URL}/api/b2b/catalog?search=${encodeURIComponent(query)}`);
+            const result = await res.json();
 
-        if (result.success && result.data && result.data.length > 0) {
-            let html = '';
-            result.data.forEach(p => {
-                html += `
-                    <div style="background: white; border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <h4 style="margin:0; font-size: 14px; color: var(--primary);">${p.name}</h4>
-                            <p style="margin:4px 0 0 0; font-size: 12px; color: var(--text-muted);">${p.category} | ${p.variants ? p.variants.length : 0} Variants</p>
-                        </div>
-                        <button class="primary-btn-small" onclick='importGlobalItem(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Import</button>
-                    </div>
-                `;
-            });
-            resultsContainer.innerHTML = html;
-        } else {
-            resultsContainer.innerHTML = '<p class="empty-state">No master products found. Consider submitting a request.</p>';
+            if (result.success && result.data && result.data.length > 0) {
+                if (resultsContainer) {
+                    resultsContainer.innerHTML = '';
+                    const frag = document.createDocumentFragment();
+                    
+                    result.data.forEach(p => {
+                        const div = document.createElement('div');
+                        div.style.background = 'white';
+                        div.style.border = '1px solid #E2E8F0';
+                        div.style.padding = '12px';
+                        div.style.borderRadius = '8px';
+                        div.style.marginBottom = '8px';
+                        div.style.display = 'flex';
+                        div.style.justifyContent = 'space-between';
+                        div.style.alignItems = 'center';
+                        
+                        div.innerHTML = `
+                            <div>
+                                <h4 style="margin:0; font-size: 14px; color: var(--primary);">${p.name}</h4>
+                                <p style="margin:4px 0 0 0; font-size: 12px; color: var(--text-muted);">${p.category} | ${p.variants ? p.variants.length : 0} Variants</p>
+                            </div>
+                            <button class="primary-btn-small" onclick='importGlobalItem(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Import</button>
+                        `;
+                        frag.appendChild(div);
+                    });
+                    resultsContainer.appendChild(frag);
+                }
+            } else {
+                if (resultsContainer) resultsContainer.innerHTML = '<p class="empty-state">No master products found. Consider submitting a request.</p>';
+            }
+        } catch (e) {
+            if (resultsContainer) resultsContainer.innerHTML = '<p class="empty-state" style="color:red;">Error searching catalog.</p>';
         }
-    } catch (e) {
-        resultsContainer.innerHTML = '<p class="empty-state" style="color:red;">Error searching catalog.</p>';
-    }
+    }, 400); // 400ms debounce
 };
 
 window.importGlobalItem = function(masterProduct) {
