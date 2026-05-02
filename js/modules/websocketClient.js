@@ -9,13 +9,29 @@ let reconnectAttempts = 0; // OPTIMIZATION: Track attempts for exponential backo
 // ENTERPRISE OPTIMIZATION: Dead Connection Detector flag
 let pongReceived = true; 
 
+// ENTERPRISE OPTIMIZATION: Throttling/Debouncing UI Updates to prevent main-thread freezing
+let batchUpdateTimeout = null;
+function triggerBatchedUIUpdates(needsOrders, needsInventory) {
+    if (batchUpdateTimeout) clearTimeout(batchUpdateTimeout);
+    batchUpdateTimeout = setTimeout(() => {
+        if (needsOrders) {
+            if (typeof fetchOrders === 'function') fetchOrders();
+            if (typeof renderOverview === 'function') renderOverview();
+        }
+        if (needsInventory) {
+            if (typeof fetchInventory === 'function') fetchInventory();
+        }
+    }, 300); // Debounce interval
+}
+
 window.setupRealtimeConnection = function() {
     if (realtimeSocket && realtimeSocket.readyState <= 1) return; 
 
     const token = localStorage.getItem('adminToken');
     if (!token) return;
 
-    const wsUrl = window.BACKEND_URL.replace(/^http/, 'ws') + `/api/ws/pos?token=${token}`;
+    // SECURITY FIX: Map HTTP to WS, and HTTPS to WSS to prevent protocol downgrade attacks
+    const wsUrl = window.BACKEND_URL.replace(/^http(s)?/i, (match, isHttps) => isHttps ? 'wss' : 'ws') + `/api/ws/pos?token=${token}`;
     
     try {
         realtimeSocket = new WebSocket(wsUrl);
@@ -49,6 +65,9 @@ window.setupRealtimeConnection = function() {
                 // OPTIMIZATION: Handle both single events and the new High-Throughput Micro-Batched Arrays from the backend
                 const eventsToProcess = Array.isArray(parsedData) ? parsedData : [parsedData];
                 
+                let fetchOrdersNeeded = false;
+                let fetchInventoryNeeded = false;
+
                 eventsToProcess.forEach(data => {
                     // ENTERPRISE OPTIMIZATION: Acknowledge server PONGs
                     if (data.type === 'PONG') {
@@ -67,11 +86,10 @@ window.setupRealtimeConnection = function() {
                     }
                     
                     if (data.type === 'NEW_ORDER' || data.type === 'ORDER_STATUS_UPDATED') {
-                        if (typeof fetchOrders === 'function') fetchOrders();
-                        if (typeof renderOverview === 'function') renderOverview();
+                        fetchOrdersNeeded = true;
                     }
                     if (data.type === 'INVENTORY_UPDATE') {
-                        if (typeof fetchInventory === 'function') fetchInventory();
+                        fetchInventoryNeeded = true;
                     }
                     
                     // --- NEW: FINANCIAL SETTLEMENT PUSH NOTIFICATION ---
@@ -86,6 +104,12 @@ window.setupRealtimeConnection = function() {
                         }
                     }
                 });
+
+                // Execute debounced DOM repaints
+                if (fetchOrdersNeeded || fetchInventoryNeeded) {
+                    triggerBatchedUIUpdates(fetchOrdersNeeded, fetchInventoryNeeded);
+                }
+
             } catch (e) {
                 console.warn("WebSocket message error", e);
             }
