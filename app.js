@@ -83,30 +83,30 @@ const DailyPickApp = (function() {
                 
                 if (typeof window.applyRoleRestrictions === 'function') window.applyRoleRestrictions();
                 
-                try {
-                    const res = await window.adminFetchWithAuth(`${window.BACKEND_URL}/api/auth/verify?id=${window.currentUser._id || window.currentUser.id}`);
-                    
-                    if (res.status === 401 || res.status === 403) {
-                        console.warn("Session definitively invalid. Forcing logout.");
-                        if (typeof window.logoutUser === 'function') window.logoutUser();
-                        return; 
-                    }
+                // ENTERPRISE OPTIMIZATION: Optimistic UI Boot.
+                // Immediately grant access to the POS using the cached token, eliminating network lag on startup.
+                window.initializeApp();
 
-                    const result = await res.json();
-                    
-                    if (!res.ok || !result.success || !result.data || result.data.role !== window.currentUser.role) {
-                        console.warn("Session verification failed. Role mismatch or invalid user. Forcing logout.");
-                        if (typeof window.logoutUser === 'function') window.logoutUser();
-                        if (typeof showToast === 'function') showToast("Session invalid. Please log in again.");
-                        return; 
-                    }
+                // BACKGROUND TASK: Verify the session securely without blocking the main thread.
+                window.adminFetchWithAuth(`${window.BACKEND_URL}/api/auth/verify?id=${window.currentUser._id || window.currentUser.id}`)
+                    .then(async (res) => {
+                        if (res.status === 401 || res.status === 403) {
+                            console.warn("Session definitively invalid. Forcing logout.");
+                            if (typeof window.logoutUser === 'function') window.logoutUser();
+                            return; 
+                        }
 
-                    window.initializeApp();
-
-                } catch (e) {
-                    console.warn("Could not reach background verification endpoint. Trusting local session temporarily.", e);
-                    window.initializeApp(); 
-                }
+                        const result = await res.json();
+                        
+                        if (!res.ok || !result.success || !result.data || result.data.role !== window.currentUser.role) {
+                            console.warn("Session verification failed. Role mismatch or invalid user. Forcing logout.");
+                            if (typeof window.logoutUser === 'function') window.logoutUser();
+                            if (typeof showToast === 'function') showToast("Session invalid. Please log in again.");
+                        }
+                    })
+                    .catch(e => {
+                        console.warn("Could not reach background verification endpoint. Trusting local session temporarily.", e);
+                    });
                 
             } else {
                 console.log("No session found. Showing Partner Gateway.");
