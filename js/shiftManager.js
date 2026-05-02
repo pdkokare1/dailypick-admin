@@ -20,28 +20,39 @@ function openShiftModal() {
     const closeView = document.getElementById('shift-close-view');
     
     if (currentActiveShift) {
-        openView.classList.add('hidden');
-        closeView.classList.remove('hidden');
-        document.getElementById('shift-open-time').innerText = new Date(currentActiveShift.startTime).toLocaleTimeString();
-        document.getElementById('shift-display-float').innerText = currentActiveShift.startingFloat.toFixed(2);
-        document.getElementById('shift-actual-cash').value = '';
+        if(openView) openView.classList.add('hidden');
+        if(closeView) closeView.classList.remove('hidden');
+        
+        const openTimeEl = document.getElementById('shift-open-time');
+        const floatEl = document.getElementById('shift-display-float');
+        const cashEl = document.getElementById('shift-actual-cash');
+        
+        if(openTimeEl) openTimeEl.innerText = new Date(currentActiveShift.startTime).toLocaleTimeString();
+        if(floatEl) floatEl.innerText = currentActiveShift.startingFloat.toFixed(2);
+        if(cashEl) cashEl.value = '';
     } else {
-        openView.classList.remove('hidden');
-        closeView.classList.add('hidden');
-        document.getElementById('shift-starting-float').value = '';
+        if(openView) openView.classList.remove('hidden');
+        if(closeView) closeView.classList.add('hidden');
+        
+        const startFloatEl = document.getElementById('shift-starting-float');
+        if(startFloatEl) startFloatEl.value = '';
     }
     
-    document.getElementById('shift-modal').classList.add('active');
+    const modal = document.getElementById('shift-modal');
+    if(modal) modal.classList.add('active');
 }
 
 function closeShiftModal() {
-    document.getElementById('shift-modal').classList.remove('active');
+    const modal = document.getElementById('shift-modal');
+    if(modal) modal.classList.remove('active');
 }
 
 async function submitOpenShift() {
     if (isProcessingCheckout) return;
-    const floatAmt = document.getElementById('shift-starting-float').value;
-    if (!floatAmt || floatAmt < 0) return showToast("Enter a valid starting float amount.");
+    const floatInput = document.getElementById('shift-starting-float');
+    const floatAmt = floatInput ? floatInput.value : '';
+    
+    if (!floatAmt || Number(floatAmt) < 0) return showToast("Enter a valid starting float amount.");
     
     isProcessingCheckout = true;
     try {
@@ -51,7 +62,7 @@ async function submitOpenShift() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userName: typeof currentUser !== 'undefined' && currentUser ? currentUser.name : 'Unknown Staff',
-                startingFloat: floatAmt,
+                startingFloat: Number(floatAmt),
                 storeId: typeof currentStoreId !== 'undefined' ? currentStoreId : null,
                 registerId: typeof currentRegisterId !== 'undefined' ? currentRegisterId : null
             })
@@ -59,32 +70,38 @@ async function submitOpenShift() {
         const result = await res.json();
         if (result.success) {
             currentActiveShift = result.data;
-            showToast('Register Opened! 🏪 Ready for sales.');
+            if (typeof showToast === 'function') showToast('Register Opened! 🏪 Ready for sales.');
             closeShiftModal();
         } else {
-            showToast(result.message);
+            if (typeof showToast === 'function') showToast(result.message);
         }
     } catch(e) {
-        showToast('Network error opening shift.');
+        if (typeof showToast === 'function') showToast('Network error opening shift.');
     } finally {
         isProcessingCheckout = false;
     }
 }
 
-async function submitCloseShift() {
+async function submitCloseShift(event) {
     if (isProcessingCheckout) return;
-    const actualCashStr = document.getElementById('shift-actual-cash').value;
+    const cashInput = document.getElementById('shift-actual-cash');
+    const actualCashStr = cashInput ? cashInput.value : '';
     
     if (!actualCashStr) {
-        return showToast("Enter the actual physical cash counted in the drawer.");
+        if (typeof showToast === 'function') showToast("Enter the actual physical cash counted in the drawer.");
+        return;
     }
     const actualCash = parseFloat(actualCashStr);
     
     isProcessingCheckout = true;
-    const btn = event.target;
-    const originalText = btn.innerText;
-    btn.innerText = 'Verifying...';
-    btn.disabled = true;
+    const btn = event ? event.target : null;
+    let originalText = 'Close Register';
+    
+    if (btn) {
+        originalText = btn.innerText;
+        btn.innerText = 'Verifying...';
+        btn.disabled = true;
+    }
 
     try {
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
@@ -103,24 +120,28 @@ async function submitCloseShift() {
             currentActiveShift = null;
             const disc = result.discrepancy;
             
-            if (disc === 0) {
-                showToast("Register Closed. Perfect Match! ✅");
-            } else if (disc < 0) {
-                showToast(`Register Closed. Warning: Drawer is SHORT by ₹${Math.abs(disc).toFixed(2)}`);
-            } else {
-                showToast(`Register Closed. Drawer is OVER by ₹${Math.abs(disc).toFixed(2)}`);
+            if (typeof showToast === 'function') {
+                if (disc === 0) {
+                    showToast("Register Closed. Perfect Match! ✅");
+                } else if (disc < 0) {
+                    showToast(`Register Closed. Warning: Drawer is SHORT by ₹${Math.abs(disc).toFixed(2)}`);
+                } else {
+                    showToast(`Register Closed. Drawer is OVER by ₹${Math.abs(disc).toFixed(2)}`);
+                }
             }
             
             closeShiftModal();
             if (typeof renderOverview === 'function') renderOverview(); 
         } else {
-            showToast(result.message || 'Failed to close register.');
+            if (typeof showToast === 'function') showToast(result.message || 'Failed to close register.');
         }
     } catch(e) {
-        showToast('Network error closing shift.');
+        if (typeof showToast === 'function') showToast('Network error closing shift.');
     } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
+        if (btn) {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
         isProcessingCheckout = false;
     }
 }
