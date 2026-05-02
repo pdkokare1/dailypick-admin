@@ -94,9 +94,10 @@ document.addEventListener('keydown', (e) => {
     if (e.key.length === 1) {
         globalBarcodeBuffer += e.key;
         clearTimeout(globalBarcodeTimeout);
+        // ENTERPRISE OPTIMIZATION: Increased buffer timeout to 250ms to support slower wireless POS scanners
         globalBarcodeTimeout = setTimeout(() => { 
             globalBarcodeBuffer = ''; 
-        }, 30);
+        }, 250);
     }
 });
 
@@ -166,10 +167,12 @@ window.POSCameraScanner = (function() {
         if (scanInterval) clearInterval(scanInterval);
         if (stream) {
             stream.getTracks().forEach(track => track.stop());
+            stream = null; // Strict GC explicitly nullifies the stream object
         }
         if (videoElement) {
             videoElement.srcObject = null;
             videoElement.remove();
+            videoElement = null; // Strict GC explicitly nullifies the DOM node reference
         }
     }
 
