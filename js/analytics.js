@@ -74,6 +74,20 @@ function updateAnalyticsRange(daysLimit) {
     let categoryRevenue = {}; 
     let hourlyDistribution = new Array(24).fill(0); 
 
+    // ENTERPRISE OPTIMIZATION: Build O(1) Data Dictionaries to prevent O(N^2) lockups
+    const inventoryMap = new Map();
+    const variantMap = new Map();
+    if (typeof currentInventory !== 'undefined') {
+        currentInventory.forEach(p => {
+            inventoryMap.set(p._id, p);
+            if (p.variants) {
+                p.variants.forEach(v => {
+                    variantMap.set(v._id, { product: p, variant: v });
+                });
+            }
+        });
+    }
+
     filteredOrders.forEach(o => {
         totalPeriodTax += (o.taxAmount || 0);
         totalPeriodDiscount += (o.discountAmount || 0);
@@ -90,20 +104,20 @@ function updateAnalyticsRange(daysLimit) {
             itemFrequency[key].qty += i.qty;
             itemFrequency[key].revenue += (i.price * i.qty);
 
+            // OPTIMIZED O(1) Cache lookups instead of .find() iterations
             if (cogsMap[orderDate] !== undefined) {
-                const invItem = typeof currentInventory !== 'undefined' ? currentInventory.find(p => p._id === i.productId) : null;
-                if (invItem && invItem.variants) {
-                    const variant = invItem.variants.find(v => v._id === i.variantId);
-                    if (variant && variant.purchaseHistory && variant.purchaseHistory.length > 0) {
-                        const cost = variant.purchaseHistory[variant.purchaseHistory.length - 1].purchasingPrice;
-                        cogsMap[orderDate] += (cost * i.qty);
-                    }
+                const cachedData = variantMap.get(i.variantId);
+                if (cachedData && cachedData.variant && cachedData.variant.purchaseHistory && cachedData.variant.purchaseHistory.length > 0) {
+                    const cost = cachedData.variant.purchaseHistory[cachedData.variant.purchaseHistory.length - 1].purchasingPrice;
+                    cogsMap[orderDate] += (cost * i.qty);
                 }
             }
 
             let catName = 'Uncategorized';
-            const invItem = typeof currentInventory !== 'undefined' ? currentInventory.find(inv => inv.name === i.name) : null;
-            if (invItem && invItem.category) catName = invItem.category;
+            const invItemByProduct = inventoryMap.get(i.productId);
+            if (invItemByProduct && invItemByProduct.category) {
+                catName = invItemByProduct.category;
+            }
 
             if (!categoryRevenue[catName]) categoryRevenue[catName] = 0;
             categoryRevenue[catName] += (i.price * i.qty);
