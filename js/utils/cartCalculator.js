@@ -9,12 +9,16 @@ export const CartCalculator = {
         let totalDiscountPaise = 0;
 
         posCart.forEach((item) => {
+            // SECURITY FIX: Type-cast to Number to prevent NaN propagation from bad string payloads
+            const safePrice = Number(item.price) || 0;
+            const safeQty = Number(item.qty) || 0;
+            
             // Convert base price to integer immediately
-            const pricePaise = Math.round(item.price * 100);
-            const itemTotalPaise = item.qty * pricePaise;
+            const pricePaise = Math.round(safePrice * 100);
+            const itemTotalPaise = safeQty * pricePaise;
             subtotalPaise += itemTotalPaise;
             
-            let tRate = item.taxRate || 0;
+            let tRate = Number(item.taxRate) || 0;
             if (tRate > 0) {
                 if (item.taxType === 'Exclusive') {
                     totalTaxPaise += Math.round(itemTotalPaise * (tRate / 100));
@@ -55,25 +59,28 @@ export const CartCalculator = {
                             }
                         }
                         if (isApplicable) {
-                            const pricePaise = Math.round(item.price * 100);
-                            applicableSubtotalPaise += (pricePaise * item.qty);
+                            const safePrice = Number(item.price) || 0;
+                            const safeQty = Number(item.qty) || 0;
+                            const pricePaise = Math.round(safePrice * 100);
+                            applicableSubtotalPaise += (pricePaise * safeQty);
                             applicableItems.push({ ...item, pricePaise });
                         }
                     });
 
-                    const minCartValuePaise = Math.round((promo.minCartValue || 0) * 100);
+                    const minCartValuePaise = Math.round(Number(promo.minCartValue || 0) * 100);
 
                     if (applicableSubtotalPaise > 0 && applicableSubtotalPaise >= minCartValuePaise) {
+                        const safePromoValue = Number(promo.value) || 0;
                         if (promo.type === 'PERCENTAGE' || promo.type === 'percentage') {
-                            totalDiscountPaise += Math.round(applicableSubtotalPaise * (promo.value / 100));
+                            totalDiscountPaise += Math.round(applicableSubtotalPaise * (safePromoValue / 100));
                         } else if (promo.type === 'FLAT_AMOUNT' || promo.type === 'fixed') {
-                            totalDiscountPaise += Math.round(promo.value * 100); 
+                            totalDiscountPaise += Math.round(safePromoValue * 100); 
                         } else if (promo.type === 'BOGO') {
-                            const bQty = promo.buyQty || 1;
-                            const gQty = promo.getQty || 1;
+                            const bQty = Number(promo.buyQty) || 1;
+                            const gQty = Number(promo.getQty) || 1;
                             
                             applicableItems.forEach(item => {
-                                const totalSets = Math.floor(item.qty / (bQty + gQty));
+                                const totalSets = Math.floor(Number(item.qty || 0) / (bQty + gQty));
                                 if (totalSets > 0) {
                                     totalDiscountPaise += totalSets * gQty * item.pricePaise;
                                 }
@@ -99,7 +106,7 @@ export const CartCalculator = {
         let hasExclusive = posCart.some(i => i.taxType === 'Exclusive');
         let preLoyaltyTotalPaise = subtotalPaise - totalDiscountPaise + (hasExclusive ? totalTaxPaise : 0);
         
-        let finalLoyaltyPointsPaise = Math.round((appliedLoyaltyPoints || 0) * 100);
+        let finalLoyaltyPointsPaise = Math.round(Number(appliedLoyaltyPoints || 0) * 100);
         if (finalLoyaltyPointsPaise > preLoyaltyTotalPaise) {
             finalLoyaltyPointsPaise = preLoyaltyTotalPaise;
         }
