@@ -3,6 +3,9 @@
 const CACHE_NAME = 'dailypick-admin-cache-v7'; 
 const OFFLINE_QUEUE_NAME = 'dailypick-offline-orders';
 
+// ENTERPRISE OPTIMIZATION: Holds the freshest JWT so background syncs don't fail due to 401s after long offline periods
+let latestAuthToken = null;
+
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -85,6 +88,12 @@ async function processEnterpriseOutbox() {
 
         try {
             const headers = new Headers(data.headers);
+            
+            // ENTERPRISE OPTIMIZATION: Inject the latest token to prevent 401s on stale payloads
+            if (latestAuthToken) {
+                headers.set('Authorization', `Bearer ${latestAuthToken}`);
+            }
+
             const response = await fetch(data.url, {
                 method: data.method,
                 headers: headers,
@@ -138,7 +147,11 @@ self.addEventListener('sync', (event) => {
 });
 
 self.addEventListener('message', (event) => {
-    if (event.data === 'trigger-sync') {
+    // ENTERPRISE OPTIMIZATION: Main thread pushes fresh tokens here when coming online
+    if (event.data && event.data.type === 'UPDATE_TOKEN') {
+        latestAuthToken = event.data.token;
+    }
+    else if (event.data === 'trigger-sync') {
         processEnterpriseOutbox();
     }
 });
