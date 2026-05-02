@@ -1,28 +1,7 @@
 /* js/api.js */
 import { CONFIG } from './core/config.js';
-import { adminFetchWithAuth as originalAdminFetch } from './utils/httpClient.js';
+import { adminFetchWithAuth as originalAdminFetch, fetchWithRetry } from './utils/httpClient.js';
 import { connectAdminLiveStream } from './services/liveStreamService.js';
-
-// ENTERPRISE OPTIMIZATION: Exponential Backoff for unstable Store Wi-Fi
-async function adminFetchWithRetry(url, options, maxRetries = 3) {
-    for (let i = 0; i < maxRetries; i++) {
-        try {
-            const res = await originalAdminFetch(url, options);
-            if (res.status >= 500 && i < maxRetries - 1) {
-                const delay = Math.pow(2, i) * 1000;
-                console.warn(`[HTTP] Server error ${res.status}. Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                continue;
-            }
-            return res;
-        } catch (err) {
-            if (i === maxRetries - 1) throw err;
-            const delay = Math.pow(2, i) * 1000;
-            console.warn(`[HTTP] Network drop detected. Retrying in ${delay}ms...`, err.message);
-            await new Promise(resolve => setTimeout(resolve, delay));
-        }
-    }
-}
 
 // ENTERPRISE OPTIMIZATION: Token Rotation Interceptor State
 let isAdminRefreshing = false;
@@ -61,26 +40,29 @@ async function handleAdminTokenRefresh() {
 // Intercept the base authenticated fetcher to ensure every request 
 // securely broadcasts the Store Owner's Tenant ID to the backend via headers.
 window.adminFetchWithAuth = async function(url, options = {}) {
-    options.headers = options.headers || {};
+    // BUG FIX: Clone options to avoid mutating original reference
+    const fetchOptions = { ...options, headers: { ...(options.headers || {}) } };
+
     const tenantId = localStorage.getItem('dailypick_storeId');
     if (tenantId) {
-        options.headers['x-tenant-id'] = tenantId;
+        fetchOptions.headers['x-tenant-id'] = tenantId;
     }
 
     // Ensure the latest token is applied in case of recent background refreshes
     const token = localStorage.getItem('dailypick_token');
     if (token) {
-        options.headers['Authorization'] = `Bearer ${token}`;
+        fetchOptions.headers['Authorization'] = `Bearer ${token}`;
     }
 
-    let response = await adminFetchWithRetry(url, options);
+    // Replaced local duplicate with imported singleton
+    let response = await fetchWithRetry(url, fetchOptions);
 
     // INTERCEPTOR: Handle 401 Unauthorized via Refresh Token
     if (response && response.status === 401) {
         try {
             const newToken = await handleAdminTokenRefresh();
-            options.headers['Authorization'] = `Bearer ${newToken}`;
-            response = await adminFetchWithRetry(url, options);
+            fetchOptions.headers['Authorization'] = `Bearer ${newToken}`;
+            response = await fetchWithRetry(url, fetchOptions);
         } catch (refreshErr) {
             console.warn("Session expired.");
             if (typeof logout === 'function') logout();
