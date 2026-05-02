@@ -161,8 +161,9 @@ self.addEventListener('fetch', (event) => {
 
     if (event.request.mode === 'navigate') {
         event.respondWith(
-            caches.match('./index.html').then((cachedResponse) => {
-                return cachedResponse || fetch(event.request).catch(() => caches.match('./index.html'));
+            // ENTERPRISE OPTIMIZATION: ignoreSearch handles cache busting params safely
+            caches.match('./index.html', { ignoreSearch: true }).then((cachedResponse) => {
+                return cachedResponse || fetch(event.request).catch(() => caches.match('./index.html', { ignoreSearch: true }));
             })
         );
         return;
@@ -218,7 +219,7 @@ self.addEventListener('fetch', (event) => {
                 })
                 .catch(async () => {
                     console.warn('[Enterprise SW] Network failed, serving API from High-Availability cache.');
-                    const cachedResponse = await caches.match(event.request);
+                    const cachedResponse = await caches.match(event.request, { ignoreSearch: true });
                     return cachedResponse || new Response(JSON.stringify({ success: false, message: 'Offline mode' }), {
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -227,8 +228,9 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // ENTERPRISE OPTIMIZATION: Stale-While-Revalidate pattern for maximum UI speed
     event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
+        caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
             const fetchPromise = fetch(event.request).then((networkResponse) => {
                 const responseToCache = networkResponse.clone();
                 caches.open(CACHE_NAME).then((cache) => {
@@ -237,11 +239,11 @@ self.addEventListener('fetch', (event) => {
                 return networkResponse;
             }).catch(() => {}); 
             
-            // OPTIMIZATION: WaitUntil ensures the background fetch finishes even if SW tries to sleep
             if (cachedResponse) {
                 event.waitUntil(fetchPromise);
+                return cachedResponse;
             }
-            return cachedResponse || fetchPromise;
+            return fetchPromise;
         })
     );
 });
