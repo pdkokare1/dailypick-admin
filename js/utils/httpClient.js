@@ -8,7 +8,7 @@ export function handleAuthFailure(url) {
 
 // ENTERPRISE OPTIMIZATION: Exponential Backoff Retry Engine
 // Silently absorbs network blips and 500/502/503/504 errors without bothering the user
-async function fetchWithRetry(url, options, maxRetries = 3) {
+export async function fetchWithRetry(url, options, maxRetries = 3) {
     for (let i = 0; i < maxRetries; i++) {
         try {
             const res = await fetch(url, options);
@@ -33,15 +33,16 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
 export async function adminFetchWithAuth(url, options = {}) {
     let token = localStorage.getItem('adminToken');
     
-    options.headers = options.headers || {};
-    options.credentials = 'include';
+    // BUG FIX: Clone options object to maintain functional purity and avoid mutating caller config
+    const fetchOptions = { ...options, headers: { ...(options.headers || {}) } };
+    fetchOptions.credentials = 'include';
     
     if (token) {
-        options.headers['Authorization'] = `Bearer ${token}`;
+        fetchOptions.headers['Authorization'] = `Bearer ${token}`;
     }
     
     // Utilize the new resilient fetch wrapper
-    let response = await fetchWithRetry(url, options);
+    let response = await fetchWithRetry(url, fetchOptions);
     
     // Automatic Token Refresh Logic
     if (response && response.status === 401) {
@@ -54,8 +55,8 @@ export async function adminFetchWithAuth(url, options = {}) {
             
             if (refreshData.success && refreshData.token) {
                 localStorage.setItem('adminToken', refreshData.token);
-                options.headers['Authorization'] = `Bearer ${refreshData.token}`;
-                response = await fetchWithRetry(url, options); 
+                fetchOptions.headers['Authorization'] = `Bearer ${refreshData.token}`;
+                response = await fetchWithRetry(url, fetchOptions); 
             } else {
                 handleAuthFailure(url);
             }
