@@ -13,7 +13,15 @@ async function fetchCategories() {
                 if (el) {
                     el.innerHTML = id === 'new-category' ? '<option value="">Select Category</option>' : '<option value="All">All Categories</option>';
                     if (id === 'bulk-assign-category') el.innerHTML = '<option value="">-- No Change --</option>';
-                    result.data.forEach(c => el.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+                    
+                    const frag = document.createDocumentFragment();
+                    result.data.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.name;
+                        opt.textContent = c.name;
+                        frag.appendChild(opt);
+                    });
+                    el.appendChild(frag);
                 }
             });
         }
@@ -33,7 +41,15 @@ async function fetchBrands() {
                 if (el) {
                     el.innerHTML = id === 'new-brand' ? '<option value="">Select Brand</option>' : '<option value="All">All Brands</option>';
                     if (id === 'bulk-assign-brand') el.innerHTML = '<option value="">-- No Change --</option>';
-                    result.data.forEach(b => el.innerHTML += `<option value="${b.name}">${b.name}</option>`);
+                    
+                    const frag = document.createDocumentFragment();
+                    result.data.forEach(b => {
+                        const opt = document.createElement('option');
+                        opt.value = b.name;
+                        opt.textContent = b.name;
+                        frag.appendChild(opt);
+                    });
+                    el.appendChild(frag);
                 }
             });
         }
@@ -52,7 +68,15 @@ async function fetchDistributors() {
                 const el = document.getElementById(id);
                 if (el) {
                     el.innerHTML = id === 'inventory-dist-filter' ? '<option value="All">All Distributors</option>' : '<option value="">Select Distributor</option>';
-                    result.data.forEach(d => el.innerHTML += `<option value="${d.name}">${d.name}</option>`);
+                    
+                    const frag = document.createDocumentFragment();
+                    result.data.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d.name;
+                        opt.textContent = d.name;
+                        frag.appendChild(opt);
+                    });
+                    el.appendChild(frag);
                 }
             });
         }
@@ -676,6 +700,9 @@ async function searchRestockItem(overrideSearchTerm = null) {
             return; 
         }
         
+        // ENTERPRISE OPTIMIZATION: Use DocumentFragment for list generation
+        const frag = document.createDocumentFragment();
+        
         result.data.forEach(p => {
             p.variants.forEach(v => {
                 const isMatch = (v.sku === term) || p.name.toLowerCase().includes(term.toLowerCase());
@@ -689,10 +716,12 @@ async function searchRestockItem(overrideSearchTerm = null) {
                     itemDiv.onclick = () => {
                         if(typeof selectItemForRestock === 'function') selectItemForRestock(p, v);
                     };
-                    resultsContainer.appendChild(itemDiv);
+                    frag.appendChild(itemDiv);
                 }
             });
         });
+        
+        resultsContainer.appendChild(frag);
     } catch (e) { 
         console.error("Search error", e); 
     }
@@ -771,20 +800,33 @@ async function openAccountsPayable() {
                 return;
             }
             
+            // ENTERPRISE OPTIMIZATION: Batch DOM Updates
+            const frag = document.createDocumentFragment();
+            
             debtors.forEach(d => {
-                container.innerHTML += `
-                    <div style="background: #fef2f2; padding: 16px; border-radius: 8px; border: 1px solid #fecaca; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <h4 style="color:#991b1b; margin-bottom:4px;">${d.name}</h4>
-                            <p style="font-size:12px; color:#b91c1c; font-weight:600;">Total Paid Lifetime: Rs ${d.totalPaidAmount.toFixed(2)}</p>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size:18px; font-weight:800; color:#dc2626; margin-bottom:8px;">Rs ${d.totalPendingAmount.toFixed(2)}</div>
-                            <button class="primary-btn-small" style="background:#dc2626;" onclick="if(typeof promptDistributorPayment === 'function') promptDistributorPayment('${d._id}', '${d.name.replace(/'/g, "\\'")}', ${d.totalPendingAmount})">Log Payment</button>
-                        </div>
+                const div = document.createElement('div');
+                div.style.background = '#fef2f2';
+                div.style.padding = '16px';
+                div.style.borderRadius = '8px';
+                div.style.border = '1px solid #fecaca';
+                div.style.marginBottom = '12px';
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                
+                div.innerHTML = `
+                    <div>
+                        <h4 style="color:#991b1b; margin-bottom:4px;">${d.name}</h4>
+                        <p style="font-size:12px; color:#b91c1c; font-weight:600;">Total Paid Lifetime: Rs ${d.totalPaidAmount.toFixed(2)}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size:18px; font-weight:800; color:#dc2626; margin-bottom:8px;">Rs ${d.totalPendingAmount.toFixed(2)}</div>
+                        <button class="primary-btn-small" style="background:#dc2626;" onclick="if(typeof promptDistributorPayment === 'function') promptDistributorPayment('${d._id}', '${d.name.replace(/'/g, "\\'")}', ${d.totalPendingAmount})">Log Payment</button>
                     </div>
                 `;
+                frag.appendChild(div);
             });
+            container.appendChild(frag);
         }
     } catch(e) {
         container.innerHTML = '<p class="empty-state">Error loading balances.</p>';
@@ -946,6 +988,10 @@ async function openAIForecastModal() {
         
         if (result.success && result.data) {
             container.innerHTML = '';
+            
+            // ENTERPRISE OPTIMIZATION: Fragment Builder
+            const frag = document.createDocumentFragment();
+            
             result.data.forEach(item => {
                 let urgencyColor = '#10b981'; 
                 let bg = '#f0fdf4';
@@ -961,17 +1007,24 @@ async function openAIForecastModal() {
                     border = '#fef3c7';
                 }
 
-                container.innerHTML += `
-                    <div style="background: ${bg}; padding: 16px; border-radius: 12px; border: 1px solid ${border}; margin-bottom: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                            <h4 style="margin: 0; color: #0f172a; font-size: 15px;">${item.itemName}</h4>
-                            <span style="background: ${urgencyColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 800; text-transform: uppercase;">${item.urgency}</span>
-                        </div>
-                        <p style="font-size: 14px; font-weight: 700; color: ${urgencyColor}; margin-bottom: 4px;">${item.action}</p>
-                        <p style="font-size: 12px; color: #475569; line-height: 1.4;">${item.reason}</p>
+                const div = document.createElement('div');
+                div.style.background = bg;
+                div.style.padding = '16px';
+                div.style.borderRadius = '12px';
+                div.style.border = `1px solid ${border}`;
+                div.style.marginBottom = '12px';
+                
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <h4 style="margin: 0; color: #0f172a; font-size: 15px;">${item.itemName}</h4>
+                        <span style="background: ${urgencyColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 800; text-transform: uppercase;">${item.urgency}</span>
                     </div>
+                    <p style="font-size: 14px; font-weight: 700; color: ${urgencyColor}; margin-bottom: 4px;">${item.action}</p>
+                    <p style="font-size: 12px; color: #475569; line-height: 1.4;">${item.reason}</p>
                 `;
+                frag.appendChild(div);
             });
+            container.appendChild(frag);
         } else {
             container.innerHTML = `<p class="empty-state">Failed to generate AI Forecast: ${result.message}</p>`;
         }
@@ -1039,21 +1092,30 @@ window.fetchB2BCatalog = async function() {
         
         const container = document.getElementById('b2b-catalog-container');
         if (container && result.success && result.data) {
-            let html = '';
+            container.innerHTML = '';
+            const frag = document.createDocumentFragment();
+            
             result.data.forEach(item => {
                 const wholesaleMeta = item.wholesaleMeta || { bulkPriceRs: item.variants[0]?.price || 0, minOrderQty: 10 };
-                html += `
-                    <div class="b2b-item-card" style="border: 1px solid #E2E8F0; padding: 16px; border-radius: 8px; margin-bottom: 12px; background: white;">
-                        <h4 style="margin: 0 0 8px 0; color: #0F172A;">${item.name}</h4>
-                        <p style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Category: ${item.category} | MOQ: ${wholesaleMeta.minOrderQty}</p>
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 16px; font-weight: 800; color: #059669;">Rs ${wholesaleMeta.bulkPriceRs} / unit</span>
-                            <button class="primary-btn-small" onclick="draftB2BPurchaseOrder('${item._id}', '${item.variants[0]?._id}', ${wholesaleMeta.minOrderQty})">Create PO</button>
-                        </div>
+                const div = document.createElement('div');
+                div.className = 'b2b-item-card';
+                div.style.border = '1px solid #E2E8F0';
+                div.style.padding = '16px';
+                div.style.borderRadius = '8px';
+                div.style.marginBottom = '12px';
+                div.style.background = 'white';
+                
+                div.innerHTML = `
+                    <h4 style="margin: 0 0 8px 0; color: #0F172A;">${item.name}</h4>
+                    <p style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Category: ${item.category} | MOQ: ${wholesaleMeta.minOrderQty}</p>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 16px; font-weight: 800; color: #059669;">Rs ${wholesaleMeta.bulkPriceRs} / unit</span>
+                        <button class="primary-btn-small" onclick="draftB2BPurchaseOrder('${item._id}', '${item.variants[0]?._id}', ${wholesaleMeta.minOrderQty})">Create PO</button>
                     </div>
                 `;
+                frag.appendChild(div);
             });
-            container.innerHTML = html;
+            container.appendChild(frag);
         }
     } catch (e) {
         console.error("B2B Catalog Fetch Error", e);
