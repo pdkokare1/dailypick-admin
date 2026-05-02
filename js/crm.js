@@ -23,6 +23,18 @@ function renderCustomers() {
     const feed = document.getElementById('crm-feed');
     feed.innerHTML = '';
     
+    // ENTERPRISE OPTIMIZATION: Event Delegation
+    // Binds a single event listener to the parent instead of 1,000+ individual closures
+    if (!feed.dataset.delegated) {
+        feed.addEventListener('click', (e) => {
+            const card = e.target.closest('.customer-card');
+            if (card && card.dataset.id) {
+                openCustomerModal(card.dataset.id);
+            }
+        });
+        feed.dataset.delegated = 'true';
+    }
+
     if (currentCustomers.length === 0) {
         feed.innerHTML = '<p class="empty-state">No customers found.</p>';
         return;
@@ -33,7 +45,7 @@ function renderCustomers() {
     currentCustomers.forEach(c => {
         const card = document.createElement('div');
         card.className = 'customer-card';
-        card.onclick = () => openCustomerModal(c._id);
+        card.dataset.id = c._id; // Attach ID for delegated listener
         
         const isVIP = c.lifetimeValue > 10000;
         const vipBadge = isVIP ? '<span class="badge-vip">VIP</span>' : '';
