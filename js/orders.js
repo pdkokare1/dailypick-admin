@@ -24,10 +24,12 @@ function setOrderDateFilter(range) {
 
 function setOrderTab(tab) {
     currentOrderTab = tab;
-    document.getElementById('tab-All').classList.remove('active');
-    document.getElementById('tab-Instant').classList.remove('active');
-    document.getElementById('tab-Routine').classList.remove('active');
-    document.getElementById(`tab-${tab}`).classList.add('active');
+    ['All', 'Instant', 'Routine'].forEach(id => {
+        const el = document.getElementById(`tab-${id}`);
+        if (el) el.classList.remove('active');
+    });
+    const activeEl = document.getElementById(`tab-${tab}`);
+    if (activeEl) activeEl.classList.add('active');
     
     ordersPage = 1;
     fetchOrders();
@@ -44,7 +46,7 @@ async function cancelOrder() {
 
     if (activeOrder.status === 'Order Placed' || activeOrder.status === 'Packing') {
         globalPendingCount = Math.max(0, globalPendingCount - 1);
-        globalPendingRevenue = Math.max(0, globalPendingRevenue - activeOrder.totalAmount);
+        globalPendingRevenue = Math.max(0, globalPendingRevenue - (Number(activeOrder.totalAmount) || 0));
     }
 
     currentOrders = currentOrders.filter(o => o._id !== targetOrderId);
@@ -115,8 +117,8 @@ async function fetchOrders() {
             }
 
             if (result.stats) {
-                globalPendingCount = result.stats.pendingCount;
-                globalPendingRevenue = result.stats.pendingRevenue;
+                globalPendingCount = result.stats.pendingCount || 0;
+                globalPendingRevenue = result.stats.pendingRevenue || 0;
             }
 
             updateDashboard(result.data.length < 30);
@@ -144,9 +146,14 @@ function loadMoreOrders() {
 
 function toggleOrderLayout(layout) {
     currentOrderLayout = layout;
-    document.getElementById('layout-list').classList.remove('active');
-    document.getElementById('layout-kanban').classList.remove('active');
-    document.getElementById(`layout-${layout}`).classList.add('active');
+    
+    ['list', 'kanban'].forEach(id => {
+        const el = document.getElementById(`layout-${id}`);
+        if(el) el.classList.remove('active');
+    });
+    
+    const activeEl = document.getElementById(`layout-${layout}`);
+    if(activeEl) activeEl.classList.add('active');
     
     const ordersFeed = document.getElementById('orders-list-view');
     const ordersKanban = document.getElementById('orders-kanban-view');
@@ -173,6 +180,7 @@ function toggleOrderSelection(orderId, event) {
 
 function updateBulkDispatchUI() {
     const btn = document.getElementById('bulk-dispatch-btn');
+    if (!btn) return;
     if (selectedOrders.size > 0) {
         btn.innerText = `Dispatch Selected (${selectedOrders.size})`;
         btn.classList.add('visible');
@@ -185,8 +193,10 @@ async function bulkDispatchOrders() {
     if (selectedOrders.size === 0) return;
     
     const btn = document.getElementById('bulk-dispatch-btn');
-    btn.innerText = 'Dispatching...'; 
-    btn.disabled = true;
+    if(btn) {
+        btn.innerText = 'Dispatching...'; 
+        btn.disabled = true;
+    }
     
     const idsToDispatch = Array.from(selectedOrders);
     
@@ -199,7 +209,7 @@ async function bulkDispatchOrders() {
             const o = currentOrders.find(ord => ord._id === id);
             if(o && (o.status === 'Order Placed' || o.status === 'Packing')) {
                 globalPendingCount = Math.max(0, globalPendingCount - 1);
-                globalPendingRevenue = Math.max(0, globalPendingRevenue - o.totalAmount);
+                globalPendingRevenue = Math.max(0, globalPendingRevenue - (Number(o.totalAmount) || 0));
                 o.status = 'Dispatched';
             }
         });
@@ -209,7 +219,7 @@ async function bulkDispatchOrders() {
     } catch (err) { 
         if (typeof showToast === 'function') showToast('Error during bulk dispatch.'); 
     } finally { 
-        btn.disabled = false; 
+        if(btn) btn.disabled = false; 
         updateBulkDispatchUI(); 
     }
 }
@@ -225,7 +235,7 @@ async function updateOrderStatus(orderId, newStatus, event) {
     if(localOrder) {
         if ((localOrder.status === 'Order Placed' || localOrder.status === 'Packing') && (newStatus === 'Dispatched' || newStatus === 'Completed' || newStatus === 'Cancelled')) {
             globalPendingCount = Math.max(0, globalPendingCount - 1);
-            globalPendingRevenue = Math.max(0, globalPendingRevenue - localOrder.totalAmount);
+            globalPendingRevenue = Math.max(0, globalPendingRevenue - (Number(localOrder.totalAmount) || 0));
         }
         localOrder.status = newStatus;
     }
@@ -279,7 +289,7 @@ function updateDashboard(isLastPage = true) {
     const dailyRevenueEl = document.getElementById('daily-revenue');
     const pendingCountEl = document.getElementById('pending-count');
     
-    if (dailyRevenueEl) dailyRevenueEl.innerText = `₹${globalPendingRevenue}`;
+    if (dailyRevenueEl) dailyRevenueEl.innerText = `₹${globalPendingRevenue.toFixed(2)}`;
     if (pendingCountEl) pendingCountEl.innerText = globalPendingCount;
     
     let displayOrders = typeof currentOrders !== 'undefined' ? currentOrders.filter(o => o.status !== 'Cancelled' && o.status !== 'Completed') : [];
@@ -327,7 +337,7 @@ async function markOrderDispatched() {
     if(localOrder) {
         if (localOrder.status === 'Order Placed' || localOrder.status === 'Packing') {
             globalPendingCount = Math.max(0, globalPendingCount - 1);
-            globalPendingRevenue = Math.max(0, globalPendingRevenue - localOrder.totalAmount);
+            globalPendingRevenue = Math.max(0, globalPendingRevenue - (Number(localOrder.totalAmount) || 0));
         }
         localOrder.status = 'Dispatched';
     }
@@ -358,13 +368,18 @@ function openAssignDriverModal() {
         if (typeof showToast === 'function') showToast('No order selected.');
         return;
     }
-    document.getElementById('assign-driver-name').value = activeOrder.deliveryDriverName !== 'Unassigned' ? activeOrder.deliveryDriverName : '';
-    document.getElementById('assign-driver-phone').value = activeOrder.driverPhone || '';
-    document.getElementById('assign-driver-modal').classList.add('active');
+    const nameEl = document.getElementById('assign-driver-name');
+    const phoneEl = document.getElementById('assign-driver-phone');
+    const modalEl = document.getElementById('assign-driver-modal');
+    
+    if(nameEl) nameEl.value = activeOrder.deliveryDriverName !== 'Unassigned' ? activeOrder.deliveryDriverName : '';
+    if(phoneEl) phoneEl.value = activeOrder.driverPhone || '';
+    if(modalEl) modalEl.classList.add('active');
 }
 
 function closeAssignDriverModal() {
-    document.getElementById('assign-driver-modal').classList.remove('active');
+    const modal = document.getElementById('assign-driver-modal');
+    if(modal) modal.classList.remove('active');
 }
 
 async function submitAssignDriver(event) {
@@ -375,8 +390,10 @@ async function submitAssignDriver(event) {
     const driverPhone = document.getElementById('assign-driver-phone').value.trim();
     const btn = event.target.querySelector('button[type="submit"]');
     
-    btn.innerText = 'Assigning...';
-    btn.disabled = true;
+    if (btn) {
+        btn.innerText = 'Assigning...';
+        btn.disabled = true;
+    }
 
     try {
         const fetchFn = typeof adminFetchWithAuth === 'function' ? adminFetchWithAuth : fetch;
@@ -402,8 +419,10 @@ async function submitAssignDriver(event) {
     } catch (e) {
         if (typeof showToast === 'function') showToast('Network error.');
     } finally {
-        btn.innerText = 'Assign Driver';
-        btn.disabled = false;
+        if (btn) {
+            btn.innerText = 'Assign Driver';
+            btn.disabled = false;
+        }
     }
 }
 
@@ -411,21 +430,30 @@ let currentRefundItem = null;
 
 function openPartialRefundModal(productId, variantId, name, maxQty, price) {
     currentRefundItem = { productId, variantId, price };
-    document.getElementById('refund-item-name').innerText = name;
-    document.getElementById('refund-qty').value = 1;
-    document.getElementById('refund-qty').max = maxQty;
-    document.getElementById('partial-refund-modal').classList.add('active');
+    const nameEl = document.getElementById('refund-item-name');
+    const qtyEl = document.getElementById('refund-qty');
+    const modal = document.getElementById('partial-refund-modal');
+    
+    if(nameEl) nameEl.innerText = name;
+    if(qtyEl) {
+        qtyEl.value = 1;
+        qtyEl.max = maxQty;
+    }
+    if(modal) modal.classList.add('active');
 }
 
 function closePartialRefundModal() {
     currentRefundItem = null;
-    document.getElementById('partial-refund-modal').classList.remove('active');
+    const modal = document.getElementById('partial-refund-modal');
+    if(modal) modal.classList.remove('active');
 }
 
 async function submitPartialRefund() {
     if (typeof activeOrder === 'undefined' || !activeOrder || !currentRefundItem) return;
     
-    const qtyToRefund = parseInt(document.getElementById('refund-qty').value);
+    const qtyInput = document.getElementById('refund-qty');
+    const qtyToRefund = parseInt(qtyInput ? qtyInput.value : 0);
+    
     if (isNaN(qtyToRefund) || qtyToRefund < 1) {
         if (typeof showToast === 'function') showToast("Invalid quantity.");
         return;
@@ -536,6 +564,9 @@ window.fetchOrders = async function() {
     if (window.currentUser && window.currentUser.role === 'Delivery_Agent') {
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition((position) => {
+                // SECURITY FIX: Ensure the user hasn't logged out while waiting for GPS response
+                if (!window.currentUser || window.currentUser.role !== 'Delivery_Agent') return;
+
                 const riderLat = position.coords.latitude;
                 const riderLng = position.coords.longitude;
                 
@@ -559,7 +590,7 @@ window.fetchOrders = async function() {
                 // Add a visual indicator to the UI that route is optimized
                 const header = document.querySelector('.orders-section h2');
                 if (header && !header.innerHTML.includes('Optimized')) {
-                    header.innerHTML += ' <span style="background:#10b981; color:white; font-size:10px; padding:2px 6px; border-radius:4px; vertical-align:middle; margin-left:8px;">Route Optimized 📍</span>';
+                    header.innerHTML += ' <span style="background:#10b981; color:white; font-size:10px; padding:2px 6px; border-radius:4px; vertical-align:middle; margin-left:8px;">Route Optimized 🛵</span>';
                 }
             }, (err) => {
                 console.warn("Rider location access denied. Falling back to chronological sorting.");
