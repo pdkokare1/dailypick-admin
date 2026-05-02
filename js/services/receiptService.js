@@ -62,6 +62,21 @@ window.printReceipt = function() {
         ${pointsHtml}
     `;
     
+    // ENTERPRISE OPTIMIZATION: Hardware integration for silent LAN thermal printing
+    if (typeof globalStoreSettings !== 'undefined' && globalStoreSettings.thermalPrinterIp && globalStoreSettings.useNetworkPrinter) {
+        try {
+            fetch(`http://${globalStoreSettings.thermalPrinterIp}/print`, {
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: pContainer.innerText
+            });
+            if (typeof showToast === 'function') showToast("Receipt sent securely to local network printer.");
+            return; // Bypass the slow OS dialog
+        } catch (e) {
+            console.warn("Thermal printer unreachable. Falling back to OS print dialog.");
+        }
+    }
+
     window.print();
 };
 
